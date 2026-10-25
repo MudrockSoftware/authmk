@@ -7,6 +7,19 @@ Source: https://github.com/MudrockSoftware/authmk.
 The full feature plan is in `ROADMAP.md`. Tick items there only when they are
 implemented **and** covered by tests.
 
+## Priorities
+
+1. **Security and stability come first.** authmk protects other people's
+   users. Choose the safe default, the well-tested path and the predictable
+   behavior, even when that is slower or more code.
+2. **Performance comes second.** Optimize only when it gives up nothing
+   from (1), and back it with a measurement.
+
+When these conflict, (1) wins. Examples: hash tokens even though plain lookups
+are faster; keep a database round trip instead of caching something that
+could go stale after a session is revoked; fail closed when a check can't be
+completed.
+
 ## Project Structure
 
 - `lib/`: the library
@@ -61,6 +74,24 @@ These are settled. Don't revisit them unless the user asks.
   prefer changing the plugin over changing core.
 
 ## Writing Code
+
+Code must be well written, small and readable by a human who is debugging
+it, possibly during an incident:
+
+- Prefer the obvious solution over the clever one. Code that someone can
+  read and trust is part of security.
+- Keep functions and modules small, with one job each. Split a function when
+  it needs a comment to explain its sections.
+- Use clear names over abbreviations. Pattern-match and use `with` so the
+  happy path and each failure path are easy to see.
+- Make control flow explicit: no hidden side effects, no logic hidden in
+  macros or process dictionaries.
+- Return errors with enough context (`%Authmk.Error{code:, message:}`) to see
+  what failed and why, without leaking secrets.
+- Don't add abstractions, options or dependencies until a real need exists.
+- Delete dead code instead of leaving it commented out.
+
+General rules:
 
 - Target Elixir `~> 1.20`. Follow `mix format`.
 - Keep macros thin: `use Authmk` validates config and builds a registry; the
