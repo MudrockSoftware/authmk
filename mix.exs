@@ -11,12 +11,20 @@ defmodule Authmk.MixProject do
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "An extensible, plugin-based authentication framework for Elixir, inspired by Better Auth.",
+      aliases: aliases(),
+      test_coverage: [summary: [threshold: 90]],
+      dialyzer: dialyzer(),
+      description:
+        "An extensible, plugin-based authentication framework for Elixir, inspired by Better Auth.",
       package: package(),
       source_url: @source_url,
       homepage_url: @homepage_url,
-      docs: [main: "readme", extras: ["README.md"]]
+      docs: [main: "readme", extras: ["README.md", "ROADMAP.md"]]
     ]
+  end
+
+  def cli do
+    [preferred_envs: [coverage: :test, fuzz: :test]]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -29,8 +37,56 @@ defmodule Authmk.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:stream_data, "~> 1.4", only: [:dev, :test]}
     ]
+  end
+
+  defp aliases do
+    [
+      # Fetches deps and enables the git pre-commit hook (lint + Dialyzer).
+      setup: ["deps.get", &install_git_hooks/1],
+      # As CI: fails under the threshold in test_coverage; HTML in cover/.
+      coverage: ["test --cover"],
+      # Only the fuzz tests (test/fuzz/), FUZZ_RUNS times each.
+      fuzz: &fuzz/1,
+      lint: [
+        "format",
+        "compile --warnings-as-errors --force",
+        "credo --strict",
+        "xref graph --format cycles --fail-above 0",
+        "dialyzer"
+      ]
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_local_path: "_build/plts",
+      plt_core_path: "_build/plts",
+      plt_add_apps: [:mix, :ex_unit],
+      flags: [:error_handling, :extra_return, :missing_return, :unknown, :unmatched_returns]
+    ]
+  end
+
+  defp install_git_hooks(_args) do
+    if File.dir?(".git") do
+      Mix.shell().cmd("git config core.hooksPath .githooks")
+      Mix.shell().info("Git hooks enabled (.githooks/pre-commit).")
+    else
+      Mix.shell().info("Not a git repository; skipping git hook setup.")
+    end
+  end
+
+  defp fuzz(args) do
+    if Path.wildcard("test/fuzz/**/*_test.exs") == [] do
+      Mix.shell().info("No fuzz tests in test/fuzz/ yet.")
+    else
+      System.put_env("FUZZ_RUNS", System.get_env("FUZZ_RUNS", "1000"))
+      Mix.Task.run("test", ["test/fuzz", "--only", "fuzz" | args])
+    end
   end
 
   defp package do

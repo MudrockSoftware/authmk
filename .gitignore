@@ -22,3 +22,6 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 authmk-*.tar
 
+
+# Reference implementation clone (read-only, not part of this repo)
+/example/

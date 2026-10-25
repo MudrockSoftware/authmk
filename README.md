@@ -123,6 +123,10 @@ adapter code.
 Authmk is English only. Errors carry a stable `code`, such as
 `:invalid_credentials`, so apps can show their own text if they want.
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full feature plan toward 1.0.
+
 ## Installation
 
 ```elixir

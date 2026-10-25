@@ -1,0 +1,5 @@
+#!/bin/sh
+# Enabled by `mix setup` (git config core.hooksPath .githooks).
+set -e
+mix format --check-formatted
+mix lint
