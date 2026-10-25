@@ -7,7 +7,10 @@ defmodule Authmk.Config do
   stored in `:persistent_term` for fast reads.
   """
 
-  alias Authmk.{Options, Origin, Secrets}
+  alias Authmk.{BaseURL, Options, Origin, Secrets}
+  alias Authmk.OAuth.Providers
+  alias Authmk.Schema.Definition
+  alias Authmk.Storage.ETS
 
   # Never print secrets, for example in crash reports.
   @derive {Inspect, except: [:secrets]}
@@ -25,6 +28,9 @@ defmodule Authmk.Config do
     :secrets,
     :secondary_storage,
     :verification,
+    :errors,
+    :social_providers,
+    :account,
     :base_url,
     :base_path,
     :app_name,
@@ -60,9 +66,7 @@ defmodule Authmk.Config do
 
     runtime = Options.validate_runtime!(deep_merge(use_opts, app_opts))
 
-    if is_nil(Origin.origin(runtime[:base_url])) do
-      raise ArgumentError, "base_url must be an http(s) URL, got: #{inspect(runtime[:base_url])}"
-    end
+    :ok = BaseURL.validate!(runtime[:base_url])
 
     plugins = Enum.map(compile[:plugins], &init_plugin/1)
     check_dependencies!(plugins)
@@ -86,6 +90,7 @@ defmodule Authmk.Config do
       | endpoints: endpoints(config),
         trusted_origins: trusted_origins(config),
         hook_modules: hook_modules(config),
+        social_providers: Providers.build(config.social_providers),
         secondary_storage: storage(auth, config.secondary_storage)
     }
 
@@ -103,14 +108,11 @@ defmodule Authmk.Config do
 
   # The ETS store needs the table its auth module starts.
   defp storage(_auth, nil), do: nil
-  defp storage(auth, Authmk.Storage.ETS), do: {Authmk.Storage.ETS, table: ets_table(auth)}
-  defp storage(auth, {Authmk.Storage.ETS, _opts}), do: storage(auth, Authmk.Storage.ETS)
+
+  defp storage(auth, ETS), do: {ETS, table: ETS.table(auth)}
+  defp storage(auth, {ETS, _opts}), do: storage(auth, ETS)
   defp storage(_auth, {module, opts}), do: {module, opts}
   defp storage(_auth, module), do: {module, []}
-
-  @doc "Name of the auth module's ETS table."
-  @spec ets_table(module()) :: atom()
-  def ets_table(auth), do: Module.concat(auth, Storage)
 
   defp check_storage!(config) do
     rate_limit_storage = config.rate_limit[:storage]
@@ -125,10 +127,10 @@ defmodule Authmk.Config do
               "rate_limit: [storage: :database] needs the Authmk.Plugins.DatabaseRateLimit plugin"
 
       config.secondary_storage && not config.session[:store_in_database] &&
-          config.schema.primary_key == :id ->
+          Definition.model!(config.schema, :session).primary_key == :id ->
         raise ArgumentError,
-              "sessions kept only in secondary storage need primary_key: :binary_id. " <>
-                "Use session: [store_in_database: true] with integer ids"
+              "sessions kept only in secondary storage can't have integer ids. " <>
+                "Use schema: [session: [primary_key: :uuid_v7]], or session: [store_in_database: true]"
 
       true ->
         :ok
@@ -206,7 +208,7 @@ defmodule Authmk.Config do
           origin <- plugin.trusted_origins(opts),
           do: origin
 
-    [config.base_url | config.trusted_origins ++ plugin_origins]
+    (BaseURL.trusted_origins(config.base_url) ++ config.trusted_origins ++ plugin_origins)
     |> Enum.map(&Origin.normalize/1)
     |> Enum.uniq()
   end

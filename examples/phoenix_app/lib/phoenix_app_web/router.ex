@@ -15,11 +15,12 @@ defmodule PhoenixAppWeb.Router do
     plug Authmk.Plug.RequireAuthenticated, redirect_to: "/"
   end
 
-  # Auth endpoints: JSON API, protected by authmk's own origin checks.
-  forward "/auth", PhoenixApp.Auth
-
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  scope "/" do
+    forward "/auth", PhoenixApp.Auth
   end
 
   scope "/", PhoenixAppWeb do

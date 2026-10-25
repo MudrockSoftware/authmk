@@ -107,6 +107,30 @@ defmodule Authmk.Plugins.EmailPassword do
     ]
   end
 
+  @doc """
+  Gives a user without a password one, for example someone who signed up
+  with a social provider. Server-side only: call it from your own code after
+  checking who is asking.
+
+      Authmk.Plugins.EmailPassword.set_password(MyApp.Auth, user, "a new password")
+  """
+  @spec set_password(module(), struct(), String.t()) :: {:ok, struct()} | {:error, Error.t()}
+  def set_password(auth, user, password) do
+    ctx = Context.new(auth.config())
+
+    with :ok <- validate_password(password, Context.plugin_opts(ctx, __MODULE__)),
+         :ok <- no_password_yet(ctx, user) do
+      Credentials.set_password(ctx, user, password)
+    end
+  end
+
+  defp no_password_yet(ctx, user) do
+    case Credentials.account(ctx, user.id) do
+      %{password: hash} when is_binary(hash) -> {:error, Error.new(:password_already_set)}
+      _no_password -> :ok
+    end
+  end
+
   @doc false
   def sign_up(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
@@ -273,7 +297,7 @@ defmodule Authmk.Plugins.EmailPassword do
     expires_in = opts[:reset_password_token_expires_in]
 
     with {:ok, token} <- Verification.create(ctx, @reset_purpose, data, expires_in) do
-      url = URL.endpoint(config, "/reset-password/#{token}", callback_url: redirect_to)
+      url = URL.endpoint(ctx, "/reset-password/#{token}", callback_url: redirect_to)
 
       Background.run(ctx, fn ->
         config.auth.send_reset_password(%{user: user, url: url, token: token}, ctx)

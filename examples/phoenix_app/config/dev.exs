@@ -1,4 +1,5 @@
 import Config
+config :phoenix_app, PhoenixApp.Auth, secret: "84yEgdqYnTazq3ih38nWXbZx5A5APNQ9At9Kf5CXyDo"
 
 # Configure your database
 config :phoenix_app, PhoenixApp.Repo,
@@ -20,7 +21,7 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "F7tEpd5n6uTX5VUZ6TiRZ/gIIGMHdKqAqodBtmUVj0a/aU2LrZKxY21KYX2++bz0",
+  secret_key_base: "Lgck41PB+d1yxD4xUyjL+EKbmYi3a9xzrgpkDPRVhsOdKp9N7p9FELmvQT7PLr+V",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:phoenix_app, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:phoenix_app, ~w(--watch)]}
@@ -51,9 +52,6 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
 
 # Enable dev routes for dashboard and mailbox
 config :phoenix_app, dev_routes: true
-
-# Development secret for authmk. Production reads AUTHMK_SECRET instead.
-config :phoenix_app, PhoenixApp.Auth, secret: "kdbTjwix33PxGOBFxwyPtjuhgqRLFgjLUVlksC5QXaw"
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"

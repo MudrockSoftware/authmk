@@ -7,6 +7,8 @@
 # General application configuration
 import Config
 
+config :phoenix_app, PhoenixApp.Auth, base_url: "http://localhost:4000"
+
 config :phoenix_app,
   ecto_repos: [PhoenixApp.Repo],
   generators: [timestamp_type: :utc_datetime]
@@ -20,7 +22,7 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
     layout: false
   ],
   pubsub_server: PhoenixApp.PubSub,
-  live_view: [signing_salt: "VaOmXdMf"]
+  live_view: [signing_salt: "VkKG+FeI"]
 
 # Configure LiveView
 config :phoenix_live_view,
@@ -65,8 +67,6 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
-
-config :phoenix_app, PhoenixApp.Auth, base_url: "http://localhost:4000"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

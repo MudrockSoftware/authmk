@@ -104,12 +104,14 @@ defmodule Authmk.Schema.Field do
   def column(%__MODULE__{source: nil, name: name}), do: name
   def column(%__MODULE__{source: source}), do: source
 
-  @doc "Ecto type for a field. References use the schema's primary key type."
-  @spec ecto_type(t(), :binary_id | :id) :: atom()
-  def ecto_type(%__MODULE__{references: ref}, primary_key) when not is_nil(ref), do: primary_key
-  def ecto_type(%__MODULE__{type: :text}, _primary_key), do: :string
-  def ecto_type(%__MODULE__{type: :datetime}, _primary_key), do: :utc_datetime_usec
-  def ecto_type(%__MODULE__{type: type}, _primary_key), do: type
+  @doc """
+  Ecto type of a value field. Reference fields take their type from the
+  referenced model's primary key (`Authmk.Schema.PrimaryKey.ecto_type/1`).
+  """
+  @spec ecto_type(t()) :: atom()
+  def ecto_type(%__MODULE__{type: :text}), do: :string
+  def ecto_type(%__MODULE__{type: :datetime}), do: :utc_datetime_usec
+  def ecto_type(%__MODULE__{type: type}), do: type
 
   @doc "Association name for a reference field: `:user_id` becomes `:user`."
   @spec association(t()) :: atom()

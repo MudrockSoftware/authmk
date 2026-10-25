@@ -20,6 +20,10 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
       Use it in CI.
     * `--allow-destructive` - allow migrations that drop tables or columns,
       or change columns.
+
+  When a table or column seems to have been renamed (one disappeared and an
+  identical one appeared), the task asks whether it was a rename, so the
+  data is kept instead of dropped.
     * `--name NAME` - migration name (default `authmk`).
     * `--migrations-path PATH`, `--snapshot-path PATH` - override where files go.
   """
@@ -27,7 +31,7 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
   use Mix.Task
 
   alias Authmk.Migration
-  alias Authmk.Migration.{Diff, Snapshot}
+  alias Authmk.Migration.{Diff, Renames, Snapshot}
 
   @switches [
     auth: :string,
@@ -66,8 +70,28 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
       opts[:check] -> check(ops)
       opts[:baseline] -> baseline(auth, snapshot_path)
       ops == [] -> Mix.shell().info("No schema changes. Nothing to generate.")
-      true -> generate(auth, repo, snapshot, snapshot_path, ops, opts)
+      true -> generate(auth, repo, snapshot, snapshot_path, confirm_renames(auth, snapshot), opts)
     end
+  end
+
+  # Asks about likely table renames, then column renames given those.
+  defp confirm_renames(auth, snapshot) do
+    current = Migration.current_snapshot(auth)
+
+    tables =
+      Enum.filter(Renames.table_candidates(snapshot, current), fn {:table, from, to} ->
+        Mix.shell().yes?("Was the table #{from} renamed to #{to}?")
+      end)
+
+    columns =
+      snapshot
+      |> Renames.apply_renames(tables)
+      |> Renames.column_candidates(current)
+      |> Enum.filter(fn {:column, table, from, to} ->
+        Mix.shell().yes?("Was #{table}.#{from} renamed to #{to}?")
+      end)
+
+    tables ++ columns
   end
 
   defp check([]), do: Mix.shell().info("Migrations are up to date.")
@@ -81,7 +105,10 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     Mix.shell().info("Recorded the current schema in #{snapshot_path}. No migration written.")
   end
 
-  defp generate(auth, repo, snapshot, snapshot_path, ops, opts) do
+  defp generate(auth, repo, snapshot, snapshot_path, renames, opts) do
+    ops = Migration.changes(auth, snapshot, renames)
+    :ok = Diff.check_addable!(ops)
+
     if Diff.destructive?(ops) and not Keyword.get(opts, :allow_destructive, false) do
       Mix.raise(
         "This migration drops or changes existing tables or columns. " <>
@@ -96,7 +123,7 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
 
     timestamp = next_version(migrations_path)
     module = "#{inspect(repo)}.Migrations.#{Macro.camelize(name)}#{timestamp}"
-    source = Migration.render(auth, snapshot, module)
+    source = Migration.render(auth, snapshot, module, renames)
 
     file = Path.join(migrations_path, "#{timestamp}_#{Macro.underscore(name)}.exs")
     File.mkdir_p!(migrations_path)

@@ -3,15 +3,35 @@ defmodule Authmk.Router do
   Serves auth endpoints. Every auth module is a Plug that calls this router;
   mount it with `forward "/auth", MyApp.Auth`.
 
-  Each request goes through, in order: endpoint lookup, origin check, rate
-  limit, param validation, session loading, `before_endpoint` hooks, the
-  handler, and `after_endpoint` hooks. Each request emits
-  `[:authmk, :endpoint, :start | :stop | :exception]` telemetry events.
+  Each request goes through, in order: endpoint lookup, `on_request` hooks,
+  origin check, rate limit, param validation, session loading, the
+  endpoint's middleware, `before_endpoint` hooks, the handler, and
+  `after_endpoint` hooks. `on_response` hooks run just before the response
+  is sent.
+
+  Error results are passed to the auth module's `on_api_error/2`. Exceptions
+  are logged and answered with a JSON `internal_error`, or re-raised to your
+  Plug/Phoenix error handling with `errors: [rescue: false]`.
+
+  Each request emits `[:authmk, :endpoint, :start | :stop | :exception]`
+  telemetry events.
   """
 
   import Plug.Conn
 
-  alias Authmk.{Config, Context, Endpoint, Error, Hooks, Origin, Params, RateLimit, Sessions}
+  alias Authmk.{
+    BaseURL,
+    Config,
+    Context,
+    Endpoint,
+    Error,
+    Hooks,
+    Log,
+    Origin,
+    Params,
+    RateLimit,
+    Sessions
+  }
 
   @parsers Plug.Parsers.init(parsers: [:urlencoded, :json], pass: ["*/*"], json_decoder: JSON)
 
@@ -21,8 +41,11 @@ defmodule Authmk.Router do
     config = Config.fetch!(auth)
     conn = conn |> fetch_cookies() |> fetch_query_params() |> parse_body()
 
-    case find_endpoint(config, conn) do
-      {endpoint, path_params} -> serve(conn, config, endpoint, path_params)
+    with {:ok, base_url} <- BaseURL.resolve(config, conn),
+         {endpoint, path_params} <- find_endpoint(config, conn) do
+      serve(conn, %Context{config: config, conn: conn, base_url: base_url}, endpoint, path_params)
+    else
+      {:error, %Error{} = error} -> send_error(conn, error)
       nil -> send_json(conn, 404, Error.to_map(Error.new(:not_found)))
     end
   end
@@ -36,25 +59,41 @@ defmodule Authmk.Router do
     end)
   end
 
-  defp serve(conn, config, endpoint, path_params) do
+  defp serve(conn, %Context{config: config} = ctx, endpoint, path_params) do
     raw_params = conn.query_params |> Map.merge(conn.body_params) |> Map.merge(path_params)
-    ctx = %Context{config: config, conn: conn, endpoint: endpoint, raw_params: raw_params}
+    ctx = %{ctx | endpoint: endpoint, raw_params: raw_params}
     metadata = %{auth: config.auth, endpoint: endpoint.name}
 
     {ctx, result} =
       :telemetry.span([:authmk, :endpoint], metadata, fn ->
-        {ctx, result} = run(ctx)
+        {ctx, result} = run_safely(ctx)
         {{ctx, result}, Map.put(metadata, :result, elem(result, 0))}
       end)
 
+    report_error(ctx, result)
     respond(conn, ctx, result)
   end
 
+  defp run_safely(%Context{config: config} = ctx) do
+    run(ctx)
+  rescue
+    exception ->
+      if not config.errors[:rescue], do: reraise(exception, __STACKTRACE__)
+
+      Log.error(
+        "#{ctx.endpoint.path} crashed:\n" <> Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      {Context.put_private(ctx, :exception, exception), {:error, Error.new(:internal_error)}}
+  end
+
   defp run(ctx) do
-    with :ok <- Origin.check_request(ctx),
+    with {:cont, ctx} <- Hooks.on_request(ctx),
+         :ok <- Origin.check_request(ctx),
          :ok <- RateLimit.check(ctx),
          {:ok, params} <- Params.cast(ctx.endpoint.params, ctx.raw_params),
          {:ok, ctx} <- load_session(%{ctx | params: params}),
+         {:cont, ctx} <- run_middleware(ctx),
          {:cont, ctx} <- Hooks.before_endpoint(ctx) do
       {module, function} = ctx.endpoint.handler
       result = Hooks.after_endpoint(ctx, apply(module, function, [ctx]))
@@ -65,8 +104,20 @@ defmodule Authmk.Router do
     end
   end
 
+  # Middleware the endpoint declares, in order. Each returns `{:cont, ctx}`
+  # or `{:halt, error}`.
+  defp run_middleware(%Context{endpoint: endpoint} = ctx) do
+    Enum.reduce_while(endpoint.middleware, {:cont, ctx}, fn {module, function}, {:cont, ctx} ->
+      case apply(module, function, [ctx]) do
+        {:cont, %Context{} = ctx} -> {:cont, {:cont, ctx}}
+        {:halt, %Error{} = error} -> {:halt, {:halt, error}}
+      end
+    end)
+  end
+
   defp result_ctx({:ok, _body, ctx}, _ctx), do: ctx
   defp result_ctx({:redirect, _url, ctx}, _ctx), do: ctx
+  defp result_ctx({:html, _status, _html, ctx}, _ctx), do: ctx
   defp result_ctx({:error, _error, ctx}, _ctx), do: ctx
   defp result_ctx({:error, _error}, ctx), do: ctx
 
@@ -83,14 +134,34 @@ defmodule Authmk.Router do
     end
   end
 
+  # The auth module hears about every error; for crashes, the exception.
+  defp report_error(ctx, {:error, error}), do: notify(ctx, error)
+  defp report_error(ctx, {:error, error, _ctx}), do: notify(ctx, error)
+  defp report_error(_ctx, _success), do: :ok
+
+  defp notify(ctx, error), do: ctx.config.auth.on_api_error(ctx.private[:exception] || error, ctx)
+
   defp respond(conn, ctx, result) do
-    conn = put_resp_cookies(conn, ctx)
+    conn =
+      conn
+      |> put_resp_cookies(ctx)
+      |> register_before_send(&Hooks.on_response(&1, ctx))
 
     case result do
-      {:ok, body, _ctx} -> send_json(conn, 200, body)
-      {:redirect, url, _ctx} -> conn |> put_resp_header("location", url) |> send_resp(302, "")
-      {:error, error, _ctx} -> send_error(conn, error)
-      {:error, error} -> send_error(conn, error)
+      {:ok, body, _ctx} ->
+        send_json(conn, 200, body)
+
+      {:redirect, url, _ctx} ->
+        conn |> put_resp_header("location", url) |> send_resp(302, "")
+
+      {:html, status, html, _ctx} ->
+        conn |> put_resp_content_type("text/html") |> send_resp(status, html)
+
+      {:error, error, _ctx} ->
+        send_error(conn, error)
+
+      {:error, error} ->
+        send_error(conn, error)
     end
   end
 

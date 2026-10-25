@@ -19,6 +19,27 @@ defmodule Authmk.Hooks do
     end)
   end
 
+  @doc "Runs `on_request/1` hooks, before any built-in check."
+  @spec on_request(Context.t()) :: {:cont, Context.t()} | {:halt, Error.t()}
+  def on_request(%Context{} = ctx) do
+    ctx
+    |> hook_modules(:on_request, 1)
+    |> Enum.reduce_while({:cont, ctx}, fn module, {:cont, ctx} ->
+      case module.on_request(ctx) do
+        {:cont, %Context{} = ctx} -> {:cont, {:cont, ctx}}
+        {:halt, %Error{} = error} -> {:halt, {:halt, error}}
+      end
+    end)
+  end
+
+  @doc "Runs `on_response/2` hooks on the conn just before it is sent."
+  @spec on_response(Plug.Conn.t(), Context.t()) :: Plug.Conn.t()
+  def on_response(conn, %Context{} = ctx) do
+    ctx
+    |> hook_modules(:on_response, 2)
+    |> Enum.reduce(conn, fn module, conn -> module.on_response(conn, ctx) end)
+  end
+
   @spec after_endpoint(Context.t(), term()) :: term()
   def after_endpoint(%Context{} = ctx, result) do
     name = ctx.endpoint.name

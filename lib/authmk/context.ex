@@ -4,6 +4,7 @@ defmodule Authmk.Context do
 
   * `config`: the auth module's `Authmk.Config`
   * `conn`: the `Plug.Conn`, or `nil` for calls made from server code
+  * `base_url`: the app's public URL for this request (see `Authmk.BaseURL`)
   * `endpoint`: the `Authmk.Endpoint` being served, or `nil`
   * `params`: validated params, with atom keys
   * `raw_params`: params as received, with string keys
@@ -17,6 +18,7 @@ defmodule Authmk.Context do
   defstruct [
     :config,
     :conn,
+    :base_url,
     :endpoint,
     :session,
     :user,
@@ -28,7 +30,10 @@ defmodule Authmk.Context do
 
   @type t :: %__MODULE__{}
 
-  @doc "A context for server-side calls, without a request."
+  @doc """
+  A context for server-side calls, without a request. It has no `base_url`;
+  set one (`Authmk.BaseURL.resolve(config, nil)`) before building links.
+  """
   @spec new(Config.t()) :: t()
   def new(config), do: %__MODULE__{config: config}
 

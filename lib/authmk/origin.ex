@@ -37,6 +37,7 @@ defmodule Authmk.Origin do
     cond do
       conn.method in @safe_methods -> :ok
       config.advanced[:disable_origin_check] -> :ok
+      ctx.endpoint && not ctx.endpoint.origin_check -> :ok
       origin = request_origin(conn) -> if trusted?(ctx, origin), do: :ok, else: invalid_origin()
       conn.req_cookies == %{} -> :ok
       true -> invalid_origin()
@@ -138,7 +139,10 @@ defmodule Authmk.Origin do
     end
   end
 
-  defp glob_match?(pattern, value) do
+  @doc false
+  # `*` matches anything but `/`, `?` one such character, `**` anything.
+  @spec glob_match?(String.t(), String.t()) :: boolean()
+  def glob_match?(pattern, value) do
     regex =
       pattern
       |> String.downcase()

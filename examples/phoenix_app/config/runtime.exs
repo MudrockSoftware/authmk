@@ -79,6 +79,8 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  config :phoenix_app, PhoenixApp.Auth, base_url: System.fetch_env!("AUTHMK_BASE_URL")
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

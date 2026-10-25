@@ -6,8 +6,6 @@ defmodule PhoenixApp.Auth do
 
   import Swoosh.Email
 
-  alias PhoenixApp.Mailer
-
   @impl Authmk
   def send_verification_email(%{user: user, url: url}, _ctx) do
     deliver(user.email, "Verify your email", "Open this link to verify your email:\n\n#{url}")
@@ -21,9 +19,9 @@ defmodule PhoenixApp.Auth do
   defp deliver(to, subject, body) do
     new()
     |> to(to)
-    |> from({"PhoenixApp", "no-reply@phoenix-app.example"})
+    |> from({"PhoenixApp", "no-reply@example.com"})
     |> subject(subject)
     |> text_body(body)
-    |> Mailer.deliver()
+    |> PhoenixApp.Mailer.deliver()
   end
 end

@@ -19,15 +19,29 @@ defmodule Authmk.Options.Schemas do
                     ],
                     table_naming: [type: {:in, [:plural, :singular]}, default: :plural],
                     table_prefix: [type: :string, default: ""],
-                    primary_key: [type: {:in, [:binary_id, :id]}, default: :binary_id]
+                    primary_key: [
+                      type: Authmk.Schema.PrimaryKey.option_type(),
+                      default: :binary_id,
+                      doc: "Default primary key kind. See `Authmk.Schema.PrimaryKey`."
+                    ]
                   )
 
   @runtime_schema NimbleOptions.new!(
                     base_url: [
-                      type: :string,
+                      type:
+                        {:or,
+                         [
+                           :string,
+                           {:keyword_list,
+                            [
+                              allowed_hosts: [type: {:list, :string}, required: true],
+                              protocol: [type: {:in, [:auto, "http", "https"]}, default: :auto],
+                              fallback: [type: :string]
+                            ]}
+                         ]},
                       required: true,
                       doc:
-                        "Public URL of your app, like `https://example.com`. Used in links and origin checks."
+                        "Public URL of your app, like `\"https://example.com\"`, or an allow list of hosts. See `Authmk.BaseURL`."
                     ],
                     base_path: [
                       type: :string,
@@ -45,6 +59,54 @@ defmodule Authmk.Options.Schemas do
                         "Versioned secrets for rotation, newest first. Defaults to `AUTHMK_SECRETS`."
                     ],
                     app_name: [type: :string, default: "authmk"],
+                    social_providers: [
+                      type: :keyword_list,
+                      default: [],
+                      doc: "Social sign-in providers. See `Authmk.OAuth.Providers`."
+                    ],
+                    account: [
+                      type: :keyword_list,
+                      default: [],
+                      keys: [
+                        store_state: [
+                          type: {:in, [:cookie, :database]},
+                          default: :cookie,
+                          doc:
+                            "Where in-progress social sign-ins are kept. See `Authmk.OAuth.State`."
+                        ],
+                        encrypt_oauth_tokens: [type: :boolean, default: false],
+                        update_account_on_sign_in: [type: :boolean, default: true],
+                        account_linking: [
+                          type: :keyword_list,
+                          default: [],
+                          doc: "See `Authmk.OAuth.Accounts`.",
+                          keys: [
+                            enabled: [type: :boolean, default: true],
+                            trusted_providers: [type: {:list, :atom}, default: []],
+                            allow_different_emails: [type: :boolean, default: false],
+                            allow_unlinking_all: [type: :boolean, default: false],
+                            require_local_email_verified: [type: :boolean, default: true]
+                          ]
+                        ]
+                      ]
+                    ],
+                    errors: [
+                      type: :keyword_list,
+                      default: [],
+                      keys: [
+                        rescue: [
+                          type: :boolean,
+                          default: true,
+                          doc:
+                            "Answer crashes with a JSON `internal_error`. `false` re-raises them to your Plug or Phoenix error handling."
+                        ],
+                        error_url: [
+                          type: :string,
+                          doc:
+                            "Where redirect flows send users on errors. Defaults to authmk's `/error` page."
+                        ]
+                      ]
+                    ],
                     secondary_storage: [
                       type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}]},
                       doc:
@@ -230,7 +292,19 @@ defmodule Authmk.Options.Schemas do
                             "Headers holding the client IP, like `x-forwarded-for`. Only set this behind a trusted proxy."
                         ],
                         disable_ip_tracking: [type: :boolean, default: false],
-                        disable_origin_check: [type: :boolean, default: false]
+                        disable_origin_check: [type: :boolean, default: false],
+                        http_options: [
+                          type: :keyword_list,
+                          default: [],
+                          doc:
+                            "Extra `Req` options for outbound requests to OAuth providers, like a test stub."
+                        ],
+                        validate_schema: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Check at startup that the database has every table and column. See `Authmk.SchemaCheck`."
+                        ]
                       ]
                     ]
                   )

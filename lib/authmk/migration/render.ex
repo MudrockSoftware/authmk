@@ -72,6 +72,7 @@ defmodule Authmk.Migration.Render do
     {table_opts, id_column} =
       case table["primary_key"] do
         "binary_id" -> {", primary_key: false", ["add :id, :binary_id, primary_key: true"]}
+        "string" -> {", primary_key: false", ["add :id, :string, primary_key: true"]}
         "id" -> {"", []}
       end
 
@@ -83,6 +84,13 @@ defmodule Authmk.Migration.Render do
   end
 
   defp render({:drop_table, name, _table}), do: "drop table(#{atom(name)})"
+
+  defp render({:rename_table, from, to}),
+    do: "rename table(#{atom(from)}), to: table(#{atom(to)})"
+
+  defp render({:rename_column, table, from, to}),
+    do: "rename table(#{atom(table)}), #{atom(from)}, to: #{atom(to)}"
+
   defp render({:add_column, _table, column, spec}), do: add(column, spec)
   defp render({:remove_column, _table, column, _spec}), do: "remove #{atom(column)}"
 
@@ -90,13 +98,16 @@ defmodule Authmk.Migration.Render do
     "modify #{atom(column)}, #{type(spec)}#{column_opts(spec)}, from: {#{type(old)}#{column_opts(old)}}"
   end
 
+  defp render({:rename_index, table, from, to, index}),
+    do: "rename #{index(table, from, index)}, to: #{atom(to)}"
+
   defp render({:create_index, table, name, index}), do: "create " <> index(table, name, index)
   defp render({:drop_index, table, name, index}), do: "drop " <> index(table, name, index)
 
   defp add(column, spec), do: "add #{atom(column)}, #{type(spec)}#{column_opts(spec)}"
 
   defp type(%{"type" => "references", "references" => ref}) do
-    type_opt = if ref["type"] == "binary_id", do: ", type: :binary_id", else: ""
+    type_opt = if ref["type"] == "id", do: "", else: ", type: :#{ref["type"]}"
     "references(#{atom(ref["table"])}#{type_opt}, on_delete: :#{ref["on_delete"]})"
   end
 

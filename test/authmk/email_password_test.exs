@@ -28,6 +28,7 @@ defmodule Authmk.EmailPasswordTest do
   import Ecto.Query
 
   alias Authmk.EmailPasswordTest.Auth
+  alias Authmk.Plugins.EmailPassword
   alias Authmk.Test.Repo
 
   @moduletag auth: Authmk.EmailPasswordTest.Auth
@@ -163,6 +164,25 @@ defmodule Authmk.EmailPasswordTest do
       post(browser, "/sign-in/email", %{email: "ada@example.com", password: "correct horse"})
 
     assert conn.status == 200
+  end
+
+  test "set_password gives a password to a user without one, once", %{browser: browser} do
+    # A user that signed up some other way, like a social provider.
+    user = Repo.insert!(%Auth.User{name: "Ada", email: "ada@example.com"})
+
+    assert {:error, %Authmk.Error{code: :password_too_short}} =
+             EmailPassword.set_password(Auth, user, "short")
+
+    assert {:ok, _account} =
+             EmailPassword.set_password(Auth, user, "correct horse")
+
+    {_browser, conn} =
+      post(browser, "/sign-in/email", %{email: "ada@example.com", password: "correct horse"})
+
+    assert conn.status == 200
+
+    assert {:error, %Authmk.Error{code: :password_already_set}} =
+             EmailPassword.set_password(Auth, user, "another one")
   end
 
   test "sign out ends the session and clears the cookie", %{browser: browser} do

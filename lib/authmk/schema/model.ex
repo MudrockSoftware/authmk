@@ -8,8 +8,17 @@ defmodule Authmk.Schema.Model do
 
   alias Authmk.Schema.Field
 
-  @enforce_keys [:key, :table, :module, :owner]
-  defstruct [:key, :table, :module, :owner, fields: [], indexes: [], timestamps: true]
+  @enforce_keys [:key, :table, :module, :owner, :primary_key]
+  defstruct [
+    :key,
+    :table,
+    :module,
+    :owner,
+    :primary_key,
+    fields: [],
+    indexes: [],
+    timestamps: true
+  ]
 
   @type index :: %{name: String.t(), columns: [atom()], unique: boolean()}
   @type t :: %__MODULE__{
@@ -17,6 +26,7 @@ defmodule Authmk.Schema.Model do
           table: String.t(),
           module: module(),
           owner: :library | :user,
+          primary_key: Authmk.Schema.PrimaryKey.t(),
           fields: [Field.t()],
           indexes: [index()],
           timestamps: boolean()

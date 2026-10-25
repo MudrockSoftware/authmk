@@ -12,6 +12,10 @@ defmodule Authmk.Storage.ETS do
 
   use GenServer
 
+  @doc "Name of an auth module's ETS table."
+  @spec table(module()) :: atom()
+  def table(auth), do: Module.concat(auth, Storage)
+
   @doc false
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :table))

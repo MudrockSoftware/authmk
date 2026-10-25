@@ -26,7 +26,18 @@ defmodule Authmk.MixProject do
       package: package(),
       source_url: @source_url,
       homepage_url: @homepage_url,
-      docs: [main: "readme", extras: ["README.md", "ROADMAP.md"]]
+      docs: [
+        main: "readme",
+        extras: [
+          "README.md",
+          "guides/writing-plugins.md",
+          "guides/deployment.md",
+          "guides/cookies-and-domains.md",
+          "ROADMAP.md",
+          "SECURITY.md"
+        ],
+        groups_for_extras: [Guides: ~r/guides\//]
+      ]
     ]
   end
 
@@ -61,8 +72,14 @@ defmodule Authmk.MixProject do
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.3"},
       {:argon2_elixir, "~> 4.1"},
+      {:req, "~> 0.5"},
+      {:jose, "~> 1.11"},
       {:redix, "~> 1.5", optional: true},
       {:bcrypt_elixir, "~> 3.2", optional: true},
+      {:igniter, "~> 0.8", optional: true},
+      {:opentelemetry_api, "~> 1.4", optional: true},
+      {:opentelemetry_telemetry, "~> 1.1", optional: true},
+      {:opentelemetry, "~> 1.5", only: :test},
       {:ecto_sqlite3, "~> 0.22", only: :test},
       {:postgrex, "~> 0.20", only: :test},
       {:myxql, "~> 0.8", only: :test},
@@ -121,7 +138,8 @@ defmodule Authmk.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"Website" => @homepage_url, "GitHub" => @source_url}
+      links: %{"Website" => @homepage_url, "GitHub" => @source_url},
+      files: ~w(lib guides .formatter.exs mix.exs README.md ROADMAP.md SECURITY.md LICENSE)
     ]
   end
 end

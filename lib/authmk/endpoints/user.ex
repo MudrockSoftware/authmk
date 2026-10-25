@@ -107,7 +107,7 @@ defmodule Authmk.Endpoints.User do
 
     with {:ok, token} <- Verification.create(ctx, @confirm_change_purpose, data, expires_in) do
       url =
-        URL.endpoint(config, "/change-email/confirm", token: token, callback_url: callback_url)
+        URL.endpoint(ctx, "/change-email/confirm", token: token, callback_url: callback_url)
 
       link = %{user: user, new_email: new_email, url: url, token: token}
       Background.run(ctx, fn -> config.auth.send_change_email_confirmation(link, ctx) end)
@@ -137,7 +137,7 @@ defmodule Authmk.Endpoints.User do
 
     with {:ok, token} <- Verification.create(ctx, @delete_purpose, data, expires_in) do
       url =
-        URL.endpoint(config, "/delete-user/callback",
+        URL.endpoint(ctx, "/delete-user/callback",
           token: token,
           callback_url: ctx.params.callback_url
         )

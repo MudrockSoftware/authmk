@@ -19,12 +19,12 @@ defmodule Authmk.Schema do
         end
       end
 
-  `use Authmk.Schema` sets `@primary_key`, `@foreign_key_type` and
-  `@timestamps_opts` to match the auth module. Fields always follow the
+  `use Authmk.Schema` sets `@primary_key` and `@timestamps_opts` to match the
+  auth module. Fields always follow the
   current config, so enabling a plugin updates the schema automatically.
   """
 
-  alias Authmk.Schema.{Definition, EctoAst}
+  alias Authmk.Schema.{Definition, EctoAst, PrimaryKey}
 
   defmacro __using__(opts) do
     auth = Macro.expand(Keyword.fetch!(opts, :auth), __CALLER__)
@@ -38,8 +38,10 @@ defmodule Authmk.Schema do
     quote do
       import Authmk.Schema, only: [authmk_fields: 0]
 
-      @primary_key EctoAst.primary_key_attribute(unquote(auth).__authmk__(:schema))
-      @foreign_key_type unquote(auth).__authmk__(:schema).primary_key
+      @primary_key unquote(auth).__authmk__(:schema)
+                   |> Definition.model!(unquote(model))
+                   |> Map.fetch!(:primary_key)
+                   |> PrimaryKey.attribute()
       @timestamps_opts [type: :utc_datetime_usec]
     end
   end

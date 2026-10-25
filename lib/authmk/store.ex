@@ -22,19 +22,19 @@ defmodule Authmk.Store do
   def one(ctx, model, query), do: span(ctx, model, :one, fn -> repo(ctx).one(query) end)
 
   @doc """
-  Lists records matching `clauses`, newest first. `:limit` defaults to the
-  `find_many_limit` config.
+  Lists records matching `clauses`, newest first (for models with
+  timestamps). `:limit` defaults to the `find_many_limit` config.
   """
   @spec all(Context.t(), atom(), keyword() | Ecto.Query.dynamic_expr(), keyword()) :: [struct()]
   def all(ctx, model, clauses, opts \\ []) do
     limit = Keyword.get(opts, :limit, ctx.config.find_many_limit)
 
+    query = from(record in module(ctx, model), where: ^clauses, limit: ^limit)
+
     query =
-      from(record in module(ctx, model),
-        where: ^clauses,
-        order_by: [desc: record.inserted_at],
-        limit: ^limit
-      )
+      if Definition.model!(ctx.config.schema, model).timestamps,
+        do: order_by(query, [record], desc: record.inserted_at),
+        else: query
 
     span(ctx, model, :all, fn -> repo(ctx).all(query) end)
   end

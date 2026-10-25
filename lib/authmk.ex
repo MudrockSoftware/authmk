@@ -92,12 +92,37 @@ defmodule Authmk do
   @doc "Called before a user's email is marked as verified."
   @callback before_email_verification(user :: struct(), Context.t()) :: term()
 
+  @doc """
+  Called with every error an endpoint returns, and with the exception when
+  one crashes. Use it to log or report. The default does nothing.
+  """
+  @callback on_api_error(Error.t() | Exception.t(), Context.t()) :: term()
+
   @doc "Runs before every endpoint. Return `{:halt, error}` to stop the request."
   @callback before_endpoint(endpoint :: atom(), Context.t()) ::
               {:cont, Context.t()} | {:halt, Error.t()}
 
   @doc "Runs after every endpoint, and may change its result."
   @callback after_endpoint(endpoint :: atom(), Context.t(), result :: term()) :: term()
+
+  @doc """
+  Adjusts or refuses a social provider's user before sign-in. Receives
+  `%{provider: atom, user: map, profile: map, tokens: Authmk.OAuth.Tokens.t()}`,
+  where `user` is the provider's mapping (`:id`, `:email`, `:email_verified`,
+  `:name`, `:image`) and `profile` its raw answer. Return `{:ok, user}`, or
+  `{:error, %Authmk.Error{}}` to refuse. Use it to fill in a placeholder email
+  for providers that share none, or to allow only some users. The default
+  returns the user unchanged.
+  """
+  @callback map_social_profile(
+              %{
+                provider: atom(),
+                user: map(),
+                profile: map(),
+                tokens: Authmk.OAuth.Tokens.t()
+              },
+              Context.t()
+            ) :: {:ok, map()} | {:error, Error.t()}
 
   @doc "Runs around database writes. See `c:Authmk.Plugin.database_hook/4`."
   @callback database_hook(event :: atom(), model :: atom(), data :: term(), Context.t()) :: term()
@@ -175,10 +200,16 @@ defmodule Authmk do
       def dynamic_trusted_origins(_ctx), do: []
 
       @impl Authmk
+      def on_api_error(_error, _ctx), do: :ok
+
+      @impl Authmk
       def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
 
       @impl Authmk
       def after_endpoint(_endpoint, _ctx, result), do: result
+
+      @impl Authmk
+      def map_social_profile(%{user: user}, _ctx), do: {:ok, user}
 
       @impl Authmk
       def database_hook(_event, _model, data, _ctx), do: {:ok, data}
@@ -194,17 +225,17 @@ defmodule Authmk do
                      before_email_verification: 2,
                      customize_session: 2,
                      dynamic_trusted_origins: 1,
+                     on_api_error: 2,
                      before_endpoint: 2,
                      after_endpoint: 3,
+                     map_social_profile: 2,
                      database_hook: 4
     end
   end
 
-  require Logger
-
   @doc false
   def missing_callback(auth, callback) do
-    Logger.warning("#{inspect(auth)} doesn't implement #{callback}/2, so no email was sent")
+    Authmk.Log.warning("#{inspect(auth)} doesn't implement #{callback}/2, so no email was sent")
     :ok
   end
 end

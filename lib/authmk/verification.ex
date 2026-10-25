@@ -16,11 +16,13 @@ defmodule Authmk.Verification do
 
   alias Authmk.{Context, Error, Storage, Store, Token}
 
-  @doc "Creates a token for `purpose` carrying `data`. Returns the token."
-  @spec create(Context.t(), String.t(), map(), pos_integer()) ::
+  @doc """
+  Creates a token for `purpose` carrying `data`. Returns the token. Pass
+  `token` to use one you generated (it must be random and unguessable).
+  """
+  @spec create(Context.t(), String.t(), map(), pos_integer(), String.t()) ::
           {:ok, String.t()} | {:error, Error.t()}
-  def create(ctx, purpose, data, expires_in) do
-    token = Token.generate()
+  def create(ctx, purpose, data, expires_in, token \\ Token.generate()) do
     identifier = identifier(purpose, token)
     value = JSON.encode!(data)
     expires_at = DateTime.add(DateTime.utc_now(), expires_in)

@@ -14,12 +14,12 @@ Legend: `[ ]` planned, `[x]` done
 - [x] `use Authmk` config validated with NimbleOptions, with clear compile-time errors
 - [x] `app_name`, `base_url`, `base_path` (default `/auth`)
 - [x] Runtime options from application config (`config/runtime.exs`), merged over `use Authmk` options
-- [ ] Dynamic base URL: work out the URL per request for preview deployments and multiple domains, with a safe fallback
+- [x] Dynamic base URL: work out the URL per request for preview deployments and multiple domains, with a safe fallback
 - [x] `secret` (or `AUTHMK_SECRET`, at least 32 characters) plus versioned `secrets` (or `AUTHMK_SECRETS`) for key rotation: sign and encrypt with the newest, verify with all
 - [x] A separate key per purpose (HKDF-SHA256); secrets never appear in inspected config
 - [x] `disabled_paths` to turn off individual endpoints
-- [ ] `on_api_error` handler and configurable error redirect page
-- [ ] Logger integration: log levels and a custom log function
+- [x] `on_api_error/2` callback, crash handling (`errors: [rescue: ...]`) and an `/error` page for redirect flows
+- [x] Logger integration: every message carries `domain: [:authmk]` for standard Logger filters
 - [x] Background tasks: run non-critical work (emails) on a `Task.Supervisor`, or inline
 - [ ] Oban adapter for background tasks
 
@@ -28,13 +28,13 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Plugin endpoints with param specs, validated by schemaless changesets
 - [x] Plugin schema: new models, and new fields on core models
 - [x] Before and after endpoint hooks (`before_endpoint/2`, `after_endpoint/3`), matched by pattern matching on the endpoint name
-- [ ] Middleware for groups of plugin endpoints
-- [ ] `on_request` / `on_response` callbacks
+- [x] Middleware for groups of plugin endpoints (`middleware:` on endpoints)
+- [x] `on_request` / `on_response` callbacks
 - [x] Per-endpoint rate-limit rules
 - [x] Plugins can add trusted origins
 - [x] Plugin dependency check and predictable hook order
-- [ ] Helper functions for plugin authors (session lookup, sensitive-session check, cookie helpers)
-- [ ] Guide: writing your first plugin
+- [x] Building blocks for plugin authors, documented in the plugin guide (sessions, freshness, tokens, crypto, errors)
+- [x] Guide: writing your first plugin (its code is tested)
 
 ### Schema system
 - [x] Core models: `user`, `session`, `account`, `verification`
@@ -43,12 +43,12 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Rename fields and columns
 - [x] Table naming: `:plural` / `:singular`, `table_prefix`, per-model `table:` override
 - [ ] Map onto existing tables, such as `users` from `phx.gen.auth` (tested end to end)
-- [x] ID generation: app-generated UUIDs (default) or integer IDs
-- [ ] Custom ID generator function
-- [ ] Mixed ID types (for example, integer user IDs with UUID plugin tables)
+- [x] ID generation: UUIDs (default), time-ordered UUIDv7, integer IDs
+- [x] Custom string ID generator function
+- [x] Mixed ID types (for example, integer user IDs with UUID plugin tables)
 - [x] `authmk_fields()` macro for models the user owns
 - [x] Generated modules for models the library owns
-- [ ] Startup check that the database matches the resolved schema
+- [x] Startup check that the database matches the resolved schema (`advanced: [validate_schema: true]`)
 - [x] Database hooks: before and after create, update and delete on every model, able to change or cancel the operation
 - [x] Efficient loading of related records (one query for session plus user)
 - [x] Default limit for list queries
@@ -59,14 +59,14 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] CI test matrix across all four databases (GitHub Actions workflow written; not run on GitHub yet)
 
 ### Mix tasks
-- [ ] `mix authmk.install`: set up config, router, user schema and first migration (Igniter)
+- [x] `mix authmk.install`: auth module, supervision tree, config and secrets, Phoenix or Plug router, first migration (Igniter); both example apps are built with it
 - [x] `mix authmk.gen.migration`: snapshot diff and Ecto migration with exact `up`/`down`
 - [x] `mix authmk.gen.migration --baseline` for existing databases
 - [x] `mix authmk.gen.migration --check` for CI
 - [x] Destructive changes need `--allow-destructive`
-- [ ] Interactive rename detection
+- [x] Interactive rename detection for tables and columns; indexes renamed in place
 - [ ] Table rebuild for SQLite when a column changes (today the generator refuses with a clear message)
-- [ ] Run migrations from code (for releases)
+- [x] Run migrations from code (for releases): standard Ecto release migrator, documented in the deployment guide
 - [x] `mix authmk.gen.secret`
 - [ ] `mix authmk.create_admin`
 - [x] `mix authmk.info`: versions, enabled plugins, resolved schema and config problems
@@ -80,9 +80,9 @@ Legend: `[ ]` planned, `[x]` done
 
 ### Errors and observability
 - [x] `%Authmk.Error{}` with stable codes, HTTP statuses and messages (`Authmk.Error.codes/0`)
-- [ ] Error reference page in the docs
+- [x] Error reference in the docs, generated from the error list
 - [x] `:telemetry` events for every endpoint and database operation
-- [ ] OpenTelemetry spans for endpoints and database calls
+- [x] OpenTelemetry spans for endpoints and database calls (`Authmk.OpenTelemetry.setup/0`)
 
 ---
 
@@ -100,7 +100,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Request password reset, reset password and the reset callback
 - [x] Optionally sign out every session after a password reset
 - [x] Change password, with an option to sign out other sessions
-- [ ] Set a password for accounts that only use social sign-in
+- [x] Set a password for accounts that have none (`EmailPassword.set_password/3`, server-side)
 - [x] Verify a password (check before sensitive actions)
 
 ### Email verification
@@ -143,7 +143,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Cookie attributes per cookie (`same_site`, `domain`), plus global defaults
 - [x] Cookies shared across subdomains (`cookies: [domain: ...]`)
 - [x] Secure cookies, with the `__Secure-` prefix, whenever `base_url` is HTTPS
-- [ ] Guide: Safari ITP and cross-domain setups (reverse proxy, shared parent domain)
+- [x] Guide: Safari ITP and cross-domain setups (reverse proxy, shared parent domain)
 
 ### Security
 - [x] CSRF protection and origin checks for requests that change state
@@ -155,7 +155,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Trusted proxy headers and configurable IP address headers
 - [x] Option to turn off IP tracking
 - [ ] Outbound HTTP requests don't follow redirects (protects against server-side request forgery)
-- [ ] Security policy and vulnerability reporting process
+- [x] Security policy and vulnerability reporting process (`SECURITY.md`)
 
 ### Rate limiting
 - [x] On by default, with a default window and maximum

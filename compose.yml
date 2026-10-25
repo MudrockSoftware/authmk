@@ -15,7 +15,6 @@ services:
       POSTGRES_USER: authmk
       POSTGRES_PASSWORD: authmk
     ports: ["5432:5432"]
-    # Postgres 18+ keeps data under /var/lib/postgresql/<version>.
     tmpfs: ["/var/lib/postgresql"]
 
   mysql:

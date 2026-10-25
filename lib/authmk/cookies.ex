@@ -7,6 +7,7 @@ defmodule Authmk.Cookies do
     * `session_data`: the cookie cache (see `Authmk.CookieCache`), when enabled.
     * `dont_remember`: marks sessions created without "remember me", so
       refreshing them keeps the cookie browser-session-only.
+    * `oauth_state`: the in-progress social sign-in (see `Authmk.OAuth.State`).
 
   All are `HttpOnly` and `SameSite=Lax` by default. When `base_url` is HTTPS
   they are `Secure` and their names get the `__Secure-` prefix. Each cookie
@@ -15,23 +16,24 @@ defmodule Authmk.Cookies do
       cookies: [session_token: [name: "sid", same_site: "Strict"]]
   """
 
-  alias Authmk.{Config, Context, Crypto}
+  alias Authmk.{Context, Crypto}
 
   @suffixes [
     session_token: "session_token",
     session_data: "session_data",
-    dont_remember: "dont_remember"
+    dont_remember: "dont_remember",
+    oauth_state: "oauth_state"
   ]
 
-  @type cookie :: :session_token | :session_data | :dont_remember
+  @type cookie :: :session_token | :session_data | :dont_remember | :oauth_state
 
   @doc "Name of a cookie."
-  @spec name(Config.t(), cookie()) :: String.t()
-  def name(config, cookie) do
+  @spec name(Context.t(), cookie()) :: String.t()
+  def name(%Context{config: config} = ctx, cookie) do
     case config.cookies[cookie][:name] do
       nil ->
         name = "#{config.cookies[:prefix]}.#{Keyword.fetch!(@suffixes, cookie)}"
-        if secure?(config), do: "__Secure-" <> name, else: name
+        if secure?(ctx), do: "__Secure-" <> name, else: name
 
       name ->
         name
@@ -55,8 +57,8 @@ defmodule Authmk.Cookies do
   cookie, or `:invalid` when the signature doesn't match.
   """
   @spec session_token(Context.t()) :: {:ok, String.t()} | :none | :invalid
-  def session_token(%Context{conn: conn, config: config}) do
-    case conn.req_cookies[name(config, :session_token)] do
+  def session_token(%Context{conn: conn, config: config} = ctx) do
+    case conn.req_cookies[name(ctx, :session_token)] do
       nil -> :none
       signed -> with :error <- Crypto.verify(config, "session-token", signed), do: :invalid
     end
@@ -64,15 +66,23 @@ defmodule Authmk.Cookies do
 
   @doc "Whether the request's session was created with remember me."
   @spec remember_me?(Context.t()) :: boolean()
-  def remember_me?(%Context{conn: conn, config: config}) do
-    signed = conn.req_cookies[name(config, :dont_remember)]
+  def remember_me?(%Context{conn: conn, config: config} = ctx) do
+    signed = conn.req_cookies[name(ctx, :dont_remember)]
     not (is_binary(signed) and Crypto.verify(config, "dont-remember", signed) == {:ok, "true"})
   end
 
   @doc "Raw value of the session data cookie, or `nil`."
   @spec session_data(Context.t()) :: String.t() | nil
-  def session_data(%Context{conn: conn, config: config}),
-    do: conn.req_cookies[name(config, :session_data)]
+  def session_data(%Context{conn: conn} = ctx),
+    do: conn.req_cookies[name(ctx, :session_data)]
+
+  @doc "The in-progress social sign-in cookie, or `nil`."
+  @spec oauth_state(Context.t()) :: String.t() | nil
+  def oauth_state(%Context{conn: conn} = ctx), do: conn.req_cookies[name(ctx, :oauth_state)]
+
+  @doc "Sets the in-progress social sign-in cookie."
+  @spec put_oauth_state(Context.t(), String.t(), pos_integer()) :: Context.t()
+  def put_oauth_state(ctx, value, max_age), do: put(ctx, :oauth_state, value, max_age)
 
   @doc "Sets the session data cookie."
   @spec put_session_data(Context.t(), String.t(), pos_integer() | nil) :: Context.t()
@@ -80,8 +90,8 @@ defmodule Authmk.Cookies do
 
   @doc "Deletes one cookie."
   @spec delete(Context.t(), cookie()) :: Context.t()
-  def delete(%Context{config: config} = ctx, cookie) do
-    Context.delete_cookie(ctx, name(config, cookie), attributes(config, cookie, nil))
+  def delete(ctx, cookie) do
+    Context.delete_cookie(ctx, name(ctx, cookie), attributes(ctx, cookie, nil))
   end
 
   @doc "Deletes every session cookie."
@@ -90,25 +100,25 @@ defmodule Authmk.Cookies do
     ctx |> delete(:session_token) |> delete(:session_data) |> delete(:dont_remember)
   end
 
-  @doc "Whether cookies are marked `Secure`."
-  @spec secure?(Config.t()) :: boolean()
-  def secure?(config) do
+  @doc "Whether cookies are marked `Secure`: by default, when the request's base URL is HTTPS."
+  @spec secure?(Context.t()) :: boolean()
+  def secure?(%Context{config: config, base_url: base_url}) do
     case config.cookies[:secure] do
-      :auto -> String.starts_with?(config.base_url, "https://")
+      :auto -> String.starts_with?(base_url || "", "https://")
       secure -> secure
     end
   end
 
-  defp put(%Context{config: config} = ctx, cookie, value, max_age) do
-    Context.put_cookie(ctx, name(config, cookie), value, attributes(config, cookie, max_age))
+  defp put(ctx, cookie, value, max_age) do
+    Context.put_cookie(ctx, name(ctx, cookie), value, attributes(ctx, cookie, max_age))
   end
 
-  defp attributes(config, cookie, max_age) do
+  defp attributes(%Context{config: config} = ctx, cookie, max_age) do
     overrides = config.cookies[cookie] || []
 
     [
       http_only: true,
-      secure: secure?(config),
+      secure: secure?(ctx),
       same_site: Keyword.get(overrides, :same_site, config.cookies[:same_site]),
       path: "/",
       domain: Keyword.get(overrides, :domain, config.cookies[:domain]),

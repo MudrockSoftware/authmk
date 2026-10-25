@@ -16,6 +16,7 @@ defmodule Authmk.Endpoint do
 
     * `{:ok, body, ctx}`: JSON response with status 200
     * `{:redirect, url, ctx}`: 302 redirect
+    * `{:html, status, html, ctx}`: an HTML page
     * `{:error, %Authmk.Error{}}` or `{:error, %Authmk.Error{}, ctx}`
   """
 
@@ -35,6 +36,18 @@ defmodule Authmk.Endpoint do
               doc: "Whether to load the session. `:required` rejects anonymous requests."
             ],
             fresh: [type: :boolean, default: false, doc: "Require a recently created session."],
+            middleware: [
+              type: {:list, {:tuple, [:atom, :atom]}},
+              default: [],
+              doc:
+                "`{module, function}` checks run after the session loads, in order. Each gets the context and returns `{:cont, ctx}` or `{:halt, error}`."
+            ],
+            origin_check: [
+              type: :boolean,
+              default: true,
+              doc:
+                "Reject untrusted origins (CSRF protection). Turn off only for endpoints that change nothing, like a provider's cross-site callback."
+            ],
             cookie_cache: [
               type: :boolean,
               default: false,
@@ -59,7 +72,9 @@ defmodule Authmk.Endpoint do
     params: [],
     session: :none,
     fresh: false,
-    cookie_cache: false
+    cookie_cache: false,
+    origin_check: true,
+    middleware: []
   ]
 
   @type t :: %__MODULE__{}

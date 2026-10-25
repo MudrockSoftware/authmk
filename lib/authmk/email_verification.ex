@@ -54,8 +54,7 @@ defmodule Authmk.EmailVerification do
     expires_in = config.email_verification[:expires_in]
 
     with {:ok, token} <- Verification.create(ctx, @purpose, data, expires_in) do
-      {:ok, token,
-       URL.endpoint(config, "/verify-email", token: token, callback_url: callback_url)}
+      {:ok, token, URL.endpoint(ctx, "/verify-email", token: token, callback_url: callback_url)}
     end
   end
 end

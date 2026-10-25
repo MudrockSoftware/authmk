@@ -41,6 +41,7 @@ defmodule PhoenixApp.MixProject do
   defp deps do
     [
       {:authmk, path: "../.."},
+      {:igniter, "~> 0.8", only: [:dev, :test]},
       {:phoenix, "~> 1.8.13"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

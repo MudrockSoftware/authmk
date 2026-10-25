@@ -10,9 +10,9 @@ defmodule PhoenixApp.Application do
     children = [
       PhoenixAppWeb.Telemetry,
       PhoenixApp.Repo,
+      PhoenixApp.Auth,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:phoenix_app, :ecto_repos), skip: skip_migrations?()},
-      PhoenixApp.Auth,
       {DNSCluster, query: Application.get_env(:phoenix_app, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PhoenixApp.PubSub},
       # Start a worker by calling: PhoenixApp.Worker.start_link(arg)

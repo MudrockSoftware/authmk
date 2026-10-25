@@ -17,7 +17,7 @@ defmodule Authmk.Migration.Snapshot do
       }
   """
 
-  alias Authmk.Schema.{Definition, Field, Model}
+  alias Authmk.Schema.{Definition, Field, Model, PrimaryKey}
 
   @version 1
 
@@ -56,7 +56,7 @@ defmodule Authmk.Migration.Snapshot do
 
   defp table(model, definition) do
     %{
-      "primary_key" => Atom.to_string(definition.primary_key),
+      "primary_key" => PrimaryKey.column_type(model.primary_key),
       "timestamps" => model.timestamps,
       "columns" =>
         Map.new(model.fields, &{Atom.to_string(Field.column(&1)), column(&1, definition)}),
@@ -88,7 +88,7 @@ defmodule Authmk.Migration.Snapshot do
       "default" => nil,
       "references" => %{
         "table" => target.table,
-        "type" => Atom.to_string(definition.primary_key),
+        "type" => PrimaryKey.column_type(target.primary_key),
         "on_delete" => Atom.to_string(field.on_delete)
       }
     }

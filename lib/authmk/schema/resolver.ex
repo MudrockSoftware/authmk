@@ -5,10 +5,11 @@ defmodule Authmk.Schema.Resolver do
   `ArgumentError` that points at the `use Authmk` line.
   """
 
-  alias Authmk.Schema.{Core, Definition, Field, Model}
+  alias Authmk.Schema.{Core, Definition, Field, Model, PrimaryKey}
 
   @model_spec NimbleOptions.new!(
                 plural: [type: :string],
+                primary_key: [type: PrimaryKey.option_type()],
                 fields: [type: :keyword_list, default: []],
                 indexes: [type: {:list, :keyword_list}, default: []],
                 timestamps: [type: :boolean, default: true]
@@ -16,6 +17,7 @@ defmodule Authmk.Schema.Resolver do
 
   @user_model_config NimbleOptions.new!(
                        table: [type: :string],
+                       primary_key: [type: PrimaryKey.option_type()],
                        module: [type: :atom],
                        fields: [type: :keyword_list, default: []],
                        additional_fields: [type: :keyword_list, default: []]
@@ -100,6 +102,7 @@ defmodule Authmk.Schema.Resolver do
       table: table,
       module: config[:module] || Module.concat(auth, Macro.camelize(Atom.to_string(key))),
       owner: if(config[:module], do: :user, else: :library),
+      primary_key: config[:primary_key] || spec[:primary_key] || opts[:primary_key],
       fields: fields,
       indexes: [],
       timestamps: spec[:timestamps]

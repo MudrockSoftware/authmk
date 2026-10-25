@@ -11,8 +11,6 @@ defmodule Authmk.Secrets do
   until you remove them.
   """
 
-  require Logger
-
   @min_length 32
   # Bits, estimated from the character set size and length.
   @min_entropy 120
@@ -73,7 +71,7 @@ defmodule Authmk.Secrets do
     {_version, current} = hd(secrets)
 
     if entropy(current) < @min_entropy do
-      Logger.warning(
+      Authmk.Log.warning(
         "Your authmk secret looks low-entropy. Use a random one: `mix authmk.gen.secret`"
       )
     end

@@ -5,7 +5,8 @@ defmodule Authmk.Test.Browser do
 
   import Plug.Conn, only: [put_req_header: 3, get_resp_header: 2]
 
-  defstruct [:auth, origin: "http://localhost:4000", cookies: %{}, headers: []]
+  # `host` is the Host header, like "app.example.com" or "localhost:4000".
+  defstruct [:auth, :host, origin: "http://localhost:4000", cookies: %{}, headers: []]
 
   def new(auth, opts \\ []), do: struct!(%__MODULE__{auth: auth}, opts)
 
@@ -20,6 +21,7 @@ defmodule Authmk.Test.Browser do
       |> put_cookies(browser.cookies)
       |> put_headers(browser.headers)
       |> put_origin(method, browser.origin)
+      |> put_host(browser.host)
 
     [_base | segments] = conn.path_info
     conn = Plug.forward(conn, segments, browser.auth, browser.auth.init([]))
@@ -59,6 +61,16 @@ defmodule Authmk.Test.Browser do
 
   defp put_headers(conn, headers) do
     Enum.reduce(headers, conn, fn {name, value}, conn -> put_req_header(conn, name, value) end)
+  end
+
+  # Adapters turn the Host header into conn.host and conn.port.
+  defp put_host(conn, nil), do: conn
+
+  defp put_host(conn, host) do
+    case String.split(host, ":") do
+      [host, port] -> %{conn | host: host, port: String.to_integer(port)}
+      [host] -> %{conn | host: host, port: 80}
+    end
   end
 
   defp put_origin(conn, :get, _origin), do: conn

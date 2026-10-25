@@ -8,7 +8,7 @@ defmodule Authmk.Migration.Diff do
   and finally drop tables (referencing tables first).
   """
 
-  alias Authmk.Migration.Snapshot
+  alias Authmk.Migration.{Pairs, Snapshot}
 
   @type op ::
           {:create_table, String.t(), map()}
@@ -18,6 +18,7 @@ defmodule Authmk.Migration.Diff do
           | {:remove_column, String.t(), String.t(), map()}
           | {:create_index, String.t(), String.t(), map()}
           | {:drop_index, String.t(), String.t(), map()}
+          | {:rename_index, String.t(), String.t(), String.t(), map()}
 
   @doc "Operations from `old` to `new`. Raises on changes no migration can make safely."
   @spec diff(Snapshot.t(), Snapshot.t()) :: [op()]
@@ -33,7 +34,8 @@ defmodule Authmk.Migration.Diff do
 
     Enum.each(common, &check_table_settings!(&1, old_tables[&1], new_tables[&1]))
 
-    Enum.flat_map(common, &index_ops(:drop_index, &1, old_tables[&1], new_tables[&1])) ++
+    Enum.flat_map(common, &index_renames(&1, old_tables[&1], new_tables[&1])) ++
+      Enum.flat_map(common, &index_ops(:drop_index, &1, old_tables[&1], new_tables[&1])) ++
       Enum.flat_map(created, &create_table_ops(&1, new_tables[&1])) ++
       Enum.flat_map(common, &column_ops(&1, old_tables[&1], new_tables[&1])) ++
       Enum.flat_map(common, &index_ops(:create_index, &1, new_tables[&1], old_tables[&1])) ++
@@ -55,11 +57,44 @@ defmodule Authmk.Migration.Diff do
   end
 
   # Indexes in `table` that `other` lacks, or has with different settings.
+  # Indexes in `table` that `other` lacks, or has with different settings.
+  # Indexes that were only renamed are left to `index_renames/3`.
   defp index_ops(op, name, table, other) do
+    renamed = renamed_indexes(table, other)
+
     for {index_name, index} <- Enum.sort(table["indexes"]),
-        other["indexes"][index_name] != index do
+        other["indexes"][index_name] != index,
+        index_name not in renamed do
       {op, name, index_name, index}
     end
+  end
+
+  # An index with the same definition under a new name (for example after a
+  # table rename) is renamed in place: MySQL won't drop an index a foreign
+  # key needs.
+  defp index_renames(name, old, new) do
+    for {old_name, new_name, index} <- index_rename_pairs(old, new) do
+      {:rename_index, name, old_name, new_name, index}
+    end
+  end
+
+  defp renamed_indexes(table, other) do
+    pairs = index_rename_pairs(table, other) ++ index_rename_pairs(other, table)
+    Enum.flat_map(pairs, fn {old_name, new_name, _index} -> [old_name, new_name] end)
+  end
+
+  defp index_rename_pairs(old, new) do
+    gone =
+      for {name, index} <- Enum.sort(old["indexes"]),
+          not Map.has_key?(new["indexes"], name),
+          do: {name, index}
+
+    added =
+      for {name, index} <- Enum.sort(new["indexes"]),
+          not Map.has_key?(old["indexes"], name),
+          do: {name, index}
+
+    Pairs.match(gone, added, &(&1 == &2))
   end
 
   defp column_ops(name, old, new) do
@@ -68,7 +103,6 @@ defmodule Authmk.Migration.Diff do
 
     added =
       for {column, spec} <- Enum.sort(new_columns), not Map.has_key?(old_columns, column) do
-        check_addable!(name, column, spec)
         {:add_column, name, column, spec}
       end
 
@@ -89,14 +123,20 @@ defmodule Authmk.Migration.Diff do
   defp changed?(nil, _spec), do: false
   defp changed?(old_spec, spec), do: old_spec != spec
 
-  # Existing rows need a value for a new NOT NULL column.
-  defp check_addable!(table, column, %{"null" => false, "default" => nil}) do
-    raise ArgumentError,
-          "can't add #{table}.#{column}: a new column on an existing table must be " <>
-            "nullable or have a default"
-  end
+  @doc """
+  Raises for operations that can't run on a table with rows: adding a
+  `NOT NULL` column without a default leaves existing rows without a value.
+  """
+  @spec check_addable!([op()]) :: :ok
+  def check_addable!(ops) do
+    for {:add_column, table, column, %{"null" => false, "default" => nil}} <- ops do
+      raise ArgumentError,
+            "can't add #{table}.#{column}: a new column on an existing table must be " <>
+              "nullable or have a default. If it replaces a column, confirm the rename"
+    end
 
-  defp check_addable!(_table, _column, _spec), do: :ok
+    :ok
+  end
 
   defp check_table_settings!(name, old, new) do
     for key <- ["primary_key", "timestamps"], old[key] != new[key] do

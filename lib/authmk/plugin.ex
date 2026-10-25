@@ -16,9 +16,11 @@ defmodule Authmk.Plugin do
         def hello(ctx), do: {:ok, %{hello: "world"}, ctx}
       end
 
-  Hooks (`before_endpoint/2`, `after_endpoint/3`, `database_hook/4`) run for
-  every request, so match on the endpoint or model you care about and add a
-  catch-all clause that passes everything else through.
+  Hooks (`on_request/1`, `on_response/2`, `before_endpoint/2`,
+  `after_endpoint/3`, `database_hook/4`) run for every request, so match on
+  the endpoint or model you care about and add a catch-all clause that passes
+  everything else through. For checks shared by several of your own
+  endpoints, give them a `middleware:` list instead (see `Authmk.Endpoint`).
   """
 
   alias Authmk.{Context, Endpoint, Error}
@@ -45,6 +47,16 @@ defmodule Authmk.Plugin do
   @doc "Plugins that must be enabled for this one to work."
   @callback depends_on() :: [module()]
 
+  @doc """
+  Runs for every request to the auth router, before any built-in check
+  (origin, rate limit, session). `ctx.endpoint` is set; `ctx.params` and the
+  session are not loaded yet. Return `{:halt, error}` to stop the request.
+  """
+  @callback on_request(Context.t()) :: {:cont, Context.t()} | {:halt, Error.t()}
+
+  @doc "Changes the response (headers, status) just before it is sent."
+  @callback on_response(Plug.Conn.t(), Context.t()) :: Plug.Conn.t()
+
   @doc "Runs before an endpoint. Return `{:halt, error}` to stop the request."
   @callback before_endpoint(endpoint :: atom(), Context.t()) ::
               {:cont, Context.t()} | {:halt, Error.t()}
@@ -65,6 +77,8 @@ defmodule Authmk.Plugin do
                       endpoints: 1,
                       trusted_origins: 1,
                       depends_on: 0,
+                      on_request: 1,
+                      on_response: 2,
                       before_endpoint: 2,
                       after_endpoint: 3,
                       database_hook: 4

@@ -5,11 +5,11 @@ defmodule PlugApp.Router do
 
   use Plug.Router
 
-  plug(:match)
-  plug(Plug.Parsers, parsers: [:urlencoded, :json], json_decoder: JSON)
-  plug(:dispatch)
+  plug :match
+  plug Plug.Parsers, parsers: [:urlencoded, :json], json_decoder: JSON
+  plug :dispatch
 
-  forward("/auth", to: PlugApp.Auth)
+  forward "/auth", to: PlugApp.Auth
 
   get "/" do
     send_resp(conn, 200, "ok")

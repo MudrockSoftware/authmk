@@ -18,4 +18,8 @@ excluded =
       else: [:sqlite]
     )
 
+# Migration tests run generated migration files up and down, which loads
+# each file again.
+Code.put_compiler_option(:ignore_module_conflict, true)
+
 ExUnit.start(exclude: excluded)

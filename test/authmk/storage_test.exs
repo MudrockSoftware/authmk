@@ -47,6 +47,7 @@ defmodule Authmk.StorageTest do
 
   import Ecto.Query
 
+  alias Authmk.Storage.ETS
   alias Authmk.StorageTest.{BothAuth, DatabaseLimitAuth, SecondaryAuth}
   alias Authmk.Test.Repo
 
@@ -116,7 +117,7 @@ defmodule Authmk.StorageTest do
       {browser, _user} = sign_up(browser)
       assert Repo.aggregate("sessions", :count) == 1
 
-      :ets.delete_all_objects(Authmk.Config.ets_table(BothAuth))
+      :ets.delete_all_objects(ETS.table(BothAuth))
       {_browser, conn} = get(browser, "/get-session")
       assert json(conn)["user"]["email"] == "ada@example.com"
     end

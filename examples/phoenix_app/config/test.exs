@@ -1,5 +1,12 @@
 import Config
 
+config :argon2_elixir, t_cost: 1, m_cost: 8
+
+config :phoenix_app, PhoenixApp.Auth,
+  secret: "gQ4n9fvOWNIrCTcEva1RdFmyIWL0wrF9knYFdm4IX9c",
+  background: :inline,
+  rate_limit: [enabled: false]
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
@@ -14,20 +21,11 @@ config :phoenix_app, PhoenixApp.Repo,
 # you can enable the server option below.
 config :phoenix_app, PhoenixAppWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
-  secret_key_base: "l9U155gS/Kt8yy1I/emx/IHd8SU21lds9fmDpp6V/4gTrOBBypiBv49++AZMFkiM",
+  secret_key_base: "x7JfjWJ/XgINMm9+2Ze4chMbZzHWF+SCWzFoGLKueG5bDZ1cbBJ1uxS9TKPA+Q9P",
   server: false
 
 # In test we don't send emails
 config :phoenix_app, PhoenixApp.Mailer, adapter: Swoosh.Adapters.Test
-
-# Send emails from the test process, so tests can assert on them.
-config :phoenix_app, PhoenixApp.Auth,
-  secret: "c2iKFVGjhjs92_nzC2BmV9xsrEO_KT0lOBNhlQvVbEw",
-  background: :inline,
-  rate_limit: [enabled: false]
-
-# Fast, insecure password hashing. Tests only.
-config :argon2_elixir, t_cost: 1, m_cost: 8, parallelism: 1
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

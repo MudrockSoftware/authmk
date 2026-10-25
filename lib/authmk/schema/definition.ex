@@ -10,7 +10,10 @@ defmodule Authmk.Schema.Definition do
   @enforce_keys [:primary_key, :models]
   defstruct [:primary_key, :models]
 
-  @type t :: %__MODULE__{primary_key: :binary_id | :id, models: %{atom() => Model.t()}}
+  @type t :: %__MODULE__{
+          primary_key: Authmk.Schema.PrimaryKey.t(),
+          models: %{atom() => Model.t()}
+        }
 
   @doc "Returns the model for `key`. Raises if it doesn't exist."
   @spec model!(t(), atom()) :: Model.t()

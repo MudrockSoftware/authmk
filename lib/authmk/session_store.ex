@@ -19,7 +19,7 @@ defmodule Authmk.SessionStore do
   import Ecto.Query
 
   alias Authmk.{Context, Error, Hooks, Storage, Store}
-  alias Authmk.Schema.{Changeset, Definition}
+  alias Authmk.Schema.{Changeset, Definition, PrimaryKey}
 
   @doc "Creates a session for `user` from internal `attrs`."
   @spec insert(Context.t(), map(), struct()) :: {:ok, struct()} | {:error, Error.t()}
@@ -182,13 +182,13 @@ defmodule Authmk.SessionStore do
   # A session that only lives in secondary storage: validated like a
   # database insert, with an id and timestamps.
   defp build(ctx, attrs) do
-    module = Store.module(ctx, :session)
+    model = Definition.model!(ctx.config.schema, :session)
     now = DateTime.utc_now()
+    id = PrimaryKey.generate(model.primary_key)
 
-    ctx.config.schema
-    |> Definition.model!(:session)
-    |> Changeset.build(struct(module), attrs, :internal)
-    |> Ecto.Changeset.change(id: Ecto.UUID.generate(), inserted_at: now, updated_at: now)
+    model
+    |> Changeset.build(struct(model.module), attrs, :internal)
+    |> Ecto.Changeset.change(id: id, inserted_at: now, updated_at: now)
     |> Ecto.Changeset.apply_action(:insert)
     |> case do
       {:ok, session} -> {:ok, session}

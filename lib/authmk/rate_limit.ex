@@ -14,7 +14,7 @@ defmodule Authmk.RateLimit do
   the whole block.
   """
 
-  alias Authmk.{Config, Context, Error, Request, Storage}
+  alias Authmk.{Context, Error, Request, Storage}
   alias Authmk.Plugins.DatabaseRateLimit
 
   @doc "`:ok`, or a `:rate_limited` error with `retry_after` seconds in its details."
@@ -32,7 +32,7 @@ defmodule Authmk.RateLimit do
 
   defp increment(%Context{config: config} = ctx, key, window) do
     case config.rate_limit[:storage] do
-      :memory -> Storage.ETS.increment([table: Config.ets_table(config.auth)], key, window)
+      :memory -> Storage.ETS.increment([table: Storage.ETS.table(config.auth)], key, window)
       :secondary_storage -> Storage.increment(config, key, window)
       :database -> DatabaseRateLimit.increment(ctx, key, window)
     end
