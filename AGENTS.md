@@ -36,11 +36,13 @@ completed.
 
 - First time: `mix setup` (fetches deps and enables the `.githooks/pre-commit` hook)
 - Library tests: `mix test`; single file or line: `mix test test/path_test.exs:42`
-- Other databases and Redis: start them with `docker compose up -d postgres mysql mariadb valkey`
+- Other databases and Redis: start them with `docker compose up -d postgres mysql mariadb valkey redis`
   (see `compose.yml`), then `AUTHMK_TEST_DB=postgres mix test`, `AUTHMK_TEST_DB=mysql mix test`,
-  `AUTHMK_TEST_DB=mariadb mix test`,
-  and `REDIS_URL=redis://localhost:6379 mix test` for the Redis tests. Each database gets its own
-  build directory. Changes to storage, queries or migrations must pass on all four.
+  `AUTHMK_TEST_DB=mariadb mix test`. Each database gets its own build directory.
+  Changes to storage, queries or migrations must pass on all four.
+- Redis tests: `REDIS_URL=redis://localhost:6379 mix test` (Valkey) and
+  `REDIS_URL=redis://localhost:6380 mix test --only redis` (Redis 8). Changes to
+  secondary storage must pass on both.
 - Coverage: `mix coverage`. It fails below the `test_coverage` threshold (90%) and writes HTML to `cover/`.
 - Fuzz tests: `mix fuzz` runs only `test/fuzz/` (StreamData properties tagged `:fuzz`),
   `FUZZ_RUNS` times each (default 1000). `mix test` excludes them.

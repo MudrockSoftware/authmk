@@ -7,8 +7,9 @@ on:
 
 env:
   MIX_ENV: test
-  ELIXIR_VERSION: "1.20"
-  OTP_VERSION: "29"
+  # Erlang's source build: no docs, GUI or ODBC.
+  KERL_BUILD_DOCS: "no"
+  KERL_CONFIGURE_OPTIONS: --without-javac --without-wx --without-odbc --without-debugger --without-observer --without-et
 
 jobs:
   lint:
@@ -18,10 +19,10 @@ jobs:
       MIX_ENV: dev
     steps:
       - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+      # Erlang builds from source on Linux (see mise.lock).
+      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
+      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      - uses: jdx/mise-action@v5
       - uses: actions/cache@v4
         with:
           path: |
@@ -48,6 +49,9 @@ jobs:
       valkey:
         image: valkey/valkey:9-alpine
         ports: ["6379:6379"]
+      redis:
+        image: redis:8-alpine
+        ports: ["6380:6379"]
       postgres:
         image: postgres:18-alpine
         env:
@@ -69,10 +73,10 @@ jobs:
         options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+      # Erlang builds from source on Linux (see mise.lock).
+      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
+      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      - uses: jdx/mise-action@v5
       - uses: actions/cache@v4
         with:
           path: |
@@ -81,6 +85,10 @@ jobs:
           key: test-${{ matrix.database }}-${{ runner.os }}-${{ hashFiles('mix.lock') }}
       - run: mix deps.get
       - run: mix test
+      - name: Redis tests on Redis 8
+        run: mix test --only redis
+        env:
+          REDIS_URL: redis://localhost:6380
 
   examples:
     name: Example ${{ matrix.app }}
@@ -94,10 +102,10 @@ jobs:
         working-directory: examples/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+      # Erlang builds from source on Linux (see mise.lock).
+      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
+      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      - uses: jdx/mise-action@v5
       - run: mix deps.get
       - run: mix compile --warnings-as-errors
       - run: mix format --check-formatted
