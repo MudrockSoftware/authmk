@@ -254,7 +254,7 @@ defmodule Authmk.Endpoints.Social do
     opts = [request_sign_up: state["request_sign_up"] == true]
 
     with {:ok, user, status} <- Accounts.sign_in(ctx, provider, info, tokens, opts),
-         {:ok, ctx} <- Sessions.create(ctx, user) do
+         {:ok, ctx} <- Sessions.sign_in(ctx, user) do
       destination =
         if status == :new,
           do: state["new_user_callback_url"] || state["callback_url"],
@@ -262,7 +262,14 @@ defmodule Authmk.Endpoints.Social do
 
       {:redirect, destination || "/", ctx}
     else
-      {:error, error} -> redirect_error(ctx, state["error_callback_url"], error.code)
+      {:challenge, %{redirect_url: url}, ctx} when is_binary(url) ->
+        {:redirect, url, ctx}
+
+      {:challenge, _body, ctx} ->
+        redirect_error(ctx, state["error_callback_url"], :additional_verification_required)
+
+      {:error, error} ->
+        redirect_error(ctx, state["error_callback_url"], error.code)
     end
   end
 
@@ -292,8 +299,11 @@ defmodule Authmk.Endpoints.Social do
            Accounts.sign_in(ctx, provider, info, tokens,
              request_sign_up: ctx.params.request_sign_up
            ),
-         {:ok, ctx} <- Sessions.create(ctx, user) do
+         {:ok, ctx} <- Sessions.sign_in(ctx, user) do
       {:ok, %{redirect: false, user: Serializer.user(ctx, user)}, ctx}
+    else
+      {:challenge, body, ctx} -> {:ok, Map.put(body, :redirect, false), ctx}
+      {:error, error} -> {:error, error}
     end
   end
 

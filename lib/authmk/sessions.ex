@@ -8,11 +8,26 @@ defmodule Authmk.Sessions do
   `session[:fresh_age]` seconds after sign-in; sensitive actions require that.
   """
 
-  alias Authmk.{Context, CookieCache, Cookies, Error, Request, SessionStore, Token}
+  alias Authmk.{Context, CookieCache, Cookies, Error, Hooks, Request, SessionStore, Token}
+
+  @doc """
+  Signs `user` in: asks plugins whether another step is needed first (see
+  `c:Authmk.Plugin.sign_in_challenge/3`), and creates the session when none
+  is. Every sign-in method goes through here.
+  """
+  @spec sign_in(Context.t(), struct(), boolean()) ::
+          {:ok, Context.t()} | {:challenge, map(), Context.t()} | {:error, Error.t()}
+  def sign_in(ctx, user, remember_me \\ true) do
+    case Hooks.sign_in_challenge(ctx, user, remember_me) do
+      {:cont, ctx} -> create(ctx, user, remember_me)
+      other -> other
+    end
+  end
 
   @doc """
   Creates a session for `user`, sets the cookie, and puts the session and
-  user on the context.
+  user on the context. Sign-ins use `sign_in/3` instead; this is for the
+  step that finishes one, like a second factor.
   """
   @spec create(Context.t(), struct(), boolean()) :: {:ok, Context.t()} | {:error, Error.t()}
   def create(%Context{config: config} = ctx, user, remember_me \\ true) do

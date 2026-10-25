@@ -6,7 +6,7 @@ defmodule Authmk.EmailVerification do
   address, which replaces the old one once the link is opened.
   """
 
-  alias Authmk.{Background, Context, Error, URL, Verification}
+  alias Authmk.{Background, Context, Error, Hooks, URL, Verification}
 
   @purpose "email-verification"
 
@@ -17,6 +17,13 @@ defmodule Authmk.EmailVerification do
   @doc "Sends a link that verifies the user's current email address."
   @spec send_verification(Context.t(), struct(), String.t() | nil) :: :ok | {:error, Error.t()}
   def send_verification(ctx, user, callback_url) do
+    case Hooks.send_email_verification(ctx, user, callback_url) do
+      :cont -> send_link(ctx, user, callback_url)
+      sent_by_plugin -> sent_by_plugin
+    end
+  end
+
+  defp send_link(ctx, user, callback_url) do
     data = %{"user_id" => to_string(user.id), "email" => user.email}
 
     with {:ok, token, url} <- create_link(ctx, data, callback_url) do

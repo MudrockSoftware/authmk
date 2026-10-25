@@ -86,16 +86,28 @@ defmodule Authmk.Endpoints.EmailVerification do
   end
 
   defp success(%{params: params, config: config} = ctx, user) do
-    with {:ok, ctx} <-
-           maybe_sign_in(ctx, user, config.email_verification[:auto_sign_in_after_verification]) do
-      if params.callback_url,
-        do: {:redirect, params.callback_url, ctx},
-        else: {:ok, %{status: true, user: Serializer.user(ctx, user)}, ctx}
+    auto_sign_in = config.email_verification[:auto_sign_in_after_verification]
+
+    with {:ok, ctx, challenge} <- maybe_sign_in(ctx, user, auto_sign_in) do
+      body = Map.merge(%{status: true, user: Serializer.user(ctx, user)}, challenge)
+
+      case challenge[:redirect_url] || params.callback_url do
+        nil -> {:ok, body, ctx}
+        url -> {:redirect, url, ctx}
+      end
     end
   end
 
-  defp maybe_sign_in(%{session: nil} = ctx, user, true), do: Sessions.create(ctx, user)
-  defp maybe_sign_in(ctx, _user, _auto_sign_in), do: {:ok, ctx}
+  # A sign-in that needs another step (a second factor) goes on from there.
+  defp maybe_sign_in(%{session: nil} = ctx, user, true) do
+    case Sessions.sign_in(ctx, user) do
+      {:ok, ctx} -> {:ok, ctx, %{}}
+      {:challenge, challenge, ctx} -> {:ok, ctx, challenge}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp maybe_sign_in(ctx, _user, _auto_sign_in), do: {:ok, ctx, %{}}
 
   defp invalid_token, do: {:error, Error.new(:invalid_token)}
 end

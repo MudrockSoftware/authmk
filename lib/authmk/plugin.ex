@@ -65,6 +65,28 @@ defmodule Authmk.Plugin do
   @callback after_endpoint(endpoint :: atom(), Context.t(), result()) :: result()
 
   @doc """
+  Runs when a sign-in is about to create a session, whatever the sign-in
+  method. Return `{:challenge, body, ctx}` to ask for another step first,
+  like a second factor: no session is created, and the sign-in answers with
+  `body`. Sign-ins that end in a redirect (social sign-in) send the browser
+  to `body.redirect_url` when there is one.
+  """
+  @callback sign_in_challenge(user :: struct(), remember_me :: boolean(), Context.t()) ::
+              {:cont, Context.t()} | {:challenge, map(), Context.t()} | {:error, Error.t()}
+
+  @doc """
+  Runs before authmk emails a verification link (on sign-up, on sign-in
+  with unverified email, or when asked). Return `:ok` after sending your own
+  instead, like a code; `:cont` lets the link go out.
+  """
+  @callback send_email_verification(
+              user :: struct(),
+              callback_url :: String.t() | nil,
+              Context.t()
+            ) ::
+              :cont | :ok | {:error, Error.t()}
+
+  @doc """
   Runs around database writes. `event` is one of `:before_create`,
   `:before_update`, `:before_delete` (return `{:ok, data}` or `{:error, error}`)
   or `:after_create`, `:after_update`, `:after_delete` (return value ignored).
@@ -81,6 +103,8 @@ defmodule Authmk.Plugin do
                       on_response: 2,
                       before_endpoint: 2,
                       after_endpoint: 3,
+                      sign_in_challenge: 3,
+                      send_email_verification: 3,
                       database_hook: 4
 
   defmacro __using__(_opts) do

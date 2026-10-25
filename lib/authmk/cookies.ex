@@ -9,6 +9,9 @@ defmodule Authmk.Cookies do
       refreshing them keeps the cookie browser-session-only.
     * `oauth_state`: the in-progress social sign-in (see `Authmk.OAuth.State`).
 
+  Plugins add their own (like `two_factor`) with `put/4`, `get/2` and
+  `delete/2`, named `<prefix>.<name>`.
+
   All are `HttpOnly` and `SameSite=Lax` by default. When `base_url` is HTTPS
   they are `Secure` and their names get the `__Secure-` prefix. Each cookie
   can override its name and attributes:
@@ -25,14 +28,16 @@ defmodule Authmk.Cookies do
     oauth_state: "oauth_state"
   ]
 
-  @type cookie :: :session_token | :session_data | :dont_remember | :oauth_state
+  @type cookie :: :session_token | :session_data | :dont_remember | :oauth_state | atom()
 
   @doc "Name of a cookie."
   @spec name(Context.t(), cookie()) :: String.t()
   def name(%Context{config: config} = ctx, cookie) do
     case config.cookies[cookie][:name] do
       nil ->
-        name = "#{config.cookies[:prefix]}.#{Keyword.fetch!(@suffixes, cookie)}"
+        name =
+          "#{config.cookies[:prefix]}.#{Keyword.get(@suffixes, cookie, Atom.to_string(cookie))}"
+
         if secure?(ctx), do: "__Secure-" <> name, else: name
 
       name ->
@@ -88,6 +93,16 @@ defmodule Authmk.Cookies do
   @spec put_session_data(Context.t(), String.t(), pos_integer() | nil) :: Context.t()
   def put_session_data(ctx, value, max_age), do: put(ctx, :session_data, value, max_age)
 
+  @doc "Raw value of a cookie from the request, or `nil`."
+  @spec get(Context.t(), cookie()) :: String.t() | nil
+  def get(%Context{conn: conn} = ctx, cookie), do: conn.req_cookies[name(ctx, cookie)]
+
+  @doc "Sets a cookie, for `max_age` seconds (`nil`: until the browser closes)."
+  @spec put(Context.t(), cookie(), String.t(), pos_integer() | nil) :: Context.t()
+  def put(ctx, cookie, value, max_age) do
+    Context.put_cookie(ctx, name(ctx, cookie), value, attributes(ctx, cookie, max_age))
+  end
+
   @doc "Deletes one cookie."
   @spec delete(Context.t(), cookie()) :: Context.t()
   def delete(ctx, cookie) do
@@ -107,10 +122,6 @@ defmodule Authmk.Cookies do
       :auto -> String.starts_with?(base_url || "", "https://")
       secure -> secure
     end
-  end
-
-  defp put(ctx, cookie, value, max_age) do
-    Context.put_cookie(ctx, name(ctx, cookie), value, attributes(ctx, cookie, max_age))
   end
 
   defp attributes(%Context{config: config} = ctx, cookie, max_age) do

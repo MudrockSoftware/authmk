@@ -49,6 +49,36 @@ defmodule Authmk.Hooks do
     |> Enum.reduce(result, fn module, result -> module.after_endpoint(name, ctx, result) end)
   end
 
+  @doc "Runs `sign_in_challenge/3` hooks. The first challenge wins."
+  @spec sign_in_challenge(Context.t(), struct(), boolean()) ::
+          {:cont, Context.t()} | {:challenge, map(), Context.t()} | {:error, Error.t()}
+  def sign_in_challenge(%Context{} = ctx, user, remember_me) do
+    ctx
+    |> hook_modules(:sign_in_challenge, 3)
+    |> Enum.reduce_while({:cont, ctx}, fn module, {:cont, ctx} ->
+      case module.sign_in_challenge(user, remember_me, ctx) do
+        {:cont, %Context{} = ctx} -> {:cont, {:cont, ctx}}
+        {:challenge, body, %Context{} = ctx} when is_map(body) -> {:halt, {:challenge, body, ctx}}
+        {:error, %Error{} = error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  @doc "Runs `send_email_verification/3` hooks. The first that sends (`:ok`) wins."
+  @spec send_email_verification(Context.t(), struct(), String.t() | nil) ::
+          :cont | :ok | {:error, Error.t()}
+  def send_email_verification(%Context{} = ctx, user, callback_url) do
+    ctx
+    |> hook_modules(:send_email_verification, 3)
+    |> Enum.reduce_while(:cont, fn module, :cont ->
+      case module.send_email_verification(user, callback_url, ctx) do
+        :cont -> {:cont, :cont}
+        :ok -> {:halt, :ok}
+        {:error, %Error{} = error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
   @doc "Runs `:before_*` database hooks. Each may change `data` or stop the write."
   @spec before_write(atom(), atom(), term(), Context.t()) :: {:ok, term()} | {:error, Error.t()}
   def before_write(event, model, data, ctx) do

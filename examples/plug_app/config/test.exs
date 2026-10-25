@@ -11,3 +11,5 @@ config :plug_app, PlugApp.Repo, pool: Ecto.Adapters.SQL.Sandbox, pool_size: 5
 config :plug_app, server: false
 config :plug_app, PlugApp.Mailer, adapter: Swoosh.Adapters.Test
 config :logger, level: :warning
+
+config :plug_app, PlugApp.SMS, adapter: :test

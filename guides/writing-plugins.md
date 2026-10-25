@@ -119,6 +119,13 @@ def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
 | `after_endpoint/3` | After the handler; can change the result |
 | `on_response/2` | Just before the response is sent; gets the `Plug.Conn` |
 | `database_hook/4` | Around every insert, update and delete |
+| `sign_in_challenge/3` | Before any sign-in creates a session; can ask for another step first |
+
+`sign_in_challenge/3` is how `Authmk.Plugins.TwoFactor` works: it answers
+`{:challenge, body, ctx}` for users with 2FA on, and its own endpoint
+creates the session (with `Authmk.Sessions.create/3`) once the code is right.
+Your own sign-in endpoints should call `Authmk.Sessions.sign_in/3`, so
+plugins like that one apply to them too.
 
 For a check that several of your own endpoints share, give those endpoints a
 `middleware: [{module, function}]` list instead of a hook.

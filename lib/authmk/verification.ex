@@ -68,6 +68,22 @@ defmodule Authmk.Verification do
 
   def consume(_ctx, _purpose, _token), do: invalid_token()
 
+  @doc "Deletes a token, wherever it is stored. Deleting one that doesn't exist is fine."
+  @spec delete(Context.t(), String.t(), String.t()) :: :ok
+  def delete(ctx, purpose, token) do
+    identifier = identifier(purpose, token)
+    :ok = delete_cached(ctx, identifier)
+
+    _count =
+      if in_database?(ctx), do: Store.delete_all(ctx, :verification, identifier: identifier)
+
+    :ok
+  end
+
+  defp delete_cached(ctx, identifier) do
+    if cached?(ctx), do: Storage.delete(ctx.config, key(identifier)), else: :ok
+  end
+
   defp create_in_database(ctx, identifier, value, expires_at) do
     if in_database?(ctx) do
       attrs = %{identifier: identifier, value: value, expires_at: expires_at}

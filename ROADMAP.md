@@ -238,47 +238,47 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.4 Sign-in methods
 
 ### Two-factor authentication
-- [ ] Turn 2FA on and off (with password confirmation)
-- [ ] TOTP with an otpauth URI and QR code (NimbleTOTP)
-- [ ] One-time codes by email or SMS
-- [ ] Backup codes: generate, view, use, regenerate
-- [ ] Trusted devices (skip 2FA for a set time)
-- [ ] Configurable issuer
-- [ ] Option to skip verification when enabling
-- [ ] Option to enable 2FA without a password
+- [x] Turn 2FA on and off (with password confirmation)
+- [x] TOTP with an otpauth URI for the QR code (NimbleTOTP)
+- [x] One-time codes by email or SMS
+- [x] Backup codes: generate, view, use, regenerate
+- [x] Trusted devices (skip 2FA for a set time)
+- [x] Configurable issuer
+- [x] Option to skip verification when enabling
+- [x] Option to enable 2FA without a password
 
 ### Username
-- [ ] Sign up and sign in with a username
-- [ ] Update a username; check if one is available (or turn that check off)
-- [ ] Minimum and maximum length, custom validator
-- [ ] Separate display username, with its own validation and normalization
-- [ ] Usernames that can't be changed
+- [x] Sign up and sign in with a username
+- [x] Update a username; check if one is available (or turn that check off)
+- [x] Minimum and maximum length, custom validator
+- [x] Separate display username, with its own validation and normalization
+- [x] Usernames that can't be changed
 
 ### Anonymous
-- [ ] Sign in anonymously
-- [ ] Link to a real account later, with an `on_link_account` callback
-- [ ] Delete the anonymous user after linking (optional)
-- [ ] Custom email domain, generated email and name
+- [x] Sign in anonymously
+- [x] Link to a real account later, with an `on_link_account` callback
+- [x] Delete the anonymous user after linking (optional)
+- [x] Custom email domain, generated email and name
 
 ### Phone number
-- [ ] Send and verify OTP codes (bring your own SMS sender)
-- [ ] Sign up on verification; sign in with phone number and password
-- [ ] Update and remove a phone number
-- [ ] Password reset by OTP
-- [ ] Limit on verification attempts
-- [ ] Custom validator; option to require verification; option to verify without creating a session
+- [x] Send and verify OTP codes (bring your own SMS sender)
+- [x] Sign up on verification; sign in with phone number and password
+- [x] Update and remove a phone number
+- [x] Password reset by OTP
+- [x] Limit on verification attempts
+- [x] Custom validator; option to require verification; option to verify without creating a session
 
 ### Magic link
-- [ ] Send a magic link and verify it
-- [ ] Sign up through a magic link (optional)
-- [ ] Custom token generation and storage (plain or hashed)
+- [x] Send a magic link and verify it
+- [x] Sign up through a magic link (optional)
+- [x] Custom token generation (tokens are always stored hashed)
 
 ### Email OTP
-- [ ] Send, check and sign in with an OTP
-- [ ] Verify an email with an OTP, optionally replacing link-based verification
-- [ ] Reset a password with an OTP
-- [ ] Change an email with an OTP
-- [ ] Limit on attempts; codes stored hashed or encrypted
+- [x] Send, check and sign in with an OTP
+- [x] Verify an email with an OTP, optionally replacing link-based verification
+- [x] Reset a password with an OTP
+- [x] Change an email with an OTP
+- [x] Limit on attempts; codes stored encrypted
 
 ### Passkeys (WebAuthn)
 - [ ] Register and sign in with passkeys (Wax)

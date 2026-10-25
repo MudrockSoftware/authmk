@@ -37,6 +37,7 @@ defmodule Authmk.Plugins.EmailPassword do
     Error,
     Input,
     Origin,
+    PasswordPolicy,
     Serializer,
     Sessions,
     Store,
@@ -149,14 +150,29 @@ defmodule Authmk.Plugins.EmailPassword do
 
   @doc false
   def sign_in(%Context{params: params} = ctx) do
+    password_sign_in(ctx, Store.get_by(ctx, :user, email: Email.normalize(params.email)))
+  end
+
+  @doc false
+  # Signs in `user` (or fails the same way for `nil`) with `password`,
+  # `callback_url` and `remember_me` from the params. For plugins that find
+  # the user another way, like by username.
+  def password_sign_in(%Context{params: params} = ctx, user) do
     opts = Context.plugin_opts(ctx, __MODULE__)
-    user = Store.get_by(ctx, :user, email: Email.normalize(params.email))
 
     with :ok <- Origin.check_redirect(ctx, params.callback_url),
          :ok <- check_credentials(ctx, user, params.password),
-         :ok <- check_verified(ctx, opts, user),
-         {:ok, ctx} <- Sessions.create(ctx, user, params.remember_me) do
-      {:ok, %{user: Serializer.user(ctx, user), redirect: params.callback_url}, ctx}
+         :ok <- check_verified(ctx, opts, user) do
+      case Sessions.sign_in(ctx, user, params.remember_me) do
+        {:ok, ctx} ->
+          {:ok, %{user: Serializer.user(ctx, user), redirect: params.callback_url}, ctx}
+
+        {:challenge, body, ctx} ->
+          {:ok, body, ctx}
+
+        {:error, error} ->
+          {:error, error}
+      end
     end
   end
 
@@ -252,8 +268,10 @@ defmodule Authmk.Plugins.EmailPassword do
   end
 
   defp sign_in_new_user(ctx, user) do
-    with {:ok, ctx} <- Sessions.create(ctx, user, ctx.params.remember_me) do
-      {:ok, %{user: Serializer.user(ctx, user)}, ctx}
+    case Sessions.sign_in(ctx, user, ctx.params.remember_me) do
+      {:ok, ctx} -> {:ok, %{user: Serializer.user(ctx, user)}, ctx}
+      {:challenge, body, ctx} -> {:ok, body, ctx}
+      {:error, error} -> {:error, error}
     end
   end
 
@@ -305,15 +323,13 @@ defmodule Authmk.Plugins.EmailPassword do
     end
   end
 
-  defp validate_password(password, opts) do
-    length = String.length(password)
-
-    cond do
-      length < opts[:min_password_length] -> {:error, Error.new(:password_too_short)}
-      length > opts[:max_password_length] -> {:error, Error.new(:password_too_long)}
-      true -> :ok
-    end
-  end
+  defp validate_password(password, opts),
+    do:
+      PasswordPolicy.check_length(
+        password,
+        opts[:min_password_length],
+        opts[:max_password_length]
+      )
 
   defp check(true, _code), do: :ok
   defp check(false, code), do: {:error, Error.new(code)}

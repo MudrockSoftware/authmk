@@ -1,6 +1,9 @@
 <Layouts.app flash={@flash}>
   <h1 class="text-2xl font-semibold">PhoenixApp</h1>
-  <p :if={@current_user} class="mt-4">Signed in as {@current_user.email}</p>
+  <p :if={@current_user && @current_user.is_anonymous} class="mt-4">Signed in as a guest</p>
+  <p :if={@current_user && !@current_user.is_anonymous} class="mt-4">
+    Signed in as {@current_user.email}
+  </p>
   <div :if={!@current_user} class="mt-4">
     <p>You are not signed in.</p>
     <%!-- POST /auth/sign-in/social answers with the provider's URL to go to. --%>

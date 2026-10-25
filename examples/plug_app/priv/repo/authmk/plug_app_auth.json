@@ -130,8 +130,54 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "two_factors": {
+      "columns": {
+        "backup_codes": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "secret": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "totp_last_step": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "two_factors_user_id_index": {
+          "columns": ["user_id"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "users": {
       "columns": {
+        "display_username": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "email": {
           "default": null,
           "null": false,
@@ -150,9 +196,39 @@
           "references": null,
           "type": "text"
         },
+        "is_anonymous": {
+          "default": false,
+          "null": true,
+          "references": null,
+          "type": "boolean"
+        },
         "name": {
           "default": null,
           "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "phone_number": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "phone_number_verified": {
+          "default": false,
+          "null": true,
+          "references": null,
+          "type": "boolean"
+        },
+        "two_factor_enabled": {
+          "default": false,
+          "null": true,
+          "references": null,
+          "type": "boolean"
+        },
+        "username": {
+          "default": null,
+          "null": true,
           "references": null,
           "type": "string"
         }
@@ -160,6 +236,14 @@
       "indexes": {
         "users_email_index": {
           "columns": ["email"],
+          "unique": true
+        },
+        "users_phone_number_index": {
+          "columns": ["phone_number"],
+          "unique": true
+        },
+        "users_username_index": {
+          "columns": ["username"],
           "unique": true
         }
       },

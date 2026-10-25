@@ -2,12 +2,19 @@ defmodule Authmk.Fuzz.Auth do
   use Authmk,
     otp_app: :authmk,
     repo: Authmk.Test.Repo,
-    plugins: [Authmk.Plugins.EmailPassword],
+    plugins: [
+      Authmk.Plugins.EmailPassword,
+      Authmk.Plugins.TwoFactor,
+      {Authmk.Plugins.PhoneNumber,
+       send_otp: &__MODULE__.send_sms/2, sign_up_on_verification: true}
+    ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
     background: :inline,
     rate_limit: [enabled: false],
     advanced: [ip_address_headers: ["x-forwarded-for"]]
+
+  def send_sms(_message, _ctx), do: :ok
 end
 
 defmodule Authmk.UntrustedInputFuzzTest do
@@ -63,6 +70,61 @@ defmodule Authmk.UntrustedInputFuzzTest do
   property "random session cookies never sign anyone in", %{browser: browser} do
     check all(token <- string(:printable, max_length: 64)) do
       browser = %{browser | cookies: %{"authmk.session_token" => token}}
+      {_browser, conn} = get(browser, "/get-session")
+      assert json(conn) == nil
+    end
+  end
+
+  property "forged 2FA cookies and codes never sign anyone in", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+    {browser, conn} = post(browser, "/two-factor/enable", %{password: "correct horse"})
+    secret = json(conn)["totp_uri"] |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+    secret = Base.decode32!(secret["secret"], padding: false)
+
+    {browser, _conn} =
+      post(browser, "/two-factor/verify-totp", %{code: NimbleTOTP.verification_code(secret)})
+
+    {stranger, _conn} = post(browser, "/sign-out")
+
+    check all(
+            challenge <- string(:printable, max_length: 80),
+            trust <- string(:printable, max_length: 80),
+            code <- string(:alphanumeric, max_length: 12),
+            path <-
+              member_of([
+                "/two-factor/verify-totp",
+                "/two-factor/verify-otp",
+                "/two-factor/verify-backup-code"
+              ])
+          ) do
+      forged = %{
+        stranger
+        | cookies: %{"authmk.two_factor" => challenge, "authmk.trust_device" => trust}
+      }
+
+      {forged, conn} = post(forged, path, %{code: code})
+      assert conn.status in [400, 401, 422, 429]
+
+      {forged, conn} =
+        post(forged, "/sign-in/email", %{email: "ada@example.com", password: "correct horse"})
+
+      assert json(conn)["two_factor_redirect"] == true
+
+      {_forged, conn} = get(forged, "/get-session")
+      assert json(conn) == nil
+    end
+  end
+
+  property "guessed phone codes never sign anyone in", %{browser: browser} do
+    {browser, _conn} = post(browser, "/phone-number/send-otp", %{phone_number: "+14155550123"})
+
+    check all(
+            number <- one_of([constant("+14155550123"), string(:printable, max_length: 20)]),
+            code <- string(:printable, max_length: 10)
+          ) do
+      {browser, conn} = post(browser, "/phone-number/verify", %{phone_number: number, code: code})
+      assert conn.status in [400, 403, 422]
+
       {_browser, conn} = get(browser, "/get-session")
       assert json(conn) == nil
     end

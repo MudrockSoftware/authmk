@@ -31,6 +31,10 @@ defmodule Authmk.Error do
     provider_error: {400, "The provider reported an error"},
     email_not_found: {400, "The provider shared no email address"},
     email_doesnt_match: {400, "The account's email doesn't match yours"},
+    additional_verification_required:
+      {403, "Finish signing in with another step, like a second factor"},
+    invalid_otp: {400, "The code is invalid or has expired"},
+    too_many_attempts: {403, "Too many wrong codes. Ask for a new one"},
     discovery_failed: {502, "Couldn't read the provider's OpenID configuration"},
     unable_to_get_user_info: {502, "Couldn't get your profile from the provider"},
     unable_to_link_account: {400, "The account couldn't be linked"},

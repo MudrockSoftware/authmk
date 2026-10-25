@@ -3,7 +3,13 @@
   <dl class="mt-4">
     <dt>Name</dt>
     <dd>{@user.name}</dd>
+    <dt>Username</dt>
+    <dd>{if @user.username, do: "@" <> @user.display_username}</dd>
     <dt>Email</dt>
     <dd>{@user.email}</dd>
+    <dt>Phone number</dt>
+    <dd>{@user.phone_number}</dd>
+    <dt>Two-factor authentication</dt>
+    <dd>{if @user.two_factor_enabled, do: "On", else: "Off"}</dd>
   </dl>
 </Layouts.app>

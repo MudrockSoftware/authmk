@@ -2,9 +2,9 @@
 
 Website: <https://authmk.com>
 
-> **Status: early development.** The foundation and email/password
-> authentication work and are tested; most plugins are still to come (see
-> [ROADMAP.md](ROADMAP.md)). The API will change before 1.0.
+> **Status: early development.** The foundation, email/password, social
+> sign-in and two-factor authentication work and are tested; more plugins
+> are coming (see [ROADMAP.md](ROADMAP.md)). The API will change before 1.0.
 
 ## Why
 
@@ -86,6 +86,18 @@ config :my_app, MyApp.Auth,
 ```
 
 See the [social sign-in guide](guides/social-sign-in.md).
+
+Two-factor authentication (authenticator apps, codes by email or SMS, backup
+codes, trusted devices) is a plugin, and applies to every sign-in method:
+
+```elixir
+plugins: [
+  Authmk.Plugins.EmailPassword,
+  {Authmk.Plugins.TwoFactor, issuer: "My App", send_otp: &MyApp.Auth.send_two_factor_code/2}
+]
+```
+
+See `Authmk.Plugins.TwoFactor`.
 
 ## Design
 

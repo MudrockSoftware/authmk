@@ -77,6 +77,7 @@ defmodule Authmk.MixProject do
       {:argon2_elixir, "~> 4.1"},
       {:req, "~> 0.5"},
       {:jose, "~> 1.11"},
+      {:nimble_totp, "~> 1.0"},
       {:redix, "~> 1.5", optional: true},
       {:bcrypt_elixir, "~> 3.2", optional: true},
       {:igniter, "~> 0.8", optional: true},
