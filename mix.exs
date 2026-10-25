@@ -2,6 +2,7 @@ defmodule Authmk.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/MudrockSoftware/authmk"
+  @homepage_url "https://authmk.com"
 
   def project do
     [
@@ -10,9 +11,10 @@ defmodule Authmk.MixProject do
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Authmk authentication toolkit for Elixir.",
+      description: "An extensible, plugin-based authentication framework for Elixir, inspired by Better Auth.",
       package: package(),
       source_url: @source_url,
+      homepage_url: @homepage_url,
       docs: [main: "readme", extras: ["README.md"]]
     ]
   end
@@ -33,8 +35,8 @@ defmodule Authmk.MixProject do
 
   defp package do
     [
-      licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url}
+      licenses: ["MIT"],
+      links: %{"Website" => @homepage_url, "GitHub" => @source_url}
     ]
   end
 end
