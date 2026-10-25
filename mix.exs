@@ -11,6 +11,7 @@ defmodule Authmk.MixProject do
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      build_path: build_path(),
       # Tests define auth modules, whose schemas derive protocols.
       consolidate_protocols: Mix.env() != :test,
       deps: deps(),
@@ -40,6 +41,15 @@ defmodule Authmk.MixProject do
     ]
   end
 
+  # The test repo's adapter is compiled in, so each test database
+  # (AUTHMK_TEST_DB) gets its own build.
+  defp build_path do
+    case System.get_env("AUTHMK_TEST_DB") do
+      db when db in ["postgres", "mysql", "mariadb"] -> "_build/" <> db
+      _sqlite -> "_build"
+    end
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
@@ -51,7 +61,11 @@ defmodule Authmk.MixProject do
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.3"},
       {:argon2_elixir, "~> 4.1"},
+      {:redix, "~> 1.5", optional: true},
+      {:bcrypt_elixir, "~> 3.2", optional: true},
       {:ecto_sqlite3, "~> 0.22", only: :test},
+      {:postgrex, "~> 0.20", only: :test},
+      {:myxql, "~> 0.8", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

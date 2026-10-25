@@ -73,7 +73,8 @@ defmodule Authmk.Router do
   defp load_session(%Context{endpoint: %Endpoint{session: :none}} = ctx), do: {:ok, ctx}
 
   defp load_session(%Context{endpoint: endpoint} = ctx) do
-    ctx = Sessions.load(ctx)
+    use_cache = endpoint.cookie_cache and not Map.get(ctx.params, :disable_cookie_cache, false)
+    ctx = Sessions.load(ctx, cache: use_cache)
 
     cond do
       endpoint.session == :required and is_nil(ctx.session) -> {:error, Error.new(:unauthorized)}

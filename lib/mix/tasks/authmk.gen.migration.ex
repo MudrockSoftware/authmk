@@ -56,9 +56,9 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     Mix.Task.run("compile", [])
     Mix.Task.run("app.config", [])
 
-    auth = auth_module(opts)
+    auth = Mix.Authmk.auth_module(opts[:auth])
     repo = auth.__authmk__(:compile_options)[:repo]
-    snapshot_path = opts[:snapshot_path] || default_snapshot_path(repo, auth)
+    snapshot_path = opts[:snapshot_path] || Mix.Authmk.snapshot_path(repo, auth)
     snapshot = Snapshot.read(snapshot_path)
     ops = Migration.changes(auth, snapshot)
 
@@ -90,7 +90,10 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     end
 
     name = opts[:name] || "authmk"
-    migrations_path = opts[:migrations_path] || Path.join(repo_priv(repo), "migrations")
+
+    migrations_path =
+      opts[:migrations_path] || Path.join(Mix.Authmk.repo_priv(repo), "migrations")
+
     timestamp = next_version(migrations_path)
     module = "#{inspect(repo)}.Migrations.#{Macro.camelize(name)}#{timestamp}"
     source = Migration.render(auth, snapshot, module)
@@ -128,38 +131,5 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
       |> Enum.max(fn -> 0 end)
 
     max(now, latest + 1)
-  end
-
-  defp auth_module(opts) do
-    case opts[:auth] do
-      nil -> find_auth_module()
-      name -> Code.ensure_loaded!(Module.concat([name]))
-    end
-  end
-
-  defp find_auth_module do
-    app = Mix.Project.config()[:app]
-    _ = Application.load(app)
-    modules = Application.spec(app, :modules) || []
-
-    case Enum.filter(modules, &auth_module?/1) do
-      [auth] -> auth
-      [] -> Mix.raise("No auth module found. Define one with `use Authmk`.")
-      many -> Mix.raise("Found several auth modules: #{inspect(many)}. Pick one with --auth.")
-    end
-  end
-
-  defp auth_module?(module) do
-    Code.ensure_loaded?(module) and function_exported?(module, :__authmk__, 1)
-  end
-
-  defp default_snapshot_path(repo, auth) do
-    file = auth |> inspect() |> Macro.underscore() |> String.replace("/", "_")
-    Path.join([repo_priv(repo), "authmk", file <> ".json"])
-  end
-
-  # Same default as Ecto: priv/<repo name>, relative to the project root.
-  defp repo_priv(repo) do
-    repo.config()[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"
   end
 end

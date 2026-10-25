@@ -17,14 +17,14 @@ defmodule Authmk.Endpoints.EmailVerification do
 
   # Always answers the same way, so it can't be used to find registered emails.
   def send(%{params: params} = ctx) do
-    with :ok <- Origin.check_redirect(ctx.config, params.callback_url),
+    with :ok <- Origin.check_redirect(ctx, params.callback_url),
          :ok <- send_if_unverified(ctx, recipient(ctx)) do
       {:ok, %{status: true}, ctx}
     end
   end
 
   def verify(%{params: params} = ctx) do
-    with :ok <- Origin.check_redirect(ctx.config, params.callback_url) do
+    with :ok <- Origin.check_redirect(ctx, params.callback_url) do
       case verify_token(ctx, params.token) do
         {:ok, user, ctx} ->
           success(ctx, user)
@@ -53,6 +53,7 @@ defmodule Authmk.Endpoints.EmailVerification do
   defp verify_token(ctx, token) do
     with {:ok, data} <- Verification.consume(ctx, EmailVerification.purpose(), token),
          {:ok, user} <- fetch_user(ctx, data["user_id"]),
+         _ = ctx.config.auth.before_email_verification(user, ctx),
          {:ok, user} <- apply_verification(ctx, user, data) do
       Background.run(ctx, fn -> ctx.config.auth.after_email_verification(user, ctx) end)
       {:ok, user, refresh_signed_in_user(ctx, user)}

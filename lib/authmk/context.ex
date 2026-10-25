@@ -9,6 +9,7 @@ defmodule Authmk.Context do
   * `raw_params`: params as received, with string keys
   * `session` and `user`: the signed-in session and user, when loaded
   * `resp_cookies`: cookies to set or delete on the response
+  * `private`: data that authmk and plugins pass along within one request
   """
 
   alias Authmk.Config
@@ -21,7 +22,8 @@ defmodule Authmk.Context do
     :user,
     params: %{},
     raw_params: %{},
-    resp_cookies: []
+    resp_cookies: [],
+    private: %{}
   ]
 
   @type t :: %__MODULE__{}
@@ -39,6 +41,10 @@ defmodule Authmk.Context do
   @spec delete_cookie(t(), String.t(), keyword()) :: t()
   def delete_cookie(ctx, name, opts),
     do: %{ctx | resp_cookies: ctx.resp_cookies ++ [{name, :delete, opts}]}
+
+  @doc "Stores a value in `private`."
+  @spec put_private(t(), atom(), term()) :: t()
+  def put_private(ctx, key, value), do: %{ctx | private: Map.put(ctx.private, key, value)}
 
   @doc "Options of `plugin`, as returned by its `init/1`."
   @spec plugin_opts(t(), module()) :: keyword()

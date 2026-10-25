@@ -18,10 +18,10 @@ defmodule Authmk.EmulationCase do
   end
 
   setup %{auth: auth} do
-    path = Database.new_path()
-    on_exit(fn -> Database.delete!(path) end)
+    database = Database.create!()
+    on_exit(fn -> Database.delete!(database) end)
 
-    repo = start_supervised!(Database.repo_child_spec(path))
+    repo = start_supervised!(Database.repo_child_spec(database))
     Repo.put_dynamic_repo(repo)
     Database.migrate!(auth, repo)
     start_supervised!(auth)

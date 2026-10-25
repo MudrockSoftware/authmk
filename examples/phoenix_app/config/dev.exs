@@ -52,6 +52,9 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :phoenix_app, dev_routes: true
 
+# Development secret for authmk. Production reads AUTHMK_SECRET instead.
+config :phoenix_app, PhoenixApp.Auth, secret: "kdbTjwix33PxGOBFxwyPtjuhgqRLFgjLUVlksC5QXaw"
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

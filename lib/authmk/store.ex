@@ -17,6 +17,10 @@ defmodule Authmk.Store do
     span(ctx, model, :get_by, fn -> repo(ctx).get_by(module(ctx, model), clauses) end)
   end
 
+  @doc "Runs a query that returns at most one record."
+  @spec one(Context.t(), atom(), Ecto.Queryable.t()) :: struct() | nil
+  def one(ctx, model, query), do: span(ctx, model, :one, fn -> repo(ctx).one(query) end)
+
   @doc """
   Lists records matching `clauses`, newest first. `:limit` defaults to the
   `find_many_limit` config.
@@ -75,6 +79,13 @@ defmodule Authmk.Store do
   def delete_all(ctx, model, clauses) do
     query = from(record in module(ctx, model), where: ^clauses)
     {count, _} = span(ctx, model, :delete_all, fn -> repo(ctx).delete_all(query) end)
+    count
+  end
+
+  @doc "Applies `updates` (like `inc: [count: 1]`) to every record `query` matches. Returns the count."
+  @spec update_all(Context.t(), atom(), Ecto.Queryable.t(), keyword()) :: non_neg_integer()
+  def update_all(ctx, model, query, updates) do
+    {count, _} = span(ctx, model, :update_all, fn -> repo(ctx).update_all(query, updates) end)
     count
   end
 

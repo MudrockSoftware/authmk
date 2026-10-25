@@ -15,7 +15,8 @@ Legend: `[ ]` planned, `[x]` done
 - [x] `app_name`, `base_url`, `base_path` (default `/auth`)
 - [x] Runtime options from application config (`config/runtime.exs`), merged over `use Authmk` options
 - [ ] Dynamic base URL: work out the URL per request for preview deployments and multiple domains, with a safe fallback
-- [ ] `secret` plus `secrets` for key rotation (sign and encrypt with the newest key, verify with all keys)
+- [x] `secret` (or `AUTHMK_SECRET`, at least 32 characters) plus versioned `secrets` (or `AUTHMK_SECRETS`) for key rotation: sign and encrypt with the newest, verify with all
+- [x] A separate key per purpose (HKDF-SHA256); secrets never appear in inspected config
 - [x] `disabled_paths` to turn off individual endpoints
 - [ ] `on_api_error` handler and configurable error redirect page
 - [ ] Logger integration: log levels and a custom log function
@@ -49,13 +50,13 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Generated modules for models the library owns
 - [ ] Startup check that the database matches the resolved schema
 - [x] Database hooks: before and after create, update and delete on every model, able to change or cancel the operation
-- [ ] Efficient loading of related records (one query for session plus user)
+- [x] Efficient loading of related records (one query for session plus user)
 - [x] Default limit for list queries
 
 ### Databases
-- [ ] SQLite, PostgreSQL and MySQL through Ecto, chosen automatically from the repo's adapter (adapter detection done; only SQLite is tested so far)
+- [x] SQLite, PostgreSQL, MySQL and MariaDB through Ecto, chosen automatically from the repo's adapter; the full suite passes on all four
 - [x] Schemas only use features all three databases share: portable field types checked at compile time, new columns on existing tables must be nullable or have a default
-- [ ] CI test matrix across all three databases
+- [ ] CI test matrix across all four databases (GitHub Actions workflow written; not run on GitHub yet)
 
 ### Mix tasks
 - [ ] `mix authmk.install`: set up config, router, user schema and first migration (Igniter)
@@ -66,16 +67,16 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] Interactive rename detection
 - [ ] Table rebuild for SQLite when a column changes (today the generator refuses with a clear message)
 - [ ] Run migrations from code (for releases)
-- [ ] `mix authmk.gen.secret`
+- [x] `mix authmk.gen.secret`
 - [ ] `mix authmk.create_admin`
-- [ ] `mix authmk.info`: versions, enabled plugins, resolved schema and config problems
+- [x] `mix authmk.info`: versions, enabled plugins, resolved schema and config problems
 - [ ] `mix authmk.upgrade`: guided upgrades between authmk versions
 
 ### Secondary storage
-- [ ] `Authmk.Storage` behaviour (get, set with TTL, delete); today it only has the counter used by rate limits
-- [x] Built-in ETS storage (rate-limit counters, with expiry sweeps)
-- [ ] Redis storage (Redix)
-- [ ] Used for sessions and verification values
+- [x] `Authmk.Storage` behaviour: get, get-and-delete, put with TTL, delete, atomic increment
+- [x] Built-in ETS storage, with expiry sweeps
+- [x] Redis / Valkey storage (Redix), tested against a real server
+- [x] Used for sessions, verification tokens and rate limits
 
 ### Errors and observability
 - [x] `%Authmk.Error{}` with stable codes, HTTP statuses and messages (`Authmk.Error.codes/0`)
@@ -91,7 +92,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Sign up, sign in and sign out
 - [x] "Remember me" (session cookie vs. persistent cookie)
 - [x] Password hashing with Argon2id by default; custom hashers through the `Authmk.Password` behaviour
-- [ ] Bcrypt hasher
+- [x] Bcrypt hasher
 - [x] Minimum and maximum password length
 - [x] Turn sign-up on or off
 - [x] Callback for duplicate sign-up attempts that doesn't reveal whether the email is taken
@@ -109,26 +110,27 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Verification link endpoint with a callback URL
 - [x] Sign the user in automatically after verification
 - [x] Callback after verification
-- [ ] Callback before verification
+- [x] Callback before verification
 
 ### Sessions
 - [x] Database-backed sessions with IP address and user agent
 - [x] Session lifetime and how often it's extended
 - [x] Turn off session extension
-- [ ] Defer session extension
+- [x] Defer session extension
 - [x] Session freshness for sensitive actions
 - [x] Get, list and sign out sessions; sign out other sessions; sign out all sessions
-- [ ] Update session (custom session fields)
-- [ ] Cookie cache to skip database lookups, as signed, encrypted or JWT cookies
+- [x] Update session (custom session fields)
+- [x] Cookie cache to skip database lookups on reads, as signed or encrypted cookies, bound to the session token
+- [ ] Cookie cache as JWT cookies
 - [ ] Cookie-cache JWTs signed with keys from a JWKS endpoint
-- [ ] Sessions in secondary storage, optionally also kept in the database
+- [x] Sessions in secondary storage, optionally also kept in the database, with revoked rows optionally preserved
 - [ ] Stateless sessions (no database), with cache refresh and versioning for revocation
-- [ ] Custom session response (add or reshape fields)
+- [x] Custom session response (`customize_session/2`)
 
 ### Users and accounts
 - [x] Update user details (only fields with `input: true`)
 - [x] Change email, verified by a link to the new address
-- [ ] Change email: also confirm from the current address
+- [x] Change email: also confirm from the current address
 - [x] Delete a user, with a password or a fresh session, optional email confirmation, and database hooks before and after
 - [x] List linked accounts
 - [ ] Encrypt OAuth tokens stored in the database
@@ -136,8 +138,9 @@ Legend: `[ ]` planned, `[x]` done
 
 ### Cookies
 - [x] Cookie prefix
-- [ ] Custom cookie names
-- [ ] Custom cookie attributes per cookie (today: global `same_site`, `domain` and `secure`)
+- [x] Session cookies signed with the secret, so forged ones are rejected before any lookup
+- [x] Custom cookie names
+- [x] Cookie attributes per cookie (`same_site`, `domain`), plus global defaults
 - [x] Cookies shared across subdomains (`cookies: [domain: ...]`)
 - [x] Secure cookies, with the `__Secure-` prefix, whenever `base_url` is HTTPS
 - [ ] Guide: Safari ITP and cross-domain setups (reverse proxy, shared parent domain)
@@ -145,7 +148,7 @@ Legend: `[ ]` planned, `[x]` done
 ### Security
 - [x] CSRF protection and origin checks for requests that change state
 - [x] Trusted origins: fixed list
-- [ ] Trusted origins: wildcards, custom schemes (for mobile apps), dynamic list per request
+- [x] Trusted origins: wildcards, custom schemes (for mobile apps), dynamic list per request
 - [x] Redirect targets limited to relative paths and trusted origins (open-redirect protection, fuzz tested)
 - [ ] OAuth state and PKCE on every OAuth flow
 - [x] Protection against revealing which emails are registered, across all current endpoints
@@ -158,7 +161,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] On by default, with a default window and maximum
 - [x] Rules per endpoint (stricter defaults for sign-in, sign-up and password reset), overridable per path
 - [x] Storage in memory (ETS)
-- [ ] Storage in the database or secondary storage
+- [x] Storage in secondary storage, or the database (`Authmk.Plugins.DatabaseRateLimit`)
 - [x] IPv6 support with subnet grouping
 - [x] `Retry-After` header and a standard error response
 

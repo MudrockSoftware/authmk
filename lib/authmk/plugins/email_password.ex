@@ -35,12 +35,12 @@ defmodule Authmk.Plugins.EmailPassword do
     EmailVerification,
     Endpoint,
     Error,
+    Input,
     Origin,
     Serializer,
     Sessions,
     Store,
     URL,
-    Users,
     Verification
   }
 
@@ -115,7 +115,7 @@ defmodule Authmk.Plugins.EmailPassword do
     with :ok <- check(not opts[:disable_sign_up], :sign_up_disabled),
          :ok <- check(Email.valid?(email), :invalid_email),
          :ok <- validate_password(params.password, opts),
-         :ok <- Origin.check_redirect(ctx.config, params.callback_url) do
+         :ok <- Origin.check_redirect(ctx, params.callback_url) do
       case Store.get_by(ctx, :user, email: email) do
         nil -> create_user(ctx, opts, email)
         user -> existing_user(ctx, opts, user)
@@ -124,11 +124,11 @@ defmodule Authmk.Plugins.EmailPassword do
   end
 
   @doc false
-  def sign_in(%Context{params: params, config: config} = ctx) do
+  def sign_in(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
     user = Store.get_by(ctx, :user, email: Email.normalize(params.email))
 
-    with :ok <- Origin.check_redirect(config, params.callback_url),
+    with :ok <- Origin.check_redirect(ctx, params.callback_url),
          :ok <- check_credentials(ctx, user, params.password),
          :ok <- check_verified(ctx, opts, user),
          {:ok, ctx} <- Sessions.create(ctx, user, params.remember_me) do
@@ -137,13 +137,13 @@ defmodule Authmk.Plugins.EmailPassword do
   end
 
   @doc false
-  def request_password_reset(%Context{params: params, config: config} = ctx) do
+  def request_password_reset(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
     user = Store.get_by(ctx, :user, email: Email.normalize(params.email))
 
     # Unknown emails get the same answer, so this can't find registered ones.
-    with :ok <- Origin.check_redirect(config, params.redirect_to),
+    with :ok <- Origin.check_redirect(ctx, params.redirect_to),
          :ok <- send_reset_link(ctx, opts, user, params.redirect_to) do
       {:ok, %{status: true}, ctx}
     end
@@ -151,7 +151,7 @@ defmodule Authmk.Plugins.EmailPassword do
 
   @doc false
   def reset_password_callback(%Context{params: params} = ctx) do
-    with :ok <- Origin.check_redirect(ctx.config, params.callback_url) do
+    with :ok <- Origin.check_redirect(ctx, params.callback_url) do
       query =
         case Verification.peek(ctx, @reset_purpose, params.token) do
           {:ok, _data} -> [token: params.token]
@@ -199,7 +199,7 @@ defmodule Authmk.Plugins.EmailPassword do
   end
 
   defp create_user(ctx, opts, email) do
-    attrs = ctx |> Users.input_attrs() |> Map.put("email", email)
+    attrs = ctx |> Input.attrs(:user) |> Map.put("email", email)
 
     result =
       Store.transaction(ctx, fn ->

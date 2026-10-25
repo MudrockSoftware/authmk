@@ -1,0 +1,37 @@
+# Test services. Start what you need, then point tests at it:
+#
+#   docker compose up -d valkey      REDIS_URL=redis://localhost:6379 mix test
+#   docker compose up -d postgres    AUTHMK_TEST_DB=postgres mix test
+#   docker compose up -d mysql       AUTHMK_TEST_DB=mysql mix test
+#   docker compose up -d mariadb     AUTHMK_TEST_DB=mariadb mix test
+services:
+  valkey:
+    image: docker.io/valkey/valkey:9-alpine
+    ports: ["6379:6379"]
+
+  postgres:
+    image: docker.io/library/postgres:18-alpine
+    environment:
+      POSTGRES_USER: authmk
+      POSTGRES_PASSWORD: authmk
+    ports: ["5432:5432"]
+    # Postgres 18+ keeps data under /var/lib/postgresql/<version>.
+    tmpfs: ["/var/lib/postgresql"]
+
+  mysql:
+    image: docker.io/library/mysql:9.7
+    environment:
+      MYSQL_ROOT_PASSWORD: authmk
+    ports: ["3306:3306"]
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+
+  mariadb:
+    image: docker.io/library/mariadb:12.3
+    environment:
+      MARIADB_ROOT_PASSWORD: authmk
+    ports: ["3307:3306"]
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql

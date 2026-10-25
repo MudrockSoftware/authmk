@@ -21,7 +21,10 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
 config :phoenix_app, PhoenixApp.Mailer, adapter: Swoosh.Adapters.Test
 
 # Send emails from the test process, so tests can assert on them.
-config :phoenix_app, PhoenixApp.Auth, background: :inline, rate_limit: [enabled: false]
+config :phoenix_app, PhoenixApp.Auth,
+  secret: "c2iKFVGjhjs92_nzC2BmV9xsrEO_KT0lOBNhlQvVbEw",
+  background: :inline,
+  rate_limit: [enabled: false]
 
 # Fast, insecure password hashing. Tests only.
 config :argon2_elixir, t_cost: 1, m_cost: 8, parallelism: 1

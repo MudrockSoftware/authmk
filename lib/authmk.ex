@@ -53,6 +53,15 @@ defmodule Authmk do
               Context.t()
             ) :: term()
 
+  @doc """
+  Sends the link that confirms an email change to the *current* address,
+  when `user: [change_email: [confirm_current_email: true]]`.
+  """
+  @callback send_change_email_confirmation(
+              %{user: struct(), new_email: String.t(), url: String.t(), token: String.t()},
+              Context.t()
+            ) :: term()
+
   @doc "Sends the link that confirms account deletion."
   @callback send_delete_account_verification(link(), Context.t()) :: term()
 
@@ -67,6 +76,21 @@ defmodule Authmk do
 
   @doc "Called after a user verifies their email."
   @callback after_email_verification(user :: struct(), Context.t()) :: term()
+
+  @doc """
+  Shapes the `GET /get-session` response. Receives `%{session: map, user: map}`
+  and returns the map to send. The default returns it unchanged.
+  """
+  @callback customize_session(session :: map(), Context.t()) :: map()
+
+  @doc """
+  Extra trusted origins for this request, on top of `trusted_origins`. Runs on
+  every origin and redirect check, so keep it fast. The default is `[]`.
+  """
+  @callback dynamic_trusted_origins(Context.t()) :: [String.t()]
+
+  @doc "Called before a user's email is marked as verified."
+  @callback before_email_verification(user :: struct(), Context.t()) :: term()
 
   @doc "Runs before every endpoint. Return `{:halt, error}` to stop the request."
   @callback before_endpoint(endpoint :: atom(), Context.t()) ::
@@ -125,6 +149,10 @@ defmodule Authmk do
         do: Authmk.missing_callback(__MODULE__, :send_change_email_verification)
 
       @impl Authmk
+      def send_change_email_confirmation(_link, _ctx),
+        do: Authmk.missing_callback(__MODULE__, :send_change_email_confirmation)
+
+      @impl Authmk
       def send_delete_account_verification(_link, _ctx),
         do: Authmk.missing_callback(__MODULE__, :send_delete_account_verification)
 
@@ -138,6 +166,15 @@ defmodule Authmk do
       def after_email_verification(_user, _ctx), do: :ok
 
       @impl Authmk
+      def before_email_verification(_user, _ctx), do: :ok
+
+      @impl Authmk
+      def customize_session(session, _ctx), do: session
+
+      @impl Authmk
+      def dynamic_trusted_origins(_ctx), do: []
+
+      @impl Authmk
       def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
 
       @impl Authmk
@@ -149,10 +186,14 @@ defmodule Authmk do
       defoverridable send_verification_email: 2,
                      send_reset_password: 2,
                      send_change_email_verification: 2,
+                     send_change_email_confirmation: 2,
                      send_delete_account_verification: 2,
                      on_password_reset: 2,
                      on_existing_user_sign_up: 2,
                      after_email_verification: 2,
+                     before_email_verification: 2,
+                     customize_session: 2,
+                     dynamic_trusted_origins: 1,
                      before_endpoint: 2,
                      after_endpoint: 3,
                      database_hook: 4

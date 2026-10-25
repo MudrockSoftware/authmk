@@ -25,7 +25,7 @@ end
 defmodule Authmk.ConfigTest do
   use ExUnit.Case, async: true
 
-  alias Authmk.ConfigTest.{NeedsGreeting, ValidAuth}
+  alias Authmk.ConfigTest.ValidAuth
 
   describe "compile-time errors point at the problem" do
     test "schema config for an unknown model" do
@@ -47,6 +47,12 @@ defmodule Authmk.ConfigTest do
     test "an additional field that already exists" do
       assert_compile_error(~r/already exists/,
         schema: [user: [additional_fields: [email: [type: :string]]]]
+      )
+    end
+
+    test "defaults on text and map fields, which MySQL rejects" do
+      assert_compile_error(~r/can't have a default/,
+        schema: [user: [additional_fields: [bio: [type: :text, default: ""]]]]
       )
     end
 
@@ -92,7 +98,7 @@ defmodule Authmk.ConfigTest do
         use Authmk,
           otp_app: :authmk,
           repo: Authmk.Test.Repo,
-          plugins: [NeedsGreeting],
+          plugins: [Authmk.ConfigTest.NeedsGreeting],
           base_url: "http://localhost:4000"
       end
 

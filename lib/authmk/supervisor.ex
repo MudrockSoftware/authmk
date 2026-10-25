@@ -6,7 +6,7 @@ defmodule Authmk.Supervisor do
 
   use Supervisor
 
-  alias Authmk.{Background, Config, RateLimit}
+  alias Authmk.{Background, Config}
   alias Authmk.Config.Holder
 
   def start_link(auth) do
@@ -20,7 +20,7 @@ defmodule Authmk.Supervisor do
     children = [
       {Holder, config},
       {Task.Supervisor, name: Background.task_supervisor(auth)},
-      {Authmk.Storage.ETS, name: RateLimit.storage(auth)}
+      {Authmk.Storage.ETS, table: Config.ets_table(auth)}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

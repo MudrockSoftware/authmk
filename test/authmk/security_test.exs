@@ -19,6 +19,25 @@ defmodule Authmk.SecurityTest.ProxyAuth do
     advanced: [ip_address_headers: ["x-forwarded-for"]]
 end
 
+defmodule Authmk.SecurityTest.PatternAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    base_url: "http://localhost:4000",
+    trusted_origins: [
+      "https://*.example.com",
+      "*.preview.example.net",
+      "myapp://",
+      "exp://callback/app"
+    ],
+    background: :inline,
+    rate_limit: [enabled: false]
+
+  # Tenants come from the database in real apps.
+  @impl Authmk
+  def dynamic_trusted_origins(_ctx), do: ["https://tenant.example.org"]
+end
+
 defmodule Authmk.SecurityTest do
   use Authmk.EmulationCase, async: true
 
@@ -89,6 +108,61 @@ defmodule Authmk.SecurityTest do
 
         assert json(conn)["error"]["code"] == "invalid_callback_url",
                "expected #{inspect(url)} to be rejected"
+      end
+    end
+  end
+
+  describe "trusted origin patterns" do
+    @describetag auth: Authmk.SecurityTest.PatternAuth
+
+    test "wildcards, custom schemes and dynamic origins", %{browser: browser} do
+      allowed = [
+        "https://app.example.com/x",
+        "https://a.b.example.com",
+        "http://pr-12.preview.example.net/done",
+        "https://pr-12.preview.example.net",
+        "myapp://anything/at/all",
+        "exp://callback/app",
+        "exp://callback/app/deeper",
+        "https://tenant.example.org/welcome"
+      ]
+
+      rejected = [
+        "http://app.example.com",
+        "https://example.com.evil.example",
+        "https://evilexample.com",
+        "https://preview.example.net.evil.example",
+        "otherapp://x",
+        "exp://callback/application",
+        "exp://callback/app/../../steal",
+        "exp://callback.evil/app",
+        "https://tenant.example.org.evil.example",
+        "/ok/%2F%2Fevil.example",
+        "/ok/%5cevil.example"
+      ]
+
+      for url <- allowed do
+        {_browser, conn} = get(browser, "/verify-email", %{token: "bad", callback_url: url})
+        assert conn.status == 302, "expected #{url} to be trusted"
+      end
+
+      for url <- rejected do
+        {_browser, conn} = get(browser, "/verify-email", %{token: "bad", callback_url: url})
+
+        assert json(conn)["error"]["code"] == "invalid_callback_url",
+               "expected #{url} to be rejected"
+      end
+    end
+
+    test "Origin headers use the same rules", %{browser: browser} do
+      for {origin, status} <- [
+            {"https://app.example.com", 200},
+            {"myapp://", 200},
+            {"https://tenant.example.org", 200},
+            {"https://evil.example", 403}
+          ] do
+        {_browser, conn} = post(%{browser | origin: origin}, "/sign-out")
+        assert conn.status == status, "expected #{origin} to get #{status}"
       end
     end
   end

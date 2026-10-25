@@ -2,13 +2,22 @@ defmodule Authmk.Endpoints.Session do
   @moduledoc false
   # Session endpoints. See `Authmk.Endpoints`.
 
-  alias Authmk.{Cookies, Serializer, Sessions, Store}
+  alias Authmk.{CookieCache, Cookies, Input, Serializer, Sessions, SessionStore}
 
   def get_session(%{session: nil} = ctx), do: {:ok, nil, ctx}
 
   def get_session(ctx) do
     body = %{session: Serializer.session(ctx, ctx.session), user: Serializer.user(ctx, ctx.user)}
-    {:ok, body, ctx}
+    body = if ctx.private[:needs_refresh], do: Map.put(body, :needs_refresh, true), else: body
+    {:ok, ctx.config.auth.customize_session(body, ctx), ctx}
+  end
+
+  # Only extra session fields with `input: true`; core fields are never input.
+  def update_session(ctx) do
+    with {:ok, session} <- SessionStore.update(ctx, ctx.session, Input.attrs(ctx, :session)) do
+      ctx = CookieCache.put(%{ctx | session: session}, Cookies.remember_me?(ctx))
+      {:ok, %{session: Serializer.session(ctx, session)}, ctx}
+    end
   end
 
   def sign_out(ctx) do
@@ -40,7 +49,5 @@ defmodule Authmk.Endpoints.Session do
 
   defp delete_session(%{session: nil}), do: :ok
 
-  defp delete_session(ctx) do
-    with {:ok, _session} <- Store.delete(ctx, :session, ctx.session), do: :ok
-  end
+  defp delete_session(ctx), do: SessionStore.delete(ctx, ctx.session)
 end

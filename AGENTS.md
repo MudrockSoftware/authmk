@@ -36,12 +36,18 @@ completed.
 
 - First time: `mix setup` (fetches deps and enables the `.githooks/pre-commit` hook)
 - Library tests: `mix test`; single file or line: `mix test test/path_test.exs:42`
+- Other databases and Redis: start them with `docker compose up -d postgres mysql mariadb valkey`
+  (see `compose.yml`), then `AUTHMK_TEST_DB=postgres mix test`, `AUTHMK_TEST_DB=mysql mix test`,
+  `AUTHMK_TEST_DB=mariadb mix test`,
+  and `REDIS_URL=redis://localhost:6379 mix test` for the Redis tests. Each database gets its own
+  build directory. Changes to storage, queries or migrations must pass on all four.
 - Coverage: `mix coverage`. It fails below the `test_coverage` threshold (90%) and writes HTML to `cover/`.
 - Fuzz tests: `mix fuzz` runs only `test/fuzz/` (StreamData properties tagged `:fuzz`),
   `FUZZ_RUNS` times each (default 1000). `mix test` excludes them.
 - Lint: `mix lint` runs format, `compile --warnings-as-errors`, `credo --strict`,
   an xref compile-cycle check (zero allowed) and Dialyzer. The pre-commit hook runs it.
 - Example app tests: `cd examples/plug_app && mix test`, `cd examples/phoenix_app && mix test`
+- Secrets: tests read `AUTHMK_SECRET`, which `test/test_helper.exs` sets.
 - Before finishing: `mix lint` and `mix coverage` must pass in the root, and
   `mix format` plus `mix test` must pass in every example app you touched.
 - Parsers and decoders for untrusted input (tokens, cookies, JWTs, SAML, SCIM
@@ -52,9 +58,9 @@ completed.
 These are settled. Don't revisit them unless the user asks.
 
 - **Ecto only.** No database adapter layer; the user passes their `repo:`.
-- **SQLite, PostgreSQL and MySQL**, with no default; the adapter is detected from the
+- **SQLite, PostgreSQL, MySQL and MariaDB**, with no default; the adapter is detected from the
   repo. Schemas use only features all three share: no array columns, no `citext`,
-  no partial indexes, no defaults computed by the database, no `FOR UPDATE`, no
+  no partial indexes, no defaults computed by the database, no defaults on `:text` or `:map` fields, no `FOR UPDATE`, no
   `on_conflict` with `conflict_target`. Fields a plugin adds to an existing table
   must be nullable or have a default, because SQLite can't modify existing columns.
 - **Schema declared in config.** Core models, plugin schemas and user config are
@@ -135,9 +141,9 @@ Tests here emulate real usage. They are not unit tests.
   resistance.
 - **Regression tests** link to the issue they cover with a comment above the
   test.
-- Database portability: the same suite must also be able to run against
-  PostgreSQL and MySQL in CI. SQLite is the default and the only database
-  needed locally.
+- Database portability: the same suite runs on PostgreSQL and MySQL
+  (`AUTHMK_TEST_DB`). SQLite is the default. Tag tests that only make sense
+  on one kind of database with `:sqlite` or `:server_database`.
 
 ### Example apps (`examples/`): the second test ground
 

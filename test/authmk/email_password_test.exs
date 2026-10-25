@@ -11,8 +11,24 @@ defmodule Authmk.EmailPasswordTest.Auth do
   def send_reset_password(link, _ctx), do: send(self(), {:email, :reset_password, link})
 end
 
+defmodule Authmk.EmailPasswordTest.BcryptAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [Authmk.Plugins.EmailPassword],
+    password_hasher: Authmk.Password.Bcrypt,
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false]
+end
+
 defmodule Authmk.EmailPasswordTest do
   use Authmk.EmulationCase, async: true
+
+  import Ecto.Query
+
+  alias Authmk.EmailPasswordTest.Auth
+  alias Authmk.Test.Repo
 
   @moduletag auth: Authmk.EmailPasswordTest.Auth
 
@@ -122,7 +138,8 @@ defmodule Authmk.EmailPasswordTest do
         })
 
       refute Map.has_key?(conn.resp_cookies["authmk.session_token"], :max_age)
-      assert conn.resp_cookies["authmk.dont_remember"].value == "true"
+      marker = conn.resp_cookies["authmk.dont_remember"].value
+      assert {:ok, "true"} = Authmk.Crypto.verify(Auth.config(), "dont-remember", marker)
     end
 
     test "rejects untrusted callback URLs", %{browser: browser} do
@@ -135,6 +152,17 @@ defmodule Authmk.EmailPasswordTest do
 
       assert json(conn)["error"]["code"] == "invalid_callback_url"
     end
+  end
+
+  @tag auth: Authmk.EmailPasswordTest.BcryptAuth
+  test "Bcrypt hashes work, for databases that already use them", %{browser: browser} do
+    {_browser, _user} = sign_up(browser)
+    assert ["$2b$" <> _] = Repo.all(from(a in "accounts", select: a.password))
+
+    {_browser, conn} =
+      post(browser, "/sign-in/email", %{email: "ada@example.com", password: "correct horse"})
+
+    assert conn.status == 200
   end
 
   test "sign out ends the session and clears the cookie", %{browser: browser} do

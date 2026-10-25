@@ -8,9 +8,7 @@ defmodule Authmk.Sessions do
   `session[:fresh_age]` seconds after sign-in; sensitive actions require that.
   """
 
-  import Ecto.Query, only: [dynamic: 2]
-
-  alias Authmk.{Context, Cookies, Error, Request, Store, Token}
+  alias Authmk.{Context, CookieCache, Cookies, Error, Request, SessionStore, Token}
 
   @doc """
   Creates a session for `user`, sets the cookie, and puts the session and
@@ -29,40 +27,68 @@ defmodule Authmk.Sessions do
       user_agent: Request.user_agent(ctx)
     }
 
-    with {:ok, session} <- Store.insert(ctx, :session, attrs) do
-      ctx = Cookies.put_session(ctx, token, remember_me)
-      {:ok, %{ctx | session: session, user: user}}
+    with {:ok, session} <- SessionStore.insert(ctx, attrs, user) do
+      ctx = %{Cookies.put_session(ctx, token, remember_me) | session: session, user: user}
+      {:ok, CookieCache.put(ctx, remember_me)}
     end
   end
 
   @doc """
-  Loads the session from the request cookie. Expired or unknown sessions
-  clear the cookie. Puts `session` and `user` on the context (both `nil`
-  when signed out).
+  Loads the session from the request cookie. Puts `session` and `user` on
+  the context (both `nil` when signed out). Forged, expired or unknown
+  sessions clear the cookies.
+
+  With `cache: true` the cookie cache is used when enabled. Only read paths
+  should pass it.
   """
-  @spec load(Context.t()) :: Context.t()
-  def load(%Context{conn: conn, config: config} = ctx) do
-    case conn.req_cookies[Cookies.session_name(config)] do
-      nil -> ctx
-      token -> load_token(ctx, token)
+  @spec load(Context.t(), keyword()) :: Context.t()
+  def load(%Context{config: config} = ctx, opts \\ []) do
+    use_cache = Keyword.get(opts, :cache, false) and CookieCache.enabled?(config)
+
+    case Cookies.session_token(ctx) do
+      :none -> drop_orphan_cache(ctx)
+      :invalid -> Cookies.clear_session(ctx)
+      {:ok, token} when use_cache -> load_cached(ctx, token)
+      {:ok, token} -> load_token(ctx, token)
+    end
+  end
+
+  defp load_cached(ctx, token) do
+    case CookieCache.read(ctx, token) do
+      {:ok, session, user} -> %{ctx | session: session, user: user}
+      :miss -> load_token(ctx, token)
     end
   end
 
   defp load_token(ctx, token) do
-    case Store.get_by(ctx, :session, token: Token.hash(token)) do
+    case SessionStore.fetch(ctx, Token.hash(token)) do
       nil ->
         Cookies.clear_session(ctx)
 
       session ->
         if expired?(session) do
           # Cleanup only: the session is rejected whether or not this works.
-          _ = Store.delete(ctx, :session, session)
+          :ok = SessionStore.delete(ctx, session)
           Cookies.clear_session(ctx)
         else
-          user = Store.get_by(ctx, :user, id: session.user_id)
-          maybe_refresh(%{ctx | session: session, user: user}, token)
+          %{ctx | session: session, user: session.user}
+          |> maybe_refresh(token)
+          |> refresh_cache()
         end
     end
+  end
+
+  defp refresh_cache(%Context{config: config} = ctx) do
+    cond do
+      CookieCache.enabled?(config) -> CookieCache.put(ctx, Cookies.remember_me?(ctx))
+      Cookies.session_data(ctx) -> Cookies.delete(ctx, :session_data)
+      true -> ctx
+    end
+  end
+
+  # A cache cookie without a session cookie belongs to nobody.
+  defp drop_orphan_cache(ctx) do
+    if Cookies.session_data(ctx), do: Cookies.delete(ctx, :session_data), else: ctx
   end
 
   @doc "Whether the context's session was created within `session[:fresh_age]` seconds."
@@ -74,43 +100,49 @@ defmodule Authmk.Sessions do
 
   @doc "Active sessions of a user."
   @spec list(Context.t(), term()) :: [struct()]
-  def list(ctx, user_id) do
-    now = DateTime.utc_now()
-    Store.all(ctx, :session, dynamic([s], s.user_id == ^user_id and s.expires_at > ^now))
-  end
+  def list(ctx, user_id), do: SessionStore.list(ctx, user_id)
 
   @doc "Revokes one session of a user by id."
   @spec revoke(Context.t(), term(), term()) :: :ok
-  def revoke(ctx, user_id, session_id) do
-    Store.delete_all(ctx, :session, dynamic([s], s.user_id == ^user_id and s.id == ^session_id))
-    :ok
-  end
+  def revoke(ctx, user_id, session_id), do: SessionStore.delete_by_id(ctx, user_id, session_id)
 
   @doc "Revokes every session of a user."
   @spec revoke_all(Context.t(), term()) :: :ok
-  def revoke_all(ctx, user_id) do
-    Store.delete_all(ctx, :session, user_id: user_id)
-    :ok
-  end
+  def revoke_all(ctx, user_id), do: SessionStore.delete_all(ctx, user_id)
 
   @doc "Revokes every session of a user except `keep_id`."
   @spec revoke_others(Context.t(), term(), term()) :: :ok
-  def revoke_others(ctx, user_id, keep_id) do
-    Store.delete_all(ctx, :session, dynamic([s], s.user_id == ^user_id and s.id != ^keep_id))
-    :ok
-  end
+  def revoke_others(ctx, user_id, keep_id), do: SessionStore.delete_others(ctx, user_id, keep_id)
 
   defp maybe_refresh(%Context{config: config, session: session} = ctx, token) do
     refreshed_at = DateTime.add(session.expires_at, -config.session[:expires_in])
     due? = DateTime.diff(DateTime.utc_now(), refreshed_at) >= config.session[:update_age]
 
-    if due? and not config.session[:disable_refresh] do
-      {:ok, session} = Store.update(ctx, :session, session, %{expires_at: expires_at(config)})
-      Cookies.put_session(%{ctx | session: session}, token, Cookies.remember_me?(ctx))
-    else
-      ctx
+    cond do
+      not due? or config.session[:disable_refresh] ->
+        ctx
+
+      # With defer_refresh, reads stay read-only and report that a refresh is due.
+      config.session[:defer_refresh] and read_only?(ctx) ->
+        Context.put_private(ctx, :needs_refresh, true)
+
+      true ->
+        refresh(ctx, token)
     end
   end
+
+  defp refresh(%Context{config: config} = ctx, token) do
+    case SessionStore.update(ctx, ctx.session, %{expires_at: expires_at(config)}) do
+      {:ok, session} ->
+        Cookies.put_session(%{ctx | session: session}, token, Cookies.remember_me?(ctx))
+
+      # Best effort: the session is still valid without the refresh.
+      {:error, _error} ->
+        ctx
+    end
+  end
+
+  defp read_only?(%Context{conn: conn}), do: conn.method in ["GET", "HEAD"]
 
   defp expired?(session), do: DateTime.before?(session.expires_at, DateTime.utc_now())
 

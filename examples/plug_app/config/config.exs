@@ -8,6 +8,11 @@ config :plug_app, port: 4001
 
 config :plug_app, PlugApp.Auth, base_url: "http://localhost:4001"
 
+# Production reads the AUTHMK_SECRET environment variable instead.
+if config_env() in [:dev, :test] do
+  config :plug_app, PlugApp.Auth, secret: "ll4Yfzwe5z9ecv0m4k702fSqA-wlJfpV-kyYtSWn_7I"
+end
+
 config :plug_app, PlugApp.Mailer, adapter: Swoosh.Adapters.Local
 config :swoosh, :api_client, false
 

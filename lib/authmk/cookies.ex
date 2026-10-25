@@ -1,55 +1,93 @@
 defmodule Authmk.Cookies do
   @moduledoc """
-  Session cookies.
+  Auth cookies:
 
-  The session cookie holds the session token; the database only has its hash.
-  It is `HttpOnly`, `SameSite=Lax` by default, and `Secure` with a
-  `__Secure-` name prefix when the app runs on HTTPS.
+    * `session_token`: the session token, signed with the secret. The
+      database only has the token's hash.
+    * `session_data`: the cookie cache (see `Authmk.CookieCache`), when enabled.
+    * `dont_remember`: marks sessions created without "remember me", so
+      refreshing them keeps the cookie browser-session-only.
 
-  When a user signs in without "remember me", the session cookie has no
-  `max-age` (the browser drops it on close) and a `dont_remember` marker
-  cookie keeps it that way when the session is refreshed.
+  All are `HttpOnly` and `SameSite=Lax` by default. When `base_url` is HTTPS
+  they are `Secure` and their names get the `__Secure-` prefix. Each cookie
+  can override its name and attributes:
+
+      cookies: [session_token: [name: "sid", same_site: "Strict"]]
   """
 
-  alias Authmk.{Config, Context}
+  alias Authmk.{Config, Context, Crypto}
 
-  @doc "Name of the session cookie."
-  @spec session_name(Config.t()) :: String.t()
-  def session_name(config), do: name(config, "session_token")
+  @suffixes [
+    session_token: "session_token",
+    session_data: "session_data",
+    dont_remember: "dont_remember"
+  ]
 
-  @doc "Name of the marker cookie for sessions without remember me."
-  @spec dont_remember_name(Config.t()) :: String.t()
-  def dont_remember_name(config), do: name(config, "dont_remember")
+  @type cookie :: :session_token | :session_data | :dont_remember
 
-  @doc "Sets the session cookie."
-  @spec put_session(Context.t(), String.t(), boolean()) :: Context.t()
-  def put_session(%Context{config: config} = ctx, token, remember_me) do
-    if remember_me do
-      ctx
-      |> Context.put_cookie(
-        session_name(config),
-        token,
-        attributes(config, config.session[:expires_in])
-      )
-      |> Context.delete_cookie(dont_remember_name(config), attributes(config, nil))
-    else
-      ctx
-      |> Context.put_cookie(session_name(config), token, attributes(config, nil))
-      |> Context.put_cookie(dont_remember_name(config), "true", attributes(config, nil))
+  @doc "Name of a cookie."
+  @spec name(Config.t(), cookie()) :: String.t()
+  def name(config, cookie) do
+    case config.cookies[cookie][:name] do
+      nil ->
+        name = "#{config.cookies[:prefix]}.#{Keyword.fetch!(@suffixes, cookie)}"
+        if secure?(config), do: "__Secure-" <> name, else: name
+
+      name ->
+        name
     end
   end
 
-  @doc "Whether the current request's session was created without remember me."
-  @spec remember_me?(Context.t()) :: boolean()
-  def remember_me?(%Context{conn: conn, config: config}),
-    do: conn.req_cookies[dont_remember_name(config)] != "true"
+  @doc "Sets the signed session token cookie."
+  @spec put_session(Context.t(), String.t(), boolean()) :: Context.t()
+  def put_session(%Context{config: config} = ctx, token, remember_me) do
+    signed = Crypto.sign(config, "session-token", token)
+    max_age = if remember_me, do: config.session[:expires_in]
+    ctx = put(ctx, :session_token, signed, max_age)
 
-  @doc "Deletes the session cookies."
+    if remember_me,
+      do: delete(ctx, :dont_remember),
+      else: put(ctx, :dont_remember, Crypto.sign(config, "dont-remember", "true"), nil)
+  end
+
+  @doc """
+  The session token from the request: `{:ok, token}`, `:none` without a
+  cookie, or `:invalid` when the signature doesn't match.
+  """
+  @spec session_token(Context.t()) :: {:ok, String.t()} | :none | :invalid
+  def session_token(%Context{conn: conn, config: config}) do
+    case conn.req_cookies[name(config, :session_token)] do
+      nil -> :none
+      signed -> with :error <- Crypto.verify(config, "session-token", signed), do: :invalid
+    end
+  end
+
+  @doc "Whether the request's session was created with remember me."
+  @spec remember_me?(Context.t()) :: boolean()
+  def remember_me?(%Context{conn: conn, config: config}) do
+    signed = conn.req_cookies[name(config, :dont_remember)]
+    not (is_binary(signed) and Crypto.verify(config, "dont-remember", signed) == {:ok, "true"})
+  end
+
+  @doc "Raw value of the session data cookie, or `nil`."
+  @spec session_data(Context.t()) :: String.t() | nil
+  def session_data(%Context{conn: conn, config: config}),
+    do: conn.req_cookies[name(config, :session_data)]
+
+  @doc "Sets the session data cookie."
+  @spec put_session_data(Context.t(), String.t(), pos_integer() | nil) :: Context.t()
+  def put_session_data(ctx, value, max_age), do: put(ctx, :session_data, value, max_age)
+
+  @doc "Deletes one cookie."
+  @spec delete(Context.t(), cookie()) :: Context.t()
+  def delete(%Context{config: config} = ctx, cookie) do
+    Context.delete_cookie(ctx, name(config, cookie), attributes(config, cookie, nil))
+  end
+
+  @doc "Deletes every session cookie."
   @spec clear_session(Context.t()) :: Context.t()
-  def clear_session(%Context{config: config} = ctx) do
-    ctx
-    |> Context.delete_cookie(session_name(config), attributes(config, nil))
-    |> Context.delete_cookie(dont_remember_name(config), attributes(config, nil))
+  def clear_session(ctx) do
+    ctx |> delete(:session_token) |> delete(:session_data) |> delete(:dont_remember)
   end
 
   @doc "Whether cookies are marked `Secure`."
@@ -61,18 +99,19 @@ defmodule Authmk.Cookies do
     end
   end
 
-  defp name(config, suffix) do
-    name = "#{config.cookies[:prefix]}.#{suffix}"
-    if secure?(config), do: "__Secure-" <> name, else: name
+  defp put(%Context{config: config} = ctx, cookie, value, max_age) do
+    Context.put_cookie(ctx, name(config, cookie), value, attributes(config, cookie, max_age))
   end
 
-  defp attributes(config, max_age) do
+  defp attributes(config, cookie, max_age) do
+    overrides = config.cookies[cookie] || []
+
     [
       http_only: true,
       secure: secure?(config),
-      same_site: config.cookies[:same_site],
+      same_site: Keyword.get(overrides, :same_site, config.cookies[:same_site]),
       path: "/",
-      domain: config.cookies[:domain],
+      domain: Keyword.get(overrides, :domain, config.cookies[:domain]),
       max_age: max_age
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)

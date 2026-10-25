@@ -37,13 +37,12 @@ defmodule Authmk.SchemaConfigTest do
   use Authmk.EmulationCase, async: true
 
   alias Authmk.SchemaConfigTest.Person
-  alias Authmk.Test.Repo
+  alias Authmk.Test.{Database, Repo}
 
   @moduletag auth: Authmk.SchemaConfigTest.Auth
 
   test "tables follow naming, prefix and explicit names" do
-    tables =
-      Repo.query!("SELECT name FROM sqlite_master WHERE type = 'table'").rows |> List.flatten()
+    tables = Database.tables()
 
     assert "people" in tables
     assert "auth_session" in tables

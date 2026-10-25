@@ -16,8 +16,34 @@ defmodule Authmk.EmailVerificationTest.Auth do
   def send_change_email_verification(link, _ctx), do: send(self(), {:email, :change_email, link})
 
   @impl Authmk
+  def before_email_verification(user, _ctx),
+    do: send(self(), {:before_verification, user.email_verified})
+
+  @impl Authmk
   def on_existing_user_sign_up(%{user: user}, _ctx),
     do: send(self(), {:email, :existing_user, user})
+end
+
+defmodule Authmk.EmailVerificationTest.ConfirmCurrentAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [{Authmk.Plugins.EmailPassword, require_email_verification: true}],
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false],
+    email_verification: [auto_sign_in_after_verification: true],
+    user: [change_email: [enabled: true, confirm_current_email: true]]
+
+  @impl Authmk
+  def send_verification_email(link, _ctx), do: send(self(), {:email, :verification, link})
+
+  @impl Authmk
+  def send_change_email_confirmation(link, _ctx),
+    do: send(self(), {:email, :change_confirmation, link})
+
+  @impl Authmk
+  def send_change_email_verification(link, _ctx), do: send(self(), {:email, :change_email, link})
 end
 
 defmodule Authmk.EmailVerificationTest do
@@ -115,6 +141,27 @@ defmodule Authmk.EmailVerificationTest do
     {_browser, conn} = get(browser, "/get-session")
     assert json(conn)["user"]["email"] == "ada@new.example"
     assert json(conn)["user"]["email_verified"] == true
+  end
+
+  @tag auth: Authmk.EmailVerificationTest.ConfirmCurrentAuth
+  test "with confirm_current_email, the current address approves first", %{browser: browser} do
+    browser = verified_user(browser)
+
+    {browser, _conn} = post(browser, "/change-email", %{new_email: "ada@new.example"})
+    refute_received {:email, :change_email, _}
+    confirmation = assert_email(:change_confirmation)
+    assert confirmation.user.email == "ada@example.com"
+
+    # The link works from any device; it is bound to the user, not the session.
+    {_other_device, conn} =
+      get(%{browser | cookies: %{}}, "/change-email/confirm", %{token: confirmation.token})
+
+    assert json(conn) == %{"status" => true}
+    link = assert_email(:change_email)
+
+    {browser, _conn} = get(browser, "/verify-email", %{token: link.token})
+    {_browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@new.example"
   end
 
   test "can't change to an email that's taken", %{browser: browser} do

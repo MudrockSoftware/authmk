@@ -35,6 +35,12 @@ defmodule Authmk.Endpoint do
               doc: "Whether to load the session. `:required` rejects anonymous requests."
             ],
             fresh: [type: :boolean, default: false, doc: "Require a recently created session."],
+            cookie_cache: [
+              type: :boolean,
+              default: false,
+              doc:
+                "Allow reading the session from the cookie cache. Only for read-only endpoints."
+            ],
             rate_limit: [
               type: :keyword_list,
               doc: "Default rule: `[window: seconds, max: count]`."
@@ -52,7 +58,8 @@ defmodule Authmk.Endpoint do
     :plugin,
     params: [],
     session: :none,
-    fresh: false
+    fresh: false,
+    cookie_cache: false
   ]
 
   @type t :: %__MODULE__{}

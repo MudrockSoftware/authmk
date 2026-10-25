@@ -6,6 +6,7 @@ defmodule Authmk.Plug.FetchSession do
       plug Authmk.Plug.FetchSession, auth: MyApp.Auth
 
   It also refreshes the session cookie when the session is due for a refresh.
+  When the cookie cache is enabled, it reads from it (see `Authmk.CookieCache`).
   """
 
   @behaviour Plug
@@ -18,7 +19,7 @@ defmodule Authmk.Plug.FetchSession do
   @impl true
   def call(conn, auth) do
     conn = Plug.Conn.fetch_cookies(conn)
-    ctx = Sessions.load(%Context{config: Config.fetch!(auth), conn: conn})
+    ctx = Sessions.load(%Context{config: Config.fetch!(auth), conn: conn}, cache: true)
 
     conn
     |> Router.put_resp_cookies(ctx)

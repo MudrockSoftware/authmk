@@ -9,6 +9,17 @@ defmodule Authmk.SessionsTest.Auth do
     session: [expires_in: 3600, update_age: 600]
 end
 
+defmodule Authmk.SessionsTest.DeferredAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [Authmk.Plugins.EmailPassword],
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false],
+    session: [expires_in: 3600, update_age: 600, defer_refresh: true]
+end
+
 defmodule Authmk.SessionsTest do
   use Authmk.EmulationCase, async: true
 
@@ -33,13 +44,33 @@ defmodule Authmk.SessionsTest do
     assert Enum.all?(sessions, &(not Map.has_key?(&1, "token")))
   end
 
-  test "stores only a hash of the session token", %{browser: browser} do
+  test "the cookie holds the signed token; the database only its hash", %{browser: browser} do
     {browser, _user} = sign_up(browser)
-    token = cookie(browser, "authmk.session_token")
+    signed = cookie(browser, "authmk.session_token")
+    {:ok, token} = Authmk.Crypto.verify(Auth.config(), "session-token", signed)
 
     [stored] = Repo.all(from(s in "sessions", select: s.token))
-    assert stored != token
     assert stored == Authmk.Token.hash(token)
+    refute stored in [token, signed]
+  end
+
+  test "a cookie with a valid token but a forged signature is rejected", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+
+    {:ok, token} =
+      Authmk.Crypto.verify(
+        Auth.config(),
+        "session-token",
+        cookie(browser, "authmk.session_token")
+      )
+
+    for forged <- [token, "v0." <> Base.url_encode64(token) <> "--forged"] do
+      {browser, conn} =
+        get(%{browser | cookies: %{"authmk.session_token" => forged}}, "/get-session")
+
+      assert json(conn) == nil
+      assert cookie(browser, "authmk.session_token") == nil
+    end
   end
 
   test "revoking one session signs out only that device", %{browser: browser} do
@@ -112,6 +143,28 @@ defmodule Authmk.SessionsTest do
 
     assert DateTime.diff(expires_at, DateTime.utc_now()) > 3500
     assert conn.resp_cookies["authmk.session_token"].max_age == 3600
+  end
+
+  describe "deferred refresh" do
+    @describetag auth: Authmk.SessionsTest.DeferredAuth
+
+    test "GET only reports that a refresh is due; POST does it", %{browser: browser} do
+      {browser, _user} = sign_up(browser)
+      eleven_minutes_ago = DateTime.add(DateTime.utc_now(), 3600 - 660)
+      Repo.update_all("sessions", set: [expires_at: eleven_minutes_ago])
+
+      stored = fn -> Repo.all(from(s in "sessions", select: s.expires_at)) end
+      before = stored.()
+
+      {browser, conn} = get(browser, "/get-session")
+      assert json(conn)["needs_refresh"] == true
+      assert stored.() == before
+
+      {browser, conn} = post(browser, "/get-session")
+      refute json(conn)["needs_refresh"]
+      {_browser, conn} = get(browser, "/get-session")
+      refute json(conn)["needs_refresh"]
+    end
   end
 
   test "a session isn't extended before update_age", %{browser: browser} do

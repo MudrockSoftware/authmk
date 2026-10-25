@@ -25,12 +25,12 @@ defmodule Authmk.MigrationTest.RequiredField do
 end
 
 defmodule Authmk.MigrationTest.ChangedType do
-  # Extended, with `locale` changed from :string to :text.
+  # Extended, with `locale` changed from a :string with a default to :text.
   use Authmk,
     otp_app: :authmk,
     repo: Authmk.Test.Repo,
     plugins: [Authmk.Plugins.EmailPassword, Authmk.Test.GreetingPlugin],
-    schema: [user: [additional_fields: [locale: [type: :text, default: "en"]]]],
+    schema: [user: [additional_fields: [locale: [type: :text]]]],
     base_url: "http://localhost:4000"
 end
 
@@ -49,9 +49,9 @@ defmodule Authmk.MigrationTest do
     Mix.shell(Mix.Shell.Process)
     on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
 
-    path = Database.new_path()
-    on_exit(fn -> Database.delete!(path) end)
-    repo = start_supervised!(Database.repo_child_spec(path))
+    database = Database.create!()
+    on_exit(fn -> Database.delete!(database) end)
+    repo = start_supervised!(Database.repo_child_spec(database))
     Repo.put_dynamic_repo(repo)
 
     %{dir: dir, repo: repo}
@@ -121,12 +121,25 @@ defmodule Authmk.MigrationTest do
     end
   end
 
+  @tag :sqlite
   test "SQLite migrations can't change existing columns", %{dir: dir} do
     run_task(Extended, dir, "initial")
 
     assert_raise ArgumentError, ~r/SQLite can't change existing columns/, fn ->
       run_task(Authmk.MigrationTest.ChangedType, dir, "change", ["--allow-destructive"])
     end
+  end
+
+  @tag :server_database
+  test "Postgres and MySQL migrations change column types, and roll back", %{dir: dir, repo: repo} do
+    run_task(Extended, dir, "initial")
+    run_task(Authmk.MigrationTest.ChangedType, dir, "change", ["--allow-destructive"])
+
+    migrations = migrate!(dir, repo)
+    assert "locale" in columns("users")
+
+    Ecto.Migrator.run(Repo, migrations, :down, step: 1, dynamic_repo: repo, log: false)
+    assert "locale" in columns("users")
   end
 
   defp run_task(auth, dir, name, extra \\ []) do
@@ -156,11 +169,7 @@ defmodule Authmk.MigrationTest do
     migrations
   end
 
-  defp tables do
-    Repo.query!("SELECT name FROM sqlite_master WHERE type = 'table'").rows |> List.flatten()
-  end
+  defp tables, do: Database.tables()
 
-  defp columns(table) do
-    Repo.query!("SELECT name FROM pragma_table_info('#{table}')").rows |> List.flatten()
-  end
+  defp columns(table), do: Database.columns(table)
 end

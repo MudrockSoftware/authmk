@@ -1,7 +1,11 @@
 defmodule Authmk.Storage.ETS do
   @moduledoc """
-  In-memory storage in an ETS table, local to one node. Expired entries are
-  swept every `:sweep_interval` milliseconds (default one minute).
+  Secondary storage in an ETS table, local to one node. Each auth module
+  starts its own table; expired entries are swept every minute.
+
+  Use it for a single node, or for development. With several nodes, use a
+  shared store such as `Authmk.Storage.Redis`, or sessions and rate limits
+  won't be shared between them.
   """
 
   @behaviour Authmk.Storage
@@ -10,31 +14,71 @@ defmodule Authmk.Storage.ETS do
 
   @doc false
   def start_link(opts) do
-    name = Keyword.fetch!(opts, :name)
-    GenServer.start_link(__MODULE__, opts, name: name)
+    GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :table))
   end
 
   @impl Authmk.Storage
-  def increment(server, key, ttl) do
-    # Fixed windows: every `ttl` seconds starts a new counter.
-    window = div(now(), ttl)
-    entry_key = {key, window}
-    expires_at = (window + 1) * ttl
-    :ets.update_counter(server, entry_key, {2, 1}, {entry_key, 0, expires_at})
+  def get(opts, key) do
+    now = now()
+
+    case :ets.lookup(opts[:table], key) do
+      [{^key, value, expires_at}] when expires_at > now -> value
+      _missing_or_expired -> nil
+    end
+  end
+
+  @impl Authmk.Storage
+  def get_and_delete(opts, key) do
+    now = now()
+
+    case :ets.take(opts[:table], key) do
+      [{^key, value, expires_at}] when expires_at > now -> value
+      _missing_or_expired -> nil
+    end
+  end
+
+  @impl Authmk.Storage
+  def put(opts, key, value, ttl) do
+    expires_at = if ttl, do: now() + ttl, else: :infinity
+    true = :ets.insert(opts[:table], {key, value, expires_at})
+    :ok
+  end
+
+  @impl Authmk.Storage
+  def delete(opts, key) do
+    true = :ets.delete(opts[:table], key)
+    :ok
+  end
+
+  # Callers put the window in the key, so a key is never reused after it
+  # expires and the default below always starts a fresh counter.
+  @impl Authmk.Storage
+  def increment(opts, key, ttl) do
+    :ets.update_counter(opts[:table], key, {2, 1}, {key, 0, now() + ttl})
   end
 
   @impl GenServer
   def init(opts) do
-    name = Keyword.fetch!(opts, :name)
-    ^name = :ets.new(name, [:named_table, :public, :set, write_concurrency: true])
+    table = Keyword.fetch!(opts, :table)
+
+    ^table =
+      :ets.new(table, [
+        :named_table,
+        :public,
+        :set,
+        read_concurrency: true,
+        write_concurrency: true
+      ])
+
     interval = Keyword.get(opts, :sweep_interval, 60_000)
     schedule_sweep(interval)
-    {:ok, %{table: name, interval: interval}}
+    {:ok, %{table: table, interval: interval}}
   end
 
   @impl GenServer
   def handle_info(:sweep, state) do
-    :ets.select_delete(state.table, [{{:_, :_, :"$1"}, [{:<, :"$1", now()}], [true]}])
+    # Integers sort before atoms, so `:infinity` entries are never swept.
+    _count = :ets.select_delete(state.table, [{{:_, :_, :"$1"}, [{:<, :"$1", now()}], [true]}])
     schedule_sweep(state.interval)
     {:noreply, state}
   end

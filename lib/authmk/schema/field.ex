@@ -71,19 +71,31 @@ defmodule Authmk.Schema.Field do
   @spec new(atom(), keyword()) :: t()
   def new(name, spec) do
     spec = validate!(name, spec)
+    check_kind!(name, spec[:type], spec[:references])
+    check_portable!(name, spec)
+    struct!(__MODULE__, [name: name] ++ spec)
+  end
 
-    cond do
-      spec[:type] && spec[:references] ->
-        raise ArgumentError, "field #{inspect(name)} sets both :type and :references"
+  defp check_kind!(name, nil, nil),
+    do: raise(ArgumentError, "field #{inspect(name)} needs a :type or :references")
 
-      is_nil(spec[:type]) and is_nil(spec[:references]) ->
-        raise ArgumentError, "field #{inspect(name)} needs a :type or :references"
+  defp check_kind!(name, _type, nil), do: name
 
-      spec[:references] && not String.ends_with?(Atom.to_string(name), "_id") ->
-        raise ArgumentError, "reference field #{inspect(name)} must end in _id"
+  defp check_kind!(name, nil, _references) do
+    if String.ends_with?(Atom.to_string(name), "_id"),
+      do: name,
+      else: raise(ArgumentError, "reference field #{inspect(name)} must end in _id")
+  end
 
-      true ->
-        struct!(__MODULE__, [name: name] ++ spec)
+  defp check_kind!(name, _type, _references),
+    do: raise(ArgumentError, "field #{inspect(name)} sets both :type and :references")
+
+  # MySQL can't give TEXT or JSON columns a default value.
+  defp check_portable!(name, spec) do
+    if spec[:type] in [:text, :map] and Keyword.has_key?(spec, :default) do
+      raise ArgumentError,
+            "field #{inspect(name)} of type #{inspect(spec[:type])} can't have a default " <>
+              "(MySQL doesn't allow it). Use :string, or set the value in a database hook"
     end
   end
 

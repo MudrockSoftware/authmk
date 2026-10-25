@@ -7,7 +7,10 @@ defmodule Authmk.Config do
   stored in `:persistent_term` for fast reads.
   """
 
-  alias Authmk.{Options, Origin}
+  alias Authmk.{Options, Origin, Secrets}
+
+  # Never print secrets, for example in crash reports.
+  @derive {Inspect, except: [:secrets]}
 
   @enforce_keys [:auth, :repo, :schema, :plugins, :endpoints]
   defstruct [
@@ -18,6 +21,10 @@ defmodule Authmk.Config do
     :plugins,
     :endpoints,
     :trusted_origins,
+    :hook_modules,
+    :secrets,
+    :secondary_storage,
+    :verification,
     :base_url,
     :base_path,
     :app_name,
@@ -52,6 +59,11 @@ defmodule Authmk.Config do
     end
 
     runtime = Options.validate_runtime!(deep_merge(use_opts, app_opts))
+
+    if is_nil(Origin.origin(runtime[:base_url])) do
+      raise ArgumentError, "base_url must be an http(s) URL, got: #{inspect(runtime[:base_url])}"
+    end
+
     plugins = Enum.map(compile[:plugins], &init_plugin/1)
     check_dependencies!(plugins)
 
@@ -64,11 +76,63 @@ defmodule Authmk.Config do
           repo: compile[:repo],
           schema: auth.__authmk__(:schema),
           plugins: plugins,
-          endpoints: []
-        ] ++ runtime
+          endpoints: [],
+          secrets: Secrets.resolve!(runtime)
+        ] ++ Keyword.drop(runtime, [:secret, :secrets])
       )
 
-    %{config | endpoints: endpoints(config), trusted_origins: trusted_origins(config)}
+    config = %{
+      config
+      | endpoints: endpoints(config),
+        trusted_origins: trusted_origins(config),
+        hook_modules: hook_modules(config),
+        secondary_storage: storage(auth, config.secondary_storage)
+    }
+
+    check_storage!(config)
+    config
+  end
+
+  # Hook order: authmk's own, then plugins in config order, then the auth module.
+  # Loaded now: `function_exported?/3` is false for modules not loaded yet.
+  defp hook_modules(config) do
+    modules = [Authmk.CoreHooks | Enum.map(config.plugins, &elem(&1, 0))] ++ [config.auth]
+    Enum.each(modules, &Code.ensure_loaded!/1)
+    modules
+  end
+
+  # The ETS store needs the table its auth module starts.
+  defp storage(_auth, nil), do: nil
+  defp storage(auth, Authmk.Storage.ETS), do: {Authmk.Storage.ETS, table: ets_table(auth)}
+  defp storage(auth, {Authmk.Storage.ETS, _opts}), do: storage(auth, Authmk.Storage.ETS)
+  defp storage(_auth, {module, opts}), do: {module, opts}
+  defp storage(_auth, module), do: {module, []}
+
+  @doc "Name of the auth module's ETS table."
+  @spec ets_table(module()) :: atom()
+  def ets_table(auth), do: Module.concat(auth, Storage)
+
+  defp check_storage!(config) do
+    rate_limit_storage = config.rate_limit[:storage]
+    plugins = Enum.map(config.plugins, &elem(&1, 0))
+
+    cond do
+      rate_limit_storage == :secondary_storage and is_nil(config.secondary_storage) ->
+        raise ArgumentError, "rate_limit: [storage: :secondary_storage] needs secondary_storage"
+
+      rate_limit_storage == :database and Authmk.Plugins.DatabaseRateLimit not in plugins ->
+        raise ArgumentError,
+              "rate_limit: [storage: :database] needs the Authmk.Plugins.DatabaseRateLimit plugin"
+
+      config.secondary_storage && not config.session[:store_in_database] &&
+          config.schema.primary_key == :id ->
+        raise ArgumentError,
+              "sessions kept only in secondary storage need primary_key: :binary_id. " <>
+                "Use session: [store_in_database: true] with integer ids"
+
+      true ->
+        :ok
+    end
   end
 
   @doc "Stores a loaded config."
@@ -143,7 +207,7 @@ defmodule Authmk.Config do
           do: origin
 
     [config.base_url | config.trusted_origins ++ plugin_origins]
-    |> Enum.map(&Origin.normalize!/1)
+    |> Enum.map(&Origin.normalize/1)
     |> Enum.uniq()
   end
 

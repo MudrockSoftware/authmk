@@ -34,7 +34,34 @@ defmodule Authmk.Options.Schemas do
                       default: "/auth",
                       doc: "Where the auth router is mounted."
                     ],
+                    secret: [
+                      type: :string,
+                      doc:
+                        "At least 32 random characters. Defaults to the `AUTHMK_SECRET` environment variable."
+                    ],
+                    secrets: [
+                      type: {:list, {:tuple, [:non_neg_integer, :string]}},
+                      doc:
+                        "Versioned secrets for rotation, newest first. Defaults to `AUTHMK_SECRETS`."
+                    ],
                     app_name: [type: :string, default: "authmk"],
+                    secondary_storage: [
+                      type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}]},
+                      doc:
+                        "`Authmk.Storage.ETS`, `{Authmk.Storage.Redis, conn: ...}` or your own `Authmk.Storage`."
+                    ],
+                    verification: [
+                      type: :keyword_list,
+                      default: [],
+                      keys: [
+                        store_in_database: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "With secondary storage, also keep verification tokens in the database."
+                        ]
+                      ]
+                    ],
                     trusted_origins: [
                       type: {:list, :string},
                       default: [],
@@ -73,7 +100,39 @@ defmodule Authmk.Options.Schemas do
                           default: @day,
                           doc: "`0` disables the check."
                         ],
-                        disable_refresh: [type: :boolean, default: false]
+                        disable_refresh: [type: :boolean, default: false],
+                        store_in_database: [
+                          type: :boolean,
+                          default: false,
+                          doc: "With secondary storage, also keep sessions in the database."
+                        ],
+                        preserve_in_database: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Keep revoked sessions' database rows, marked ended, instead of deleting them."
+                        ],
+                        defer_refresh: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Keep `GET /get-session` read-only; it reports `needs_refresh` and `POST /get-session` refreshes."
+                        ],
+                        cookie_cache: [
+                          type: :keyword_list,
+                          default: [],
+                          doc: "See `Authmk.CookieCache`.",
+                          keys: [
+                            enabled: [type: :boolean, default: false],
+                            max_age: [type: :pos_integer, default: 300, doc: "Seconds."],
+                            strategy: [type: {:in, [:signed, :encrypted]}, default: :signed],
+                            version: [
+                              type: :string,
+                              default: "1",
+                              doc: "Change it to invalidate every cache."
+                            ]
+                          ]
+                        ]
                       ]
                     ],
                     user: [
@@ -83,7 +142,14 @@ defmodule Authmk.Options.Schemas do
                         change_email: [
                           type: :keyword_list,
                           default: [],
-                          keys: [enabled: [type: :boolean, default: false]]
+                          keys: [
+                            enabled: [type: :boolean, default: false],
+                            confirm_current_email: [
+                              type: :boolean,
+                              default: false,
+                              doc: "Confirm from the current address before mailing the new one."
+                            ]
+                          ]
                         ],
                         delete_user: [
                           type: :keyword_list,
@@ -103,7 +169,34 @@ defmodule Authmk.Options.Schemas do
                         prefix: [type: :string, default: "authmk"],
                         secure: [type: {:in, [:auto, true, false]}, default: :auto],
                         same_site: [type: {:in, ["Lax", "Strict", "None"]}, default: "Lax"],
-                        domain: [type: :string]
+                        domain: [type: :string],
+                        session_token: [
+                          type: :keyword_list,
+                          doc: "Overrides for the session_token cookie.",
+                          keys: [
+                            name: [type: :string],
+                            same_site: [type: {:in, ["Lax", "Strict", "None"]}],
+                            domain: [type: :string]
+                          ]
+                        ],
+                        session_data: [
+                          type: :keyword_list,
+                          doc: "Overrides for the session_data cookie.",
+                          keys: [
+                            name: [type: :string],
+                            same_site: [type: {:in, ["Lax", "Strict", "None"]}],
+                            domain: [type: :string]
+                          ]
+                        ],
+                        dont_remember: [
+                          type: :keyword_list,
+                          doc: "Overrides for the dont_remember cookie.",
+                          keys: [
+                            name: [type: :string],
+                            same_site: [type: {:in, ["Lax", "Strict", "None"]}],
+                            domain: [type: :string]
+                          ]
+                        ]
                       ]
                     ],
                     rate_limit: [
@@ -112,6 +205,11 @@ defmodule Authmk.Options.Schemas do
                       keys: [
                         enabled: [type: :boolean, default: true],
                         window: [type: :pos_integer, default: 10, doc: "Seconds."],
+                        storage: [
+                          type: {:in, [:memory, :secondary_storage, :database]},
+                          default: :memory,
+                          doc: "`:database` needs `Authmk.Plugins.DatabaseRateLimit`."
+                        ],
                         max: [type: :pos_integer, default: 100],
                         rules: [
                           type: {:map, :string, {:or, [{:in, [false]}, :keyword_list]}},

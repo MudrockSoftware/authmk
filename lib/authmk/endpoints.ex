@@ -5,7 +5,9 @@ defmodule Authmk.Endpoints do
   | Method | Path | Session |
   |---|---|---|
   | GET | `/ok` | none |
-  | GET | `/get-session` | optional |
+  | GET | `/get-session` | optional (may use the cookie cache) |
+  | POST | `/get-session` | optional (refreshes a deferred session) |
+  | POST | `/update-session` | required |
   | POST | `/sign-out` | optional |
   | GET | `/list-sessions` | required |
   | POST | `/revoke-session` | required |
@@ -13,6 +15,7 @@ defmodule Authmk.Endpoints do
   | POST | `/revoke-other-sessions` | required |
   | POST | `/update-user` | required |
   | POST | `/change-email` | required |
+  | GET | `/change-email/confirm` | none |
   | POST | `/delete-user` | required |
   | GET | `/delete-user/callback` | required |
   | GET | `/list-accounts` | required |
@@ -30,7 +33,15 @@ defmodule Authmk.Endpoints do
   def all do
     [
       new(:ok, :get, "/ok", {__MODULE__, :ok}),
-      new(:get_session, :get, "/get-session", {Session, :get_session}, session: :optional),
+      new(:get_session, :get, "/get-session", {Session, :get_session},
+        session: :optional,
+        cookie_cache: true,
+        params: [disable_cookie_cache: [type: :boolean, default: false]]
+      ),
+      new(:refresh_session, :post, "/get-session", {Session, :get_session}, session: :optional),
+      new(:update_session, :post, "/update-session", {Session, :update_session},
+        session: :required
+      ),
       new(:sign_out, :post, "/sign-out", {Session, :sign_out}, session: :optional),
       new(:list_sessions, :get, "/list-sessions", {Session, :list_sessions}, session: :required),
       new(:revoke_session, :post, "/revoke-session", {Session, :revoke_session},
@@ -52,6 +63,9 @@ defmodule Authmk.Endpoints do
         session: :required,
         rate_limit: @strict,
         params: [new_email: [type: :string, required: true], callback_url: [type: :string]]
+      ),
+      new(:confirm_email_change, :get, "/change-email/confirm", {User, :confirm_email_change},
+        params: [token: [type: :string, required: true], callback_url: [type: :string]]
       ),
       new(:delete_user, :post, "/delete-user", {User, :delete_user},
         session: :required,

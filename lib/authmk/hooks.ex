@@ -1,7 +1,7 @@
 defmodule Authmk.Hooks do
   @moduledoc false
-  # Runs endpoint and database hooks: every plugin in config order, then the
-  # auth module itself.
+  # Runs endpoint and database hooks: authmk's own (Authmk.CoreHooks), then
+  # every plugin in config order, then the auth module itself.
 
   alias Authmk.{Context, Error}
 
@@ -52,7 +52,6 @@ defmodule Authmk.Hooks do
   end
 
   defp hook_modules(%Context{config: config}, function, arity) do
-    plugins = Enum.map(config.plugins, &elem(&1, 0))
-    Enum.filter(plugins ++ [config.auth], &function_exported?(&1, function, arity))
+    Enum.filter(config.hook_modules, &function_exported?(&1, function, arity))
   end
 end
