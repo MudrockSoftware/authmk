@@ -124,8 +124,15 @@ Tests here emulate real usage. They are not unit tests.
 
 ## Workflow
 
-- Don't commit unless the user explicitly asks.
-- Use Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `test:`, `chore:`.
-  Add `!` for breaking changes.
+- Git history belongs to the developer. Agents may only use git to inspect
+  code and to compare behavior while testing or fixing bugs:
+  - Allowed: `git status`, `git log`, `git diff`, `git show`, `git blame`,
+    `git stash` and `git stash pop`. Always pop what you stashed, so the
+    working tree ends exactly as you found it.
+  - Never: `commit` (including `--amend`), `push`, `pull`, `fetch`, `merge`,
+    `rebase`, `cherry-pick`, `reset`, `checkout`, `switch` or `restore` on
+    files, `clean`, `stash drop`/`clear`, creating or deleting branches or
+    tags, or changing git config. Anything that writes history, touches a
+    remote or can discard changes is the developer's job.
 - Update `README.md`, the module docs and `ROADMAP.md` when you change
   public behavior.
