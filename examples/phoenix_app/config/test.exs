@@ -20,6 +20,12 @@ config :phoenix_app, PhoenixAppWeb.Endpoint,
 # In test we don't send emails
 config :phoenix_app, PhoenixApp.Mailer, adapter: Swoosh.Adapters.Test
 
+# Send emails from the test process, so tests can assert on them.
+config :phoenix_app, PhoenixApp.Auth, background: :inline, rate_limit: [enabled: false]
+
+# Fast, insecure password hashing. Tests only.
+config :argon2_elixir, t_cost: 1, m_cost: 8, parallelism: 1
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

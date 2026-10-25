@@ -8,7 +8,15 @@ defmodule PhoenixAppWeb.Router do
     plug :put_root_layout, html: {PhoenixAppWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug Authmk.Plug.FetchSession, auth: PhoenixApp.Auth
   end
+
+  pipeline :require_authenticated do
+    plug Authmk.Plug.RequireAuthenticated, redirect_to: "/"
+  end
+
+  # Auth endpoints: JSON API, protected by authmk's own origin checks.
+  forward "/auth", PhoenixApp.Auth
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -18,6 +26,12 @@ defmodule PhoenixAppWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+  end
+
+  scope "/", PhoenixAppWeb do
+    pipe_through [:browser, :require_authenticated]
+
+    get "/account", PageController, :account
   end
 
   # Other scopes may use custom stacks.

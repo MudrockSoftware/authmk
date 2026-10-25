@@ -11,56 +11,60 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.1 Foundation
 
 ### Configuration
-- [ ] `use Authmk` config validated with NimbleOptions, with clear compile-time errors
-- [ ] `app_name`, `base_url`, `base_path` (default `/auth`)
+- [x] `use Authmk` config validated with NimbleOptions, with clear compile-time errors
+- [x] `app_name`, `base_url`, `base_path` (default `/auth`)
+- [x] Runtime options from application config (`config/runtime.exs`), merged over `use Authmk` options
 - [ ] Dynamic base URL: work out the URL per request for preview deployments and multiple domains, with a safe fallback
 - [ ] `secret` plus `secrets` for key rotation (sign and encrypt with the newest key, verify with all keys)
-- [ ] `disabled_paths` to turn off individual endpoints
+- [x] `disabled_paths` to turn off individual endpoints
 - [ ] `on_api_error` handler and configurable error redirect page
 - [ ] Logger integration: log levels and a custom log function
-- [ ] Background tasks: run non-critical work (emails, cleanup) on a `Task.Supervisor`, swappable for Oban
+- [x] Background tasks: run non-critical work (emails) on a `Task.Supervisor`, or inline
+- [ ] Oban adapter for background tasks
 
 ### Plugin system
-- [ ] `Authmk.Plugin` behaviour: `init/1`, `schema/1`, `routes/1`, `hooks/1`, `depends_on/0`
-- [ ] Plugin endpoints with param specs, validated by schemaless changesets
-- [ ] Plugin schema: new models, and new fields on core models
-- [ ] Before and after hooks, matched on a single endpoint, several endpoints, or a predicate
+- [x] `Authmk.Plugin` behaviour: `init/1`, `schema/1`, `endpoints/1`, `trusted_origins/1`, `depends_on/0`
+- [x] Plugin endpoints with param specs, validated by schemaless changesets
+- [x] Plugin schema: new models, and new fields on core models
+- [x] Before and after endpoint hooks (`before_endpoint/2`, `after_endpoint/3`), matched by pattern matching on the endpoint name
 - [ ] Middleware for groups of plugin endpoints
 - [ ] `on_request` / `on_response` callbacks
-- [ ] Per-plugin rate-limit rules
-- [ ] Plugins can add trusted origins
-- [ ] Plugin dependency check and predictable hook order
+- [x] Per-endpoint rate-limit rules
+- [x] Plugins can add trusted origins
+- [x] Plugin dependency check and predictable hook order
 - [ ] Helper functions for plugin authors (session lookup, sensitive-session check, cookie helpers)
 - [ ] Guide: writing your first plugin
 
 ### Schema system
-- [ ] Core models: `user`, `session`, `account`, `verification`
-- [ ] Field specs: `type`, `required`, `default`, `input`, `returned`, `unique`, `index`, `references`, `on_delete`, `validate`, `source`
-- [ ] Extra fields on core models (`additional_fields`)
-- [ ] Rename fields and columns
-- [ ] Table naming: `:plural` / `:singular`, `table_prefix`, per-model `table:` override
-- [ ] Map onto existing tables, such as `users` from `phx.gen.auth`
-- [ ] ID generation: app-generated UUIDs (default), integer IDs, custom generator function
+- [x] Core models: `user`, `session`, `account`, `verification`
+- [x] Field specs: `type`, `required`, `default`, `input`, `returned`, `unique`, `index`, `references`, `on_delete`, `validate`, `source`
+- [x] Extra fields on core models (`additional_fields`)
+- [x] Rename fields and columns
+- [x] Table naming: `:plural` / `:singular`, `table_prefix`, per-model `table:` override
+- [ ] Map onto existing tables, such as `users` from `phx.gen.auth` (tested end to end)
+- [x] ID generation: app-generated UUIDs (default) or integer IDs
+- [ ] Custom ID generator function
 - [ ] Mixed ID types (for example, integer user IDs with UUID plugin tables)
-- [ ] `authmk_fields()` macro for models the user owns
-- [ ] Generated modules for models the library owns
+- [x] `authmk_fields()` macro for models the user owns
+- [x] Generated modules for models the library owns
 - [ ] Startup check that the database matches the resolved schema
-- [ ] Database hooks: before and after create, update and delete on every model, able to change or cancel the operation
+- [x] Database hooks: before and after create, update and delete on every model, able to change or cancel the operation
 - [ ] Efficient loading of related records (one query for session plus user)
-- [ ] Default limit for list queries
+- [x] Default limit for list queries
 
 ### Databases
-- [ ] SQLite, PostgreSQL and MySQL through Ecto, chosen automatically from the repo's adapter
-- [ ] A rule that schemas only use features all three share, checked at compile time
+- [ ] SQLite, PostgreSQL and MySQL through Ecto, chosen automatically from the repo's adapter (adapter detection done; only SQLite is tested so far)
+- [x] Schemas only use features all three databases share: portable field types checked at compile time, new columns on existing tables must be nullable or have a default
 - [ ] CI test matrix across all three databases
 
 ### Mix tasks
 - [ ] `mix authmk.install`: set up config, router, user schema and first migration (Igniter)
-- [ ] `mix authmk.gen.migration`: snapshot diff and Ecto migration
-- [ ] `mix authmk.gen.migration --baseline` for existing databases
-- [ ] `mix authmk.gen.migration --check` for CI
-- [ ] Interactive rename detection; destructive changes need `--allow-destructive`
-- [ ] Table rebuild for SQLite when a column changes
+- [x] `mix authmk.gen.migration`: snapshot diff and Ecto migration with exact `up`/`down`
+- [x] `mix authmk.gen.migration --baseline` for existing databases
+- [x] `mix authmk.gen.migration --check` for CI
+- [x] Destructive changes need `--allow-destructive`
+- [ ] Interactive rename detection
+- [ ] Table rebuild for SQLite when a column changes (today the generator refuses with a clear message)
 - [ ] Run migrations from code (for releases)
 - [ ] `mix authmk.gen.secret`
 - [ ] `mix authmk.create_admin`
@@ -68,14 +72,15 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] `mix authmk.upgrade`: guided upgrades between authmk versions
 
 ### Secondary storage
-- [ ] `Authmk.Storage` behaviour (get, set with TTL, delete)
-- [ ] Built-in ETS storage
+- [ ] `Authmk.Storage` behaviour (get, set with TTL, delete); today it only has the counter used by rate limits
+- [x] Built-in ETS storage (rate-limit counters, with expiry sweeps)
 - [ ] Redis storage (Redix)
-- [ ] Used for sessions, rate limits and verification values
+- [ ] Used for sessions and verification values
 
 ### Errors and observability
-- [ ] `%Authmk.Error{}` with stable codes, documented in an error reference
-- [ ] `:telemetry` events for every endpoint and database operation
+- [x] `%Authmk.Error{}` with stable codes, HTTP statuses and messages (`Authmk.Error.codes/0`)
+- [ ] Error reference page in the docs
+- [x] `:telemetry` events for every endpoint and database operation
 - [ ] OpenTelemetry spans for endpoints and database calls
 
 ---
@@ -83,33 +88,37 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.2 Core authentication
 
 ### Email and password
-- [ ] Sign up, sign in and sign out
-- [ ] "Remember me" (session cookie vs. persistent cookie)
-- [ ] Password hashing with Argon2id by default (configurable cost), with Bcrypt and custom hash and verify functions available
-- [ ] Minimum and maximum password length
-- [ ] Turn sign-up on or off
-- [ ] Callback for duplicate sign-up attempts that doesn't reveal whether the email is taken
-- [ ] Fake user response so sign-up and sign-in can't be used to find existing emails
-- [ ] Request password reset, reset password and the reset callback
-- [ ] Optionally sign out every session after a password reset
-- [ ] Change password, with an option to sign out other sessions
+- [x] Sign up, sign in and sign out
+- [x] "Remember me" (session cookie vs. persistent cookie)
+- [x] Password hashing with Argon2id by default; custom hashers through the `Authmk.Password` behaviour
+- [ ] Bcrypt hasher
+- [x] Minimum and maximum password length
+- [x] Turn sign-up on or off
+- [x] Callback for duplicate sign-up attempts that doesn't reveal whether the email is taken
+- [x] Sign-up and sign-in can't be used to find existing emails (same answers, same timing)
+- [x] Request password reset, reset password and the reset callback
+- [x] Optionally sign out every session after a password reset
+- [x] Change password, with an option to sign out other sessions
 - [ ] Set a password for accounts that only use social sign-in
-- [ ] Verify a password (server-side check before sensitive actions)
+- [x] Verify a password (check before sensitive actions)
 
 ### Email verification
-- [ ] `send_verification_email` callback; bring your own mailer (Swoosh)
-- [ ] Send on sign-up, send on sign-in, or both
-- [ ] Require a verified email before sign-in
-- [ ] Verification link endpoint with a callback URL
-- [ ] Sign the user in automatically after verification
-- [ ] Callbacks before and after verification
+- [x] `send_verification_email` callback; bring your own mailer (Swoosh)
+- [x] Send on sign-up, send on sign-in, or both
+- [x] Require a verified email before sign-in
+- [x] Verification link endpoint with a callback URL
+- [x] Sign the user in automatically after verification
+- [x] Callback after verification
+- [ ] Callback before verification
 
 ### Sessions
-- [ ] Database-backed sessions with IP address and user agent
-- [ ] Session lifetime and how often it's extended
-- [ ] Turn off session extension, or defer it
-- [ ] Session freshness for sensitive actions
-- [ ] Get, list, update and sign out sessions; sign out other sessions; sign out all sessions
+- [x] Database-backed sessions with IP address and user agent
+- [x] Session lifetime and how often it's extended
+- [x] Turn off session extension
+- [ ] Defer session extension
+- [x] Session freshness for sensitive actions
+- [x] Get, list and sign out sessions; sign out other sessions; sign out all sessions
+- [ ] Update session (custom session fields)
 - [ ] Cookie cache to skip database lookups, as signed, encrypted or JWT cookies
 - [ ] Cookie-cache JWTs signed with keys from a JWKS endpoint
 - [ ] Sessions in secondary storage, optionally also kept in the database
@@ -117,36 +126,41 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] Custom session response (add or reshape fields)
 
 ### Users and accounts
-- [ ] Update user details
-- [ ] Change email, with verification of the current and/or new address
-- [ ] Delete a user, optionally with email verification, freshness check and before/after callbacks
-- [ ] List linked accounts
+- [x] Update user details (only fields with `input: true`)
+- [x] Change email, verified by a link to the new address
+- [ ] Change email: also confirm from the current address
+- [x] Delete a user, with a password or a fresh session, optional email confirmation, and database hooks before and after
+- [x] List linked accounts
 - [ ] Encrypt OAuth tokens stored in the database
 - [ ] Update account data on each sign-in
 
 ### Cookies
-- [ ] Cookie prefix and custom cookie names
-- [ ] Custom cookie attributes, per cookie and as defaults
-- [ ] Cookies shared across subdomains
-- [ ] Secure cookies forced on in production
+- [x] Cookie prefix
+- [ ] Custom cookie names
+- [ ] Custom cookie attributes per cookie (today: global `same_site`, `domain` and `secure`)
+- [x] Cookies shared across subdomains (`cookies: [domain: ...]`)
+- [x] Secure cookies, with the `__Secure-` prefix, whenever `base_url` is HTTPS
 - [ ] Guide: Safari ITP and cross-domain setups (reverse proxy, shared parent domain)
 
 ### Security
-- [ ] CSRF protection and origin checks for requests that change state
-- [ ] Trusted origins: fixed list, wildcards, custom schemes (for mobile apps), dynamic list per request
+- [x] CSRF protection and origin checks for requests that change state
+- [x] Trusted origins: fixed list
+- [ ] Trusted origins: wildcards, custom schemes (for mobile apps), dynamic list per request
+- [x] Redirect targets limited to relative paths and trusted origins (open-redirect protection, fuzz tested)
 - [ ] OAuth state and PKCE on every OAuth flow
-- [ ] Protection against revealing which emails are registered, across all endpoints
-- [ ] Trusted proxy headers and configurable IP address headers
-- [ ] Option to turn off IP tracking
+- [x] Protection against revealing which emails are registered, across all current endpoints
+- [x] Trusted proxy headers and configurable IP address headers
+- [x] Option to turn off IP tracking
 - [ ] Outbound HTTP requests don't follow redirects (protects against server-side request forgery)
 - [ ] Security policy and vulnerability reporting process
 
 ### Rate limiting
-- [ ] On by default in production, with a default window and maximum
-- [ ] Rules per endpoint (stricter defaults for sign-in, sign-up and password reset)
-- [ ] Storage in memory, the database or secondary storage
-- [ ] IPv6 support with subnet grouping
-- [ ] `Retry-After` header and a standard error response
+- [x] On by default, with a default window and maximum
+- [x] Rules per endpoint (stricter defaults for sign-in, sign-up and password reset), overridable per path
+- [x] Storage in memory (ETS)
+- [ ] Storage in the database or secondary storage
+- [x] IPv6 support with subnet grouping
+- [x] `Retry-After` header and a standard error response
 
 ---
 
@@ -444,7 +458,8 @@ Legend: `[ ]` planned, `[x]` done
 
 ## 0.9 Framework integration
 
-- [ ] Plug: `Authmk.Plug.FetchSession`, `RequireAuthenticated`, `RequireRole`, `RequireUser` (rejects service accounts)
+- [x] Plug: `Authmk.Plug.FetchSession`, `Authmk.Plug.RequireAuthenticated`
+- [ ] Plug: `RequireRole`, `RequireUser` (rejects service accounts)
 - [ ] Phoenix router macro and controller helpers
 - [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` assigns
 - [ ] LiveView function components: sign-in, sign-up, password reset, 2FA, passkeys, account settings, organization switcher

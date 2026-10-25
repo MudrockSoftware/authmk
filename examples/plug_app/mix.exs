@@ -32,7 +32,8 @@ defmodule PlugApp.MixProject do
       {:bandit, "~> 1.8"},
       {:jason, "~> 1.4"},
       {:ecto_sql, "~> 3.13"},
-      {:ecto_sqlite3, ">= 0.0.0"}
+      {:ecto_sqlite3, ">= 0.0.0"},
+      {:swoosh, "~> 1.19"}
     ]
   end
 

@@ -8,7 +8,7 @@ defmodule PlugApp.Application do
   @impl true
   def start(_type, _args) do
     children =
-      [PlugApp.Repo] ++
+      [PlugApp.Repo, PlugApp.Auth] ++
         if Application.get_env(:plug_app, :server, true) do
           [{Bandit, plug: PlugApp.Router, port: Application.fetch_env!(:plug_app, :port)}]
         else

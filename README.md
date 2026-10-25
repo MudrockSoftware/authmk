@@ -2,8 +2,9 @@
 
 Website: <https://authmk.com>
 
-> **Status: early development.** Nothing below is implemented yet. This README
-> describes the planned design, and the API will change before 1.0.
+> **Status: early development.** The foundation and email/password
+> authentication work and are tested; most plugins are still to come (see
+> [ROADMAP.md](ROADMAP.md)). The API will change before 1.0.
 
 ## Why
 
@@ -13,29 +14,94 @@ a framework where a plugin can add database tables, routes and lifecycle hooks
 in one place, the way Better Auth does for TypeScript. Authmk aims to bring that
 model to Phoenix and Ecto.
 
-## Planned design
+## Getting started
+
+1. Add the dependency:
+
+   ```elixir
+   {:authmk, "~> 0.1.0"}
+   ```
+
+2. Define an auth module:
+
+   ```elixir
+   defmodule MyApp.Auth do
+     use Authmk,
+       otp_app: :my_app,
+       repo: MyApp.Repo,
+       plugins: [Authmk.Plugins.EmailPassword]
+
+     @impl Authmk
+     def send_reset_password(%{user: user, url: url}, _ctx) do
+       MyApp.Mailer.deliver_reset_link(user.email, url)
+     end
+   end
+   ```
+
+3. Configure it, start it after your repo, and mount it:
+
+   ```elixir
+   # config/runtime.exs
+   config :my_app, MyApp.Auth, base_url: "https://example.com"
+
+   # application.ex
+   children = [MyApp.Repo, MyApp.Auth, ...]
+
+   # router.ex (Phoenix or Plug.Router)
+   forward "/auth", MyApp.Auth
+   ```
+
+4. Generate and run the migration:
+
+   ```sh
+   mix authmk.gen.migration
+   mix ecto.migrate
+   ```
+
+5. Load the signed-in user in your own pipelines:
+
+   ```elixir
+   plug Authmk.Plug.FetchSession, auth: MyApp.Auth   # assigns :current_user, :current_session
+   plug Authmk.Plug.RequireAuthenticated, redirect_to: "/sign-in"
+   ```
+
+Clients then call `POST /auth/sign-up/email`, `POST /auth/sign-in/email`,
+`GET /auth/get-session` and so on. See `Authmk.Endpoints` and
+`Authmk.Plugins.EmailPassword` for every endpoint. Working Plug and Phoenix
+apps are in [`examples/`](https://github.com/MudrockSoftware/authmk/tree/main/examples).
+
+## Design
 
 ### Plugins
 
 A plugin is a module that implements the `Authmk.Plugin` behaviour. It can contribute:
 
 - **Schema**: new tables, or extra fields on core tables such as `user`
-- **Routes**: endpoints mounted under the auth router
-- **Hooks**: `before` hooks, which can stop a request, and `after` hooks on core events such as sign-in and sign-up
-- **Options**: validated with NimbleOptions
+- **Endpoints**: served under the auth router
+- **Hooks**: `before_endpoint/2`, which can stop a request, `after_endpoint/3`,
+  which can change the result, and `database_hook/4` around every write
+- **Options**: validated in `init/1`
 
 ```elixir
 defmodule MyApp.Auth do
   use Authmk,
+    otp_app: :my_app,
     repo: MyApp.Repo,
     plugins: [
-      Authmk.Plugins.EmailPassword,
-      {Authmk.Plugins.TwoFactor, issuer: "MyApp"}
+      {Authmk.Plugins.EmailPassword, require_email_verification: true},
+      MyApp.Auth.AuditPlugin
     ]
-end
 
-# router.ex
-forward "/auth", MyApp.Auth.Router
+  # Your auth module gets the same hooks as plugins.
+  @impl Authmk
+  def before_endpoint(:sign_up_email, ctx) do
+    if String.ends_with?(ctx.raw_params["email"], "@example.com"),
+      do: {:cont, ctx},
+      else: {:halt, Authmk.Error.new(:forbidden)}
+  end
+
+  def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
+end
 ```
 
 ### Schema declared in config
@@ -98,8 +164,8 @@ mix authmk.gen.migration --check      # fail in CI if a migration is missing
 mix ecto.migrate
 ```
 
-Renames are confirmed interactively, and destructive changes such as drops
-require an explicit flag.
+Destructive changes such as drops need `--allow-destructive`. Interactive
+rename detection is planned.
 
 ### Databases
 
@@ -147,4 +213,4 @@ Authmk is an independent project and is not affiliated with Better Auth.
 
 ## License
 
-MIT © Mudrock Software LTD. See [LICENSE](LICENSE).
+MIT © Mudrock Software LTD. See [LICENSE](https://github.com/MudrockSoftware/authmk/blob/main/LICENSE).

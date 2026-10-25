@@ -1,0 +1,201 @@
+{
+  "tables": {
+    "accounts": {
+      "columns": {
+        "access_token": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "access_token_expires_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "account_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "id_token": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "password": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "provider_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "refresh_token": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "refresh_token_expires_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "scope": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "accounts_provider_id_account_id_index": {
+          "columns": ["provider_id","account_id"],
+          "unique": true
+        },
+        "accounts_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "sessions": {
+      "columns": {
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "ip_address": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "token": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_agent": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "sessions_token_index": {
+          "columns": ["token"],
+          "unique": true
+        },
+        "sessions_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "users": {
+      "columns": {
+        "email": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "email_verified": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "image": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "users_email_index": {
+          "columns": ["email"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "verifications": {
+      "columns": {
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "identifier": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        }
+      },
+      "indexes": {
+        "verifications_identifier_index": {
+          "columns": ["identifier"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    }
+  },
+  "version": 1
+}

@@ -12,6 +12,7 @@ defmodule PhoenixApp.Application do
       PhoenixApp.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:phoenix_app, :ecto_repos), skip: skip_migrations?()},
+      PhoenixApp.Auth,
       {DNSCluster, query: Application.get_env(:phoenix_app, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PhoenixApp.PubSub},
       # Start a worker by calling: PhoenixApp.Worker.start_link(arg)
