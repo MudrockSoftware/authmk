@@ -170,68 +170,68 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.3 Social sign-in
 
 ### OAuth core
-- [ ] Sign in with a social provider (redirect flow)
-- [ ] Sign in with an ID token (native mobile and one-tap flows)
-- [ ] Link and unlink accounts
-- [ ] Account linking rules: trusted providers, allowing different emails, allowing the last account to be unlinked
-- [ ] Get an access token, with automatic refresh
-- [ ] Get account info from the provider
-- [ ] Ask for extra scopes later, and keep previously granted scopes across sign-ins
-- [ ] Custom authorization URL parameters, `prompt`, `response_mode`
-- [ ] Pass extra data through the OAuth flow
-- [ ] Map a provider profile to a user, including placeholder emails for providers that return none
-- [ ] Validate provider user info before creating a user
-- [ ] Per-provider options: `disable_sign_up`, `disable_implicit_sign_up`, `disable_id_token_sign_in`, `verify_id_token`, `override_user_info_on_sign_in`, `require_email_verification`, `disable_default_scope`, custom `get_user_info`, custom `refresh_access_token`
-- [ ] OAuth state stored in a cookie or in the database
-- [ ] One identity-token verifier shared by all providers
-- [ ] Documented error codes for OAuth callbacks
+- [x] Sign in with a social provider (redirect flow)
+- [x] Sign in with an ID token (native mobile and one-tap flows)
+- [x] Link and unlink accounts
+- [x] Account linking rules: trusted providers, allowing different emails, allowing the last account to be unlinked
+- [x] Get an access token, with automatic refresh
+- [x] Get account info from the provider
+- [x] Ask for extra scopes later, and keep previously granted scopes across sign-ins
+- [x] Custom authorization URL parameters, `prompt`, `response_mode`
+- [x] Pass extra data through the OAuth flow
+- [x] Map a provider profile to a user, including placeholder emails for providers that return none
+- [x] Validate provider user info before creating a user
+- [x] Per-provider options: `disable_sign_up`, `disable_implicit_sign_up`, `disable_id_token_sign_in`, `override_user_info_on_sign_in`, `require_email_verification`, `disable_default_scopes`; custom ID token verification, user info and token refresh through provider modules
+- [x] OAuth state stored in a cookie or in the database
+- [x] One identity-token verifier shared by all providers
+- [x] Documented error codes for OAuth callbacks
 
 ### Built-in providers
-- [ ] Apple
-- [ ] Atlassian
-- [ ] Amazon Cognito
-- [ ] Cloudflare
-- [ ] Discord
-- [ ] Dropbox
-- [ ] Facebook
-- [ ] Figma
-- [ ] GitHub
-- [ ] GitLab
-- [ ] Google
-- [ ] Hugging Face
-- [ ] Kakao
-- [ ] Kick
-- [ ] LINE
-- [ ] Linear
-- [ ] LinkedIn
-- [ ] Microsoft
-- [ ] Naver
-- [ ] Notion
-- [ ] Paybin
-- [ ] PayPal
-- [ ] Polar
-- [ ] Railway
-- [ ] Reddit
-- [ ] Roblox
-- [ ] Salesforce
-- [ ] Slack
-- [ ] Spotify
-- [ ] TikTok
-- [ ] Twitch
-- [ ] Twitter (X)
-- [ ] Vercel
-- [ ] VK ID
-- [ ] WeChat
-- [ ] Zoom
+- [x] Apple
+- [x] Atlassian
+- [x] Amazon Cognito
+- [x] Cloudflare
+- [x] Discord
+- [x] Dropbox
+- [x] Facebook
+- [x] Figma
+- [x] GitHub
+- [x] GitLab
+- [x] Google
+- [x] Hugging Face
+- [x] Kakao
+- [x] Kick
+- [x] LINE
+- [x] Linear
+- [x] LinkedIn
+- [x] Microsoft
+- [x] Naver
+- [x] Notion
+- [x] Paybin
+- [x] PayPal
+- [x] Polar
+- [x] Railway
+- [x] Reddit
+- [x] Roblox
+- [x] Salesforce
+- [x] Slack
+- [x] Spotify
+- [x] TikTok
+- [x] Twitch
+- [x] Twitter (X)
+- [x] Vercel
+- [x] VK ID
+- [x] WeChat
+- [x] Zoom
 
-### Generic OAuth plugin
-- [ ] Any OAuth 2.0 / OpenID Connect provider, configured by discovery URL or by hand
-- [ ] Ready-made settings for Auth0, Gumroad, HubSpot, Keycloak, LINE, Microsoft Entra ID, Okta, Patreon, Slack and Yandex
-- [ ] Custom token exchange and user-info fetch
-- [ ] Map user-info fields; access the raw token response
-- [ ] Sign in with an ID token
-- [ ] Sign-in started from the identity provider
-- [ ] Logout started from the app, sent on to the identity provider
+### Generic OAuth
+- [x] Any OAuth 2.0 / OpenID Connect provider, configured by discovery URL or by hand
+- [x] Ready-made settings for Auth0, Gumroad, HubSpot, Keycloak, LINE, Microsoft Entra ID, Okta, Patreon, Slack and Yandex
+- [x] Custom token exchange and user-info fetch
+- [x] Map user-info fields; access the raw token response
+- [x] Sign in with an ID token
+- [x] Sign-in started from the identity provider
+- [x] Logout started from the app, sent on to the identity provider
 
 ---
 

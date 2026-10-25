@@ -74,6 +74,19 @@ Clients then call `POST /auth/sign-up/email`, `POST /auth/sign-in/email`,
 `Authmk.Plugins.EmailPassword` for every endpoint. Working Plug and Phoenix
 apps are in [`examples/`](https://github.com/MudrockSoftware/authmk/tree/main/examples).
 
+Social sign-in takes a line per provider, with 43 built in and any other
+OpenID Connect or OAuth 2.0 provider through `:generic`:
+
+```elixir
+config :my_app, MyApp.Auth,
+  social_providers: [
+    github: [client_id: "...", client_secret: "..."],
+    staff: [provider: :keycloak, issuer: "https://sso.example.com/realms/staff", client_id: "...", client_secret: "..."]
+  ]
+```
+
+See the [social sign-in guide](guides/social-sign-in.md).
+
 ## Design
 
 ### Plugins

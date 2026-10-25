@@ -5,7 +5,10 @@ config :argon2_elixir, t_cost: 1, m_cost: 8
 config :phoenix_app, PhoenixApp.Auth,
   secret: "gQ4n9fvOWNIrCTcEva1RdFmyIWL0wrF9knYFdm4IX9c",
   background: :inline,
-  rate_limit: [enabled: false]
+  rate_limit: [enabled: false],
+  # GitHub is played by a Req.Test stub (see test/phoenix_app_web/social_test.exs).
+  social_providers: [github: [client_id: "github-id", client_secret: "github-secret"]],
+  advanced: [http_options: [plug: {Req.Test, PhoenixApp.GitHub}]]
 
 # Configure your database
 #

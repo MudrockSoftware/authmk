@@ -24,6 +24,8 @@ defmodule Authmk.Endpoints do
   | GET | `/verify-email` | optional |
   | POST | `/sign-in/social` | none |
   | GET, POST | `/callback/:provider` | none |
+  | GET | `/sign-in/initiate/:provider` | none (sign-in started by the provider) |
+  | POST | `/sign-out/social` | required (also at the provider) |
   | POST | `/link-social` | required |
   | POST | `/unlink-account` | required |
   | POST | `/get-access-token` | required |

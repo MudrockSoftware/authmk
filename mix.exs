@@ -30,6 +30,7 @@ defmodule Authmk.MixProject do
         main: "readme",
         extras: [
           "README.md",
+          "guides/social-sign-in.md",
           "guides/writing-plugins.md",
           "guides/deployment.md",
           "guides/cookies-and-domains.md",

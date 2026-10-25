@@ -2,7 +2,8 @@ defmodule PhoenixAppWeb.PageController do
   use PhoenixAppWeb, :controller
 
   def home(conn, _params) do
-    render(conn, :home)
+    providers = Map.keys(PhoenixApp.Auth.config().social_providers)
+    render(conn, :home, providers: providers)
   end
 
   def account(conn, _params) do

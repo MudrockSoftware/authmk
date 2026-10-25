@@ -1,5 +1,6 @@
 defmodule PhoenixAppWeb.AuthTest do
-  use PhoenixAppWeb.ConnCase, async: true
+  # SQLite takes one writer at a time: tests that sign up run one by one.
+  use PhoenixAppWeb.ConnCase, async: false
 
   import Swoosh.TestAssertions
 
