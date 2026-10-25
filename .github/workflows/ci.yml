@@ -5,23 +5,14 @@ on:
     branches: [main]
   pull_request:
 
-env:
-  MIX_ENV: test
-  # Erlang's source build: no docs, GUI or ODBC.
-  KERL_BUILD_DOCS: "no"
-  KERL_CONFIGURE_OPTIONS: --without-javac --without-wx --without-odbc --without-debugger --without-observer --without-et
-
 jobs:
   lint:
     name: Lint, coverage and fuzz
     runs-on: ubuntu-latest
-    env:
-      MIX_ENV: dev
+    # No MIX_ENV here: lint runs in dev, coverage and fuzz in test (mix.exs `cli/0`).
     steps:
       - uses: actions/checkout@v4
-      # Erlang builds from source on Linux (see mise.lock).
-      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
-      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      # Elixir and Erlang from mise.toml.
       - uses: jdx/mise-action@v5
       - uses: actions/cache@v4
         with:
@@ -73,9 +64,7 @@ jobs:
         options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
-      # Erlang builds from source on Linux (see mise.lock).
-      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
-      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      # Elixir and Erlang from mise.toml.
       - uses: jdx/mise-action@v5
       - uses: actions/cache@v4
         with:
@@ -102,9 +91,7 @@ jobs:
         working-directory: examples/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v4
-      # Erlang builds from source on Linux (see mise.lock).
-      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libncurses-dev
-      # Elixir and Erlang from mise.toml, checked against mise.lock's checksums.
+      # Elixir and Erlang from mise.toml.
       - uses: jdx/mise-action@v5
       - run: mix deps.get
       - run: mix compile --warnings-as-errors

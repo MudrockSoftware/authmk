@@ -16,6 +16,8 @@ defmodule Authmk.MixProject do
       consolidate_protocols: Mix.env() != :test,
       deps: deps(),
       aliases: aliases(),
+      # test/support/ is compiled code, not tests.
+      test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
       test_coverage: [
         summary: [threshold: 90],
         ignore_modules: [~r/^Authmk\.Test\./, Authmk.EmulationCase]
@@ -84,6 +86,8 @@ defmodule Authmk.MixProject do
       {:ecto_sqlite3, "~> 0.22", only: :test},
       {:postgrex, "~> 0.20", only: :test},
       {:myxql, "~> 0.8", only: :test},
+      # The installer tests generate Phoenix projects (Igniter.Test.phx_test_project/1).
+      {:phx_new, "~> 1.8", only: :test, runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
