@@ -80,6 +80,86 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "passkeys": {
+      "columns": {
+        "aaguid": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "backed_up": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "counter": {
+          "default": 0,
+          "null": false,
+          "references": null,
+          "type": "integer"
+        },
+        "credential_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "credential_id_hash": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "device_type": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "public_key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "transports": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "passkeys_credential_id_hash_index": {
+          "columns": ["credential_id_hash"],
+          "unique": true
+        },
+        "passkeys_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "sessions": {
       "columns": {
         "expires_at": {
@@ -274,6 +354,50 @@
       "indexes": {
         "verifications_identifier_index": {
           "columns": ["identifier"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "wallet_addresses": {
+      "columns": {
+        "address": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "chain_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "integer"
+        },
+        "is_primary": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "wallet_addresses_address_chain_id_index": {
+          "columns": ["address","chain_id"],
+          "unique": true
+        },
+        "wallet_addresses_user_id_index": {
+          "columns": ["user_id"],
           "unique": false
         }
       },

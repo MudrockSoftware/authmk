@@ -7,8 +7,12 @@ config :phoenix_app, PhoenixApp.Auth,
   background: :inline,
   rate_limit: [enabled: false],
   # GitHub is played by a Req.Test stub (see test/phoenix_app_web/social_test.exs).
-  social_providers: [github: [client_id: "github-id", client_secret: "github-secret"]],
-  advanced: [http_options: [plug: {Req.Test, PhoenixApp.GitHub}]]
+  # The providers are played by a Req.Test stub (see the social tests).
+  social_providers: [
+    github: [client_id: "github-id", client_secret: "github-secret"],
+    google: [client_id: "google-id", client_secret: "google-secret"]
+  ],
+  advanced: [http_options: [plug: {Req.Test, PhoenixApp.Providers}]]
 
 # Configure your database
 #

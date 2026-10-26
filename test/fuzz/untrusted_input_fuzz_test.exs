@@ -6,7 +6,9 @@ defmodule Authmk.Fuzz.Auth do
       Authmk.Plugins.EmailPassword,
       Authmk.Plugins.TwoFactor,
       {Authmk.Plugins.PhoneNumber,
-       send_otp: &__MODULE__.send_sms/2, sign_up_on_verification: true}
+       send_otp: &__MODULE__.send_sms/2, sign_up_on_verification: true},
+      Authmk.Plugins.Passkey,
+      Authmk.Plugins.SIWE
     ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
@@ -20,6 +22,8 @@ end
 defmodule Authmk.UntrustedInputFuzzTest do
   use Authmk.EmulationCase, async: true
   use ExUnitProperties
+
+  alias Authmk.Testing.{FakeAuthenticator, FakeWallet}
 
   @moduletag :fuzz
   @moduletag auth: Authmk.Fuzz.Auth
@@ -124,6 +128,68 @@ defmodule Authmk.UntrustedInputFuzzTest do
           ) do
       {browser, conn} = post(browser, "/phone-number/verify", %{phone_number: number, code: code})
       assert conn.status in [400, 403, 422]
+
+      {_browser, conn} = get(browser, "/get-session")
+      assert json(conn) == nil
+    end
+  end
+
+  property "garbled passkey responses never crash or sign anyone in", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+    authenticator = FakeAuthenticator.new()
+    {browser, conn} = post(browser, "/passkey/generate-register-options")
+    registration = FakeAuthenticator.register(authenticator, json(conn))
+    {browser, _conn} = post(browser, "/passkey/verify-registration", %{response: registration})
+    {stranger, _conn} = post(browser, "/sign-out")
+
+    check all(
+            field <- member_of(["clientDataJSON", "authenticatorData", "signature"]),
+            value <-
+              one_of([
+                map(binary(max_length: 200), &Base.url_encode64(&1, padding: false)),
+                string(:printable, max_length: 200)
+              ])
+          ) do
+      {stranger, conn} = post(stranger, "/passkey/generate-authenticate-options")
+      {_moved, response} = FakeAuthenticator.authenticate(authenticator, json(conn))
+      response = put_in(response, ["response", field], value)
+
+      {stranger, conn} = post(stranger, "/passkey/verify-authentication", %{response: response})
+      assert conn.status in [400, 401]
+
+      {_stranger, conn} = get(stranger, "/get-session")
+      assert json(conn) == nil
+    end
+  end
+
+  property "mangled sign-in messages and signatures never crash or sign anyone in", %{
+    browser: browser
+  } do
+    wallet = FakeWallet.new()
+
+    check all(
+            cut <- integer(0..400),
+            insert <- string(:printable, max_length: 30),
+            signature <-
+              one_of([
+                string(:printable, max_length: 140),
+                map(binary(max_length: 70), &("0x" <> Base.encode16(&1)))
+              ])
+          ) do
+      {browser, conn} = post(browser, "/siwe/nonce", %{wallet_address: wallet.address})
+      message = FakeWallet.message(wallet, domain: "localhost:4000", nonce: json(conn)["nonce"])
+      # The real message with a piece cut out and something else put in.
+      {head, tail} = String.split_at(message, cut)
+      mangled = head <> insert <> String.slice(tail, String.length(insert)..-1//1)
+
+      {browser, conn} =
+        post(browser, "/siwe/verify", %{
+          message: mangled,
+          signature: signature,
+          wallet_address: wallet.address
+        })
+
+      assert conn.status in [400, 401, 422]
 
       {_browser, conn} = get(browser, "/get-session")
       assert json(conn) == nil

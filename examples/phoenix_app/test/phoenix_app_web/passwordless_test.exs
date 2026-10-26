@@ -31,7 +31,10 @@ defmodule PhoenixAppWeb.PasswordlessTest do
     conn =
       conn
       |> from_browser()
-      |> post("/auth/email-otp/send-verification-otp", %{email: "ada@example.com", type: "sign-in"})
+      |> post("/auth/email-otp/send-verification-otp", %{
+        email: "ada@example.com",
+        type: "sign-in"
+      })
 
     assert_email_sent(fn email ->
       [_, code] = Regex.run(~r/(\d{6})/, email.text_body)

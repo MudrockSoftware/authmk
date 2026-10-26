@@ -21,7 +21,12 @@ defmodule PlugApp.PasswordlessTest do
   end
 
   test "sign in with a code sent by email" do
-    conn = post_json("/auth/email-otp/send-verification-otp", %{email: "ada@example.com", type: "sign-in"})
+    conn =
+      post_json("/auth/email-otp/send-verification-otp", %{
+        email: "ada@example.com",
+        type: "sign-in"
+      })
+
     assert json(conn) == %{"success" => true}
 
     assert_email_sent(fn email ->

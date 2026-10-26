@@ -10,6 +10,9 @@ defmodule PhoenixApp.Auth do
        send_otp: &__MODULE__.send_phone_code/2, sign_up_on_verification: true},
       {Authmk.Plugins.MagicLink, send_magic_link: &__MODULE__.send_magic_link/2},
       {Authmk.Plugins.EmailOTP, send_otp: &__MODULE__.send_email_code/2},
+      Authmk.Plugins.Passkey,
+      Authmk.Plugins.OneTap,
+      Authmk.Plugins.SIWE,
       {Authmk.Plugins.TwoFactor,
        issuer: "PhoenixApp", send_otp: &__MODULE__.send_two_factor_code/2}
     ]

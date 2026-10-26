@@ -281,21 +281,21 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Limit on attempts; codes stored encrypted
 
 ### Passkeys (WebAuthn)
-- [ ] Register and sign in with passkeys (Wax)
-- [ ] Register a passkey as the first sign-in method, before any account exists
-- [ ] Autofill passkey sign-in (conditional UI)
-- [ ] List, rename and delete passkeys
-- [ ] Name passkeys after the authenticator (AAGUID lookup)
-- [ ] Extensions: PRF, largeBlob, credProps
+- [x] Register and sign in with passkeys (Wax)
+- [x] Register a passkey as the first sign-in method, before any account exists
+- [x] Autofill passkey sign-in (conditional UI)
+- [x] List, rename and delete passkeys
+- [x] Name passkeys after the authenticator (AAGUID lookup)
+- [x] Extensions: PRF, largeBlob, credProps
 
 ### Google One Tap
-- [ ] One Tap sign-in with ID-token verification
-- [ ] Custom redirect behavior; authorized-origin checks
+- [x] One Tap sign-in with ID-token verification
+- [x] Custom redirect behavior; authorized-origin checks
 
 ### Sign-In with Ethereum
-- [ ] Generate a nonce, verify the signed message (EIP-4361)
-- [ ] Messages for specific chains; identity taken from the signed message
-- [ ] Optional ENS name and avatar lookup
+- [x] Generate a nonce, verify the signed message (EIP-4361)
+- [x] Messages for specific chains; identity taken from the signed message
+- [x] Optional ENS name and avatar lookup (through an app-provided lookup)
 
 ---
 

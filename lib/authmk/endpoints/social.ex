@@ -283,6 +283,15 @@ defmodule Authmk.Endpoints.Social do
     end
   end
 
+  @doc false
+  # For plugins that receive a provider's ID tokens their own way, like
+  # Google One Tap. Signs in like `POST /sign-in/social` with an `id_token`.
+  def id_token_sign_in(ctx, provider_id, token) do
+    with {:ok, provider} <- provider(ctx, provider_id) do
+      sign_in_with_id_token(ctx, provider, %{"token" => token})
+    end
+  end
+
   defp sign_in_with_id_token(ctx, provider, id_token) do
     with :ok <- id_token_allowed(provider),
          {:ok, claims} <- verify_id_token(ctx, provider, id_token),
@@ -297,7 +306,7 @@ defmodule Authmk.Endpoints.Social do
          {:ok, info} <- map_profile(ctx, provider, claims, tokens),
          {:ok, user, _status} <-
            Accounts.sign_in(ctx, provider, info, tokens,
-             request_sign_up: ctx.params.request_sign_up
+             request_sign_up: Map.get(ctx.params, :request_sign_up, false)
            ),
          {:ok, ctx} <- Sessions.sign_in(ctx, user) do
       {:ok, %{redirect: false, user: Serializer.user(ctx, user)}, ctx}

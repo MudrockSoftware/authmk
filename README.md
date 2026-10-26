@@ -3,8 +3,9 @@
 Website: <https://authmk.com>
 
 > **Status: early development.** The foundation, email/password, social
-> sign-in and two-factor authentication work and are tested; more plugins
-> are coming (see [ROADMAP.md](ROADMAP.md)). The API will change before 1.0.
+> sign-in, two-factor authentication and the passwordless sign-in methods
+> work and are tested; more plugins are coming (see [ROADMAP.md](ROADMAP.md)).
+> The API will change before 1.0.
 
 ## Why
 
@@ -98,6 +99,22 @@ plugins: [
 ```
 
 See `Authmk.Plugins.TwoFactor`.
+
+More sign-in methods, each a plugin:
+
+| Plugin | What it adds |
+|---|---|
+| `Authmk.Plugins.Username` | Sign in with a username and password |
+| `Authmk.Plugins.Anonymous` | Guests who sign up later, keeping their data |
+| `Authmk.Plugins.PhoneNumber` | Codes by SMS; phone number and password |
+| `Authmk.Plugins.MagicLink` | Sign-in links by email |
+| `Authmk.Plugins.EmailOTP` | Codes by email: sign in, verify, reset, change email |
+| `Authmk.Plugins.Passkey` | Passkeys (WebAuthn); needs `{:wax_, "~> 0.7"}` |
+| `Authmk.Plugins.OneTap` | Google One Tap, popup and redirect modes |
+| `Authmk.Plugins.SIWE` | Sign-In with Ethereum; needs `{:ex_secp256k1, "~> 0.8"}` and `{:ex_keccak, "~> 0.7"}` |
+
+To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
+and `Authmk.Testing.FakeWallet` play the authenticator and the wallet.
 
 ## Design
 

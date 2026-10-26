@@ -23,17 +23,20 @@ end
 config :phoenix_app, PhoenixAppWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-# Sign in with GitHub when its OAuth app is configured. Create one at
-# https://github.com/settings/developers with the callback URL
-# http://localhost:4000/auth/callback/github.
-if config_env() != :test and System.get_env("GITHUB_CLIENT_ID") do
-  config :phoenix_app, PhoenixApp.Auth,
-    social_providers: [
-      github: [
-        client_id: System.fetch_env!("GITHUB_CLIENT_ID"),
-        client_secret: System.fetch_env!("GITHUB_CLIENT_SECRET")
-      ]
-    ]
+# Social sign-in for the providers whose apps are configured. Create them at
+# https://github.com/settings/developers and
+# https://console.cloud.google.com/apis/credentials, with the callback URLs
+# http://localhost:4000/auth/callback/github and .../callback/google. Google
+# also gives One Tap.
+if config_env() != :test do
+  providers =
+    for {name, prefix} <- [github: "GITHUB", google: "GOOGLE"],
+        client_id = System.get_env("#{prefix}_CLIENT_ID"),
+        do:
+          {name,
+           [client_id: client_id, client_secret: System.fetch_env!("#{prefix}_CLIENT_SECRET")]}
+
+  config :phoenix_app, PhoenixApp.Auth, social_providers: providers
 end
 
 if config_env() == :dev do

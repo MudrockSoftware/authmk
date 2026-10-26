@@ -6,7 +6,7 @@ defmodule PhoenixAppWeb.SocialTest do
 
   # GitHub's token endpoint and API, as far as sign-in uses them.
   defp stub_github do
-    Req.Test.stub(PhoenixApp.GitHub, fn conn ->
+    Req.Test.stub(PhoenixApp.Providers, fn conn ->
       case conn.request_path do
         "/login/oauth/access_token" ->
           Req.Test.json(conn, %{"access_token" => "gho_1", "token_type" => "bearer"})

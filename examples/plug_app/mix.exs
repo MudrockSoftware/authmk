@@ -28,6 +28,9 @@ defmodule PlugApp.MixProject do
   defp deps do
     [
       {:authmk, path: "../.."},
+      {:wax_, "~> 0.7"},
+      {:ex_secp256k1, "~> 0.8"},
+      {:ex_keccak, "~> 0.7"},
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:plug, "~> 1.18"},
       {:bandit, "~> 1.8"},

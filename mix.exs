@@ -81,6 +81,11 @@ defmodule Authmk.MixProject do
       {:redix, "~> 1.5", optional: true},
       {:bcrypt_elixir, "~> 3.2", optional: true},
       {:igniter, "~> 0.8", optional: true},
+      # For Authmk.Plugins.Passkey.
+      {:wax_, "~> 0.7", optional: true},
+      # For Authmk.Plugins.SIWE.
+      {:ex_secp256k1, "~> 0.8", optional: true},
+      {:ex_keccak, "~> 0.7", optional: true},
       {:opentelemetry_api, "~> 1.4", optional: true},
       {:opentelemetry_telemetry, "~> 1.1", optional: true},
       {:opentelemetry, "~> 1.5", only: :test},
