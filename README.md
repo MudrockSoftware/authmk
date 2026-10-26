@@ -113,6 +113,15 @@ More sign-in methods, each a plugin:
 | `Authmk.Plugins.OneTap` | Google One Tap, popup and redirect modes |
 | `Authmk.Plugins.SIWE` | Sign-In with Ethereum; needs `{:ex_secp256k1, "~> 0.8"}` and `{:ex_keccak, "~> 0.7"}` |
 
+Authorization: `Authmk.AccessControl` defines roles and permissions, checked
+without a database call. `Authmk.Plugins.Admin` manages users (roles, bans,
+sessions, impersonation) with them, `Authmk.Plugins.Organization` adds
+organizations with members, invitations, teams and their own roles, and
+`Authmk.Plugins.APIKey` issues hashed API keys with permissions, usage
+limits and rate limits, and `Authmk.Plugins.ServiceAccount` gives programs
+their own identities (with roles, expiry and IP allow-lists), seen by your
+plugs as `current_principal`.
+
 To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
 and `Authmk.Testing.FakeWallet` play the authenticator and the wallet.
 

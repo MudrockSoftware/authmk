@@ -1,7 +1,9 @@
 defmodule Authmk.Plug.FetchSession do
   @moduledoc """
   Loads the signed-in session into `conn.assigns`:
-  `:current_user` and `:current_session` (both `nil` when signed out).
+  `:current_user` and `:current_session` (both `nil` when signed out), and
+  `:current_principal`: the user, or what else authenticated the request
+  (like a service account, see `Authmk.Plugins.ServiceAccount`).
 
       plug Authmk.Plug.FetchSession, auth: MyApp.Auth
 
@@ -28,10 +30,11 @@ defmodule Authmk.Plug.FetchSession do
         conn
         |> Router.put_resp_cookies(ctx)
         |> assign_session(ctx.user, ctx.session)
+        |> Plug.Conn.assign(:current_principal, ctx.private[:principal] || ctx.user)
 
       # A host outside base_url's allow list never gets a session.
       {:error, _invalid_host} ->
-        assign_session(conn, nil, nil)
+        conn |> assign_session(nil, nil) |> Plug.Conn.assign(:current_principal, nil)
     end
   end
 

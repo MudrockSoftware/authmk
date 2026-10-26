@@ -64,6 +64,22 @@ defmodule Authmk.Hooks do
     end)
   end
 
+  @doc "Runs `authenticate_request/1` hooks. The first that isn't `:none` wins."
+  @spec authenticate_request(Context.t()) ::
+          {:ok, struct(), struct()} | {:principal, term()} | :none | {:error, Error.t()}
+  def authenticate_request(%Context{} = ctx) do
+    ctx
+    |> hook_modules(:authenticate_request, 1)
+    |> Enum.reduce_while(:none, fn module, :none ->
+      case module.authenticate_request(ctx) do
+        :none -> {:cont, :none}
+        {:ok, _session, _user} = signed_in -> {:halt, signed_in}
+        {:principal, _principal} = principal -> {:halt, principal}
+        {:error, %Error{}} = error -> {:halt, error}
+      end
+    end)
+  end
+
   @doc "Runs `send_email_verification/3` hooks. The first that sends (`:ok`) wins."
   @spec send_email_verification(Context.t(), struct(), String.t() | nil) ::
           :cont | :ok | {:error, Error.t()}

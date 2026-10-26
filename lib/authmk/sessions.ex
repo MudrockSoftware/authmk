@@ -27,10 +27,12 @@ defmodule Authmk.Sessions do
   @doc """
   Creates a session for `user`, sets the cookie, and puts the session and
   user on the context. Sign-ins use `sign_in/3` instead; this is for the
-  step that finishes one, like a second factor.
+  step that finishes one, like a second factor. `extra` sets more session
+  fields, like a plugin's own or a shorter `expires_at`.
   """
-  @spec create(Context.t(), struct(), boolean()) :: {:ok, Context.t()} | {:error, Error.t()}
-  def create(%Context{config: config} = ctx, user, remember_me \\ true) do
+  @spec create(Context.t(), struct(), boolean(), map()) ::
+          {:ok, Context.t()} | {:error, Error.t()}
+  def create(%Context{config: config} = ctx, user, remember_me \\ true, extra \\ %{}) do
     token = Token.generate()
     track_ip = not config.advanced[:disable_ip_tracking]
 
@@ -41,6 +43,8 @@ defmodule Authmk.Sessions do
       ip_address: if(track_ip, do: Request.client_ip(ctx)),
       user_agent: Request.user_agent(ctx)
     }
+
+    attrs = Map.merge(attrs, extra)
 
     with {:ok, session} <- SessionStore.insert(ctx, attrs, user) do
       ctx = %{Cookies.put_session(ctx, token, remember_me) | session: session, user: user}
@@ -53,11 +57,33 @@ defmodule Authmk.Sessions do
   the context (both `nil` when signed out). Forged, expired or unknown
   sessions clear the cookies.
 
+  Plugins may authenticate the request another way first (see
+  `c:Authmk.Plugin.authenticate_request/1`). When one refuses it, the error
+  is in `ctx.private.authentication_error`, and the request is signed out.
+  When one authenticates something other than a user (a service account),
+  it is in `ctx.private.principal`, with no session or user.
+
   With `cache: true` the cookie cache is used when enabled. Only read paths
   should pass it.
   """
   @spec load(Context.t(), keyword()) :: Context.t()
-  def load(%Context{config: config} = ctx, opts \\ []) do
+  def load(%Context{} = ctx, opts \\ []) do
+    case Hooks.authenticate_request(ctx) do
+      {:ok, session, user} ->
+        %{ctx | session: session, user: user}
+
+      {:principal, principal} ->
+        %{Context.put_private(ctx, :principal, principal) | session: nil, user: nil}
+
+      {:error, error} ->
+        %{Context.put_private(ctx, :authentication_error, error) | session: nil, user: nil}
+
+      :none ->
+        load_from_cookie(ctx, opts)
+    end
+  end
+
+  defp load_from_cookie(%Context{config: config} = ctx, opts) do
     use_cache = Keyword.get(opts, :cache, false) and CookieCache.enabled?(config)
 
     case Cookies.session_token(ctx) do
@@ -70,8 +96,11 @@ defmodule Authmk.Sessions do
 
   defp load_cached(ctx, token) do
     case CookieCache.read(ctx, token) do
-      {:ok, session, user} -> %{ctx | session: session, user: user}
-      :miss -> load_token(ctx, token)
+      {:ok, session, user} ->
+        %{ctx | session: session, user: user}
+
+      :miss ->
+        load_token(ctx, token)
     end
   end
 

@@ -8,7 +8,8 @@ defmodule Authmk.Fuzz.Auth do
       {Authmk.Plugins.PhoneNumber,
        send_otp: &__MODULE__.send_sms/2, sign_up_on_verification: true},
       Authmk.Plugins.Passkey,
-      Authmk.Plugins.SIWE
+      Authmk.Plugins.SIWE,
+      {Authmk.Plugins.APIKey, enable_sessions: true}
     ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
@@ -23,6 +24,7 @@ defmodule Authmk.UntrustedInputFuzzTest do
   use Authmk.EmulationCase, async: true
   use ExUnitProperties
 
+  alias Authmk.Test.Browser
   alias Authmk.Testing.{FakeAuthenticator, FakeWallet}
 
   @moduletag :fuzz
@@ -193,6 +195,17 @@ defmodule Authmk.UntrustedInputFuzzTest do
 
       {_browser, conn} = get(browser, "/get-session")
       assert json(conn) == nil
+    end
+  end
+
+  property "random API keys in the header never sign anyone in", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+    {_browser, _conn} = post(browser, "/api-key/create", %{name: "real"})
+
+    check all(key <- string(:printable, min_length: 1, max_length: 100)) do
+      stranger = %{Browser.new(Authmk.Fuzz.Auth) | headers: [{"x-api-key", key}]}
+      {_stranger, conn} = get(stranger, "/get-session")
+      assert conn.status == 401
     end
   end
 

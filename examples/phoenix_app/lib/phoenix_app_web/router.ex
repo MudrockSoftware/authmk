@@ -17,6 +17,9 @@ defmodule PhoenixAppWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug Authmk.Plug.FetchSession, auth: PhoenixApp.Auth
+    # Users and service accounts (by API key) alike.
+    plug Authmk.Plug.RequireAuthenticated, allow_principals: true
   end
 
   scope "/" do
@@ -35,10 +38,11 @@ defmodule PhoenixAppWeb.Router do
     get "/account", PageController, :account
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", PhoenixAppWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", PhoenixAppWeb do
+    pipe_through :api
+
+    get "/whoami", ApiController, :whoami
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:phoenix_app, :dev_routes) do

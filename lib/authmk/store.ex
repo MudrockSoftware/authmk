@@ -39,6 +39,17 @@ defmodule Authmk.Store do
     span(ctx, model, :all, fn -> repo(ctx).all(query) end)
   end
 
+  @doc "Runs `query`, built on `module/2`, and returns its records."
+  @spec list(Context.t(), atom(), Ecto.Queryable.t()) :: [struct()]
+  def list(ctx, model, query), do: span(ctx, model, :all, fn -> repo(ctx).all(query) end)
+
+  @doc "Counts the records `query` matches."
+  @spec count(Context.t(), atom(), Ecto.Queryable.t()) :: non_neg_integer()
+  def count(ctx, model, query) do
+    query = query |> exclude(:order_by) |> exclude(:limit) |> exclude(:offset)
+    span(ctx, model, :count, fn -> repo(ctx).aggregate(query, :count) end)
+  end
+
   @doc "Inserts a record. `mode` is `:input` for request params, `:internal` otherwise."
   @spec insert(Context.t(), atom(), map(), :input | :internal) ::
           {:ok, struct()} | {:error, Error.t()}

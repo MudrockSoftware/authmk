@@ -128,6 +128,7 @@ defmodule Authmk.Router do
     ctx = Sessions.load(ctx, cache: use_cache)
 
     cond do
+      ctx.private[:authentication_error] -> {:error, ctx.private[:authentication_error]}
       endpoint.session == :required and is_nil(ctx.session) -> {:error, Error.new(:unauthorized)}
       endpoint.fresh and not Sessions.fresh?(ctx) -> {:error, Error.new(:session_not_fresh)}
       true -> {:ok, ctx}

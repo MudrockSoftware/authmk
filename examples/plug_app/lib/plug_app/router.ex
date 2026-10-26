@@ -20,7 +20,7 @@ defmodule PlugApp.Router do
     conn =
       conn
       |> Authmk.Plug.FetchSession.call(PlugApp.Auth)
-      |> Authmk.Plug.RequireAuthenticated.call(nil)
+      |> Authmk.Plug.RequireAuthenticated.call(Authmk.Plug.RequireAuthenticated.init([]))
 
     if conn.halted do
       conn
@@ -30,6 +30,31 @@ defmodule PlugApp.Router do
       conn
       |> put_resp_content_type("application/json")
       |> send_resp(200, JSON.encode!(%{email: user.email, name: user.name}))
+    end
+  end
+
+  # For programs too: a service account's API key gets in.
+  get "/whoami" do
+    conn =
+      conn
+      |> Authmk.Plug.FetchSession.call(PlugApp.Auth)
+      |> Authmk.Plug.RequireAuthenticated.call(
+        Authmk.Plug.RequireAuthenticated.init(allow_principals: true)
+      )
+
+    if conn.halted do
+      conn
+    else
+      body =
+        case conn.assigns do
+          %{current_user: %{} = user} ->
+            %{type: "user", name: user.name}
+
+          %{current_principal: service_account} ->
+            %{type: "service_account", name: service_account.name}
+        end
+
+      conn |> put_resp_content_type("application/json") |> send_resp(200, JSON.encode!(body))
     end
   end
 

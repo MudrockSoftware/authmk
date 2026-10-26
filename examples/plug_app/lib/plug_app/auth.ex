@@ -13,6 +13,10 @@ defmodule PlugApp.Auth do
       Authmk.Plugins.Passkey,
       Authmk.Plugins.OneTap,
       Authmk.Plugins.SIWE,
+      Authmk.Plugins.Admin,
+      {Authmk.Plugins.Organization, send_invitation_email: &__MODULE__.send_invitation/2},
+      {Authmk.Plugins.APIKey, enable_sessions: true},
+      Authmk.Plugins.ServiceAccount,
       {Authmk.Plugins.TwoFactor, issuer: "PlugApp", send_otp: &__MODULE__.send_two_factor_code/2}
     ]
 
@@ -42,6 +46,14 @@ defmodule PlugApp.Auth do
 
   def send_email_code(%{email: email, otp: code}, _ctx) do
     deliver(email, "Your code", "Your code is #{code}")
+  end
+
+  def send_invitation(%{id: id, email: email, organization: organization}, _ctx) do
+    deliver(
+      email,
+      "Join #{organization.name}",
+      "You're invited to #{organization.name}. Your invitation id is #{id}."
+    )
   end
 
   defp deliver(to, subject, body) do

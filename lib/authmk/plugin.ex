@@ -75,6 +75,22 @@ defmodule Authmk.Plugin do
               {:cont, Context.t()} | {:challenge, map(), Context.t()} | {:error, Error.t()}
 
   @doc """
+  Authenticates a request without a session cookie, like an API key in a
+  header. Runs wherever authmk loads the session: the auth router and
+  `Authmk.Plug.FetchSession`. Return `{:ok, session, user}` to sign the
+  request in (the session is built in memory, not stored), `:none` to fall
+  back to the session cookie, or `{:error, error}` to refuse the request.
+  `{:principal, principal}` authenticates something that isn't a user, like
+  a service account: there is no session or user then, and
+  `Authmk.Plug.FetchSession` assigns it as `current_principal`.
+  """
+  @callback authenticate_request(Context.t()) ::
+              {:ok, session :: struct(), user :: struct()}
+              | {:principal, term()}
+              | :none
+              | {:error, Error.t()}
+
+  @doc """
   Runs before authmk emails a verification link (on sign-up, on sign-in
   with unverified email, or when asked). Return `:ok` after sending your own
   instead, like a code; `:cont` lets the link go out.
@@ -104,6 +120,7 @@ defmodule Authmk.Plugin do
                       before_endpoint: 2,
                       after_endpoint: 3,
                       sign_in_challenge: 3,
+                      authenticate_request: 1,
                       send_email_verification: 3,
                       database_hook: 4
 

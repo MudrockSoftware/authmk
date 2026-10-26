@@ -302,52 +302,54 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.5 Authorization
 
 ### Access control
-- [ ] Shared roles and permissions system (statements, roles, `has_permission?/2`)
-- [ ] Custom permissions and roles, checked on the server
-- [ ] Permissions that can be checked offline, without a database call
+- [x] Shared roles and permissions system (statements, roles, `has_permission?/2`)
+- [x] Custom permissions and roles, checked on the server
+- [x] Permissions that can be checked offline, without a database call
 
 ### Admin
-- [ ] Create, list (with search, filter, sort and pagination), get, update and remove users
-- [ ] Set a user's role and password
-- [ ] Ban and unban users, with a reason and an expiry; custom message for banned users
-- [ ] List and revoke a user's sessions
-- [ ] Impersonate a user and stop impersonating, with a time limit
-- [ ] Admin roles, admin user IDs, default role
-- [ ] Access control for admin actions
+- [x] Create, list (with search, filter, sort and pagination), get, update and remove users
+- [x] Set a user's role and password
+- [x] Ban and unban users, with a reason and an expiry; custom message for banned users
+- [x] List and revoke a user's sessions
+- [x] Impersonate a user and stop impersonating, with a time limit
+- [x] Admin roles, admin user IDs, default role
+- [x] Access control for admin actions
 
 ### Organizations
-- [ ] Create, list, get (including members and invitations), update and delete organizations
-- [ ] Active organization per session
-- [ ] Invitations: send, accept, cancel, reject, get, list (for an organization and for a user), with email callbacks
-- [ ] Members: list, add, remove, update role, get the active member and their role, leave
-- [ ] Organization roles and permissions, including custom permissions
-- [ ] Dynamic access control: create, update, delete and list roles at runtime
-- [ ] Teams: create, update, delete, list; team members; active team; team permissions
-- [ ] Hooks on organization lifecycle events
-- [ ] Extra fields on organization, member, invitation and team
-- [ ] Limits (organizations per user, members per organization)
+- [x] Create, list, get (including members and invitations), update and delete organizations
+- [x] Active organization per session
+- [x] Invitations: send, accept, cancel, reject, get, list (for an organization and for a user), with email callbacks
+- [x] Members: list, add, remove, update role, get the active member and their role, leave
+- [x] Organization roles and permissions, including custom permissions
+- [x] Dynamic access control: create, update, delete and list roles at runtime
+- [x] Teams: create, update, delete, list; team members; active team; team permissions
+- [x] Hooks on organization lifecycle events
+- [x] Extra fields on organization, member, invitation and team
+- [x] Limits (organizations per user, members per organization)
 
 ### API keys
-- [ ] Create, verify, get, update, delete and list API keys; delete expired keys
-- [ ] Sessions created from API keys (sign requests in with an `x-api-key` header)
-- [ ] Multiple key configurations (prefixes, lengths, defaults) chosen by ID
-- [ ] API keys owned by an organization, with permission checks
-- [ ] Per-key permissions, defaults and checks for required permissions
-- [ ] Per-key rate limiting
-- [ ] Remaining-use count, refills and expiry
-- [ ] Storage in the database, secondary storage, or both
-- [ ] Custom key generation and verification; metadata
-- [ ] Keys stored hashed
+- [x] Create, verify, get, update, delete and list API keys; delete expired keys
+- [x] Sessions created from API keys (sign requests in with an `x-api-key` header)
+- [x] Multiple key configurations (prefixes, lengths, defaults) chosen by ID
+- [x] API keys owned by an organization, with permission checks
+- [x] Per-key permissions, defaults and checks for required permissions
+- [x] Per-key rate limiting
+- [x] Remaining-use count, refills and expiry
+- [x] Storage in the database, secondary storage, or both
+- [x] Custom key generation and verification; metadata
+- [x] Keys stored hashed
 
 ### Service accounts
-- [ ] `service_account` model: a non-human identity owned by a user or an organization, with no email, no password and no interactive sign-in
-- [ ] Authenticates with API keys, or with the client credentials grant when the OAuth provider plugin is enabled
-- [ ] Roles and permissions through the shared access-control system, including organization roles
-- [ ] Create, list, update, disable and delete; rotate credentials without downtime (overlapping keys)
-- [ ] Optional expiry and IP allow-list
-- [ ] Unified principal: plugs and LiveView assign `current_principal` (a user or a service account), alongside `current_user`
+- [x] `service_account` model: a non-human identity owned by a user or an organization, with no email, no password and no interactive sign-in
+- [x] Authenticates with API keys
+- [ ] Authenticates with the client credentials grant, when the OAuth provider plugin is enabled
+- [x] Roles and permissions through the shared access-control system, including organization roles
+- [x] Create, list, update, disable and delete; rotate credentials without downtime (overlapping keys)
+- [x] Optional expiry and IP allow-list
+- [x] Unified principal: plugs assign `current_principal` (a user or a service account), alongside `current_user`
 - [ ] Service accounts appear as the actor in audit logs and are counted separately in admin analytics
-- [ ] Admin and organization endpoints and UI to manage them
+- [x] Organization endpoints to manage them
+- [ ] Admin endpoints and UI to manage them
 
 ---
 
@@ -464,7 +466,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Plug: `Authmk.Plug.FetchSession`, `Authmk.Plug.RequireAuthenticated`
 - [ ] Plug: `RequireRole`, `RequireUser` (rejects service accounts)
 - [ ] Phoenix router macro and controller helpers
-- [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` assigns
+- [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` / `current_principal` assigns
 - [ ] LiveView function components: sign-in, sign-up, password reset, 2FA, passkeys, account settings, organization switcher
 - [ ] JSON API usable by SPAs, mobile apps and desktop apps
 - [ ] Deep-link and custom-scheme redirects for mobile apps

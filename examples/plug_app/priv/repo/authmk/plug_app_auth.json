@@ -80,6 +80,312 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "api_keys": {
+      "columns": {
+        "config_id": {
+          "default": "default",
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "expires_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "last_refill_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "last_request_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "metadata": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "permissions": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "prefix": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "rate_limit_enabled": {
+          "default": true,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "rate_limit_max": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "rate_limit_time_window": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "refill_amount": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "refill_interval": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "remaining": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "request_count": {
+          "default": 0,
+          "null": false,
+          "references": null,
+          "type": "integer"
+        },
+        "request_window_started_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "service_account_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "service_accounts",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "start": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "api_keys_key_index": {
+          "columns": ["key"],
+          "unique": true
+        },
+        "api_keys_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "api_keys_service_account_id_index": {
+          "columns": ["service_account_id"],
+          "unique": false
+        },
+        "api_keys_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "invitations": {
+      "columns": {
+        "email": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "inviter_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "organization_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "organizations",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "role": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "invitations_email_index": {
+          "columns": ["email"],
+          "unique": false
+        },
+        "invitations_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "members": {
+      "columns": {
+        "organization_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "organizations",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "role": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "members_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "members_organization_id_user_id_index": {
+          "columns": ["organization_id","user_id"],
+          "unique": true
+        },
+        "members_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "organizations": {
+      "columns": {
+        "logo": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "metadata": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "map"
+        },
+        "name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "slug": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "organizations_slug_index": {
+          "columns": ["slug"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "passkeys": {
       "columns": {
         "aaguid": {
@@ -160,13 +466,103 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "service_accounts": {
+      "columns": {
+        "allowed_ips": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "description": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "disabled": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "expires_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "last_used_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "role": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "service_accounts_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "service_accounts_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "sessions": {
       "columns": {
+        "active_organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "expires_at": {
           "default": null,
           "null": false,
           "references": null,
           "type": "utc_datetime_usec"
+        },
+        "impersonated_by_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
         },
         "ip_address": {
           "default": null,
@@ -252,6 +648,24 @@
     },
     "users": {
       "columns": {
+        "ban_expires": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "ban_reason": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "banned": {
+          "default": false,
+          "null": true,
+          "references": null,
+          "type": "boolean"
+        },
         "display_username": {
           "default": null,
           "null": true,
@@ -299,6 +713,12 @@
           "null": true,
           "references": null,
           "type": "boolean"
+        },
+        "role": {
+          "default": "user",
+          "null": true,
+          "references": null,
+          "type": "string"
         },
         "two_factor_enabled": {
           "default": false,

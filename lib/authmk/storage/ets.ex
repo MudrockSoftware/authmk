@@ -26,7 +26,7 @@ defmodule Authmk.Storage.ETS do
     now = now()
 
     case :ets.lookup(opts[:table], key) do
-      [{^key, value, expires_at}] when expires_at > now -> value
+      [{^key, value, expires_at}] when expires_at > now -> as_string(value)
       _missing_or_expired -> nil
     end
   end
@@ -36,10 +36,14 @@ defmodule Authmk.Storage.ETS do
     now = now()
 
     case :ets.take(opts[:table], key) do
-      [{^key, value, expires_at}] when expires_at > now -> value
+      [{^key, value, expires_at}] when expires_at > now -> as_string(value)
       _missing_or_expired -> nil
     end
   end
+
+  # Counters from increment/3 read back as strings, like from Redis.
+  defp as_string(value) when is_integer(value), do: Integer.to_string(value)
+  defp as_string(value), do: value
 
   @impl Authmk.Storage
   def put(opts, key, value, ttl) do
