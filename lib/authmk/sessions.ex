@@ -75,6 +75,10 @@ defmodule Authmk.Sessions do
       {:principal, principal} ->
         %{Context.put_private(ctx, :principal, principal) | session: nil, user: nil}
 
+      # A session token from elsewhere than the cookie: checked the same way.
+      {:token, token} ->
+        load_token(ctx, token)
+
       {:error, error} ->
         %{Context.put_private(ctx, :authentication_error, error) | session: nil, user: nil}
 

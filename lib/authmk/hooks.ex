@@ -66,7 +66,11 @@ defmodule Authmk.Hooks do
 
   @doc "Runs `authenticate_request/1` hooks. The first that isn't `:none` wins."
   @spec authenticate_request(Context.t()) ::
-          {:ok, struct(), struct()} | {:principal, term()} | :none | {:error, Error.t()}
+          {:ok, struct(), struct()}
+          | {:principal, term()}
+          | {:token, String.t()}
+          | :none
+          | {:error, Error.t()}
   def authenticate_request(%Context{} = ctx) do
     ctx
     |> hook_modules(:authenticate_request, 1)
@@ -75,6 +79,7 @@ defmodule Authmk.Hooks do
         :none -> {:cont, :none}
         {:ok, _session, _user} = signed_in -> {:halt, signed_in}
         {:principal, _principal} = principal -> {:halt, principal}
+        {:token, token} when is_binary(token) -> {:halt, {:token, token}}
         {:error, %Error{}} = error -> {:halt, error}
       end
     end)

@@ -97,10 +97,16 @@ defmodule Authmk.Cookies do
   @spec get(Context.t(), cookie()) :: String.t() | nil
   def get(%Context{conn: conn} = ctx, cookie), do: conn.req_cookies[name(ctx, cookie)]
 
-  @doc "Sets a cookie, for `max_age` seconds (`nil`: until the browser closes)."
-  @spec put(Context.t(), cookie(), String.t(), pos_integer() | nil) :: Context.t()
-  def put(ctx, cookie, value, max_age) do
-    Context.put_cookie(ctx, name(ctx, cookie), value, attributes(ctx, cookie, max_age))
+  @doc """
+  Sets a cookie, for `max_age` seconds (`nil`: until the browser closes).
+
+  Cookies are `HttpOnly` unless `http_only: false` is given, for values
+  the browser's scripts must read. Never pass it for secrets.
+  """
+  @spec put(Context.t(), cookie(), String.t(), pos_integer() | nil, keyword()) :: Context.t()
+  def put(ctx, cookie, value, max_age, opts \\ []) do
+    attributes = Keyword.merge(attributes(ctx, cookie, max_age), Keyword.take(opts, [:http_only]))
+    Context.put_cookie(ctx, name(ctx, cookie), value, attributes)
   end
 
   @doc "Deletes one cookie."

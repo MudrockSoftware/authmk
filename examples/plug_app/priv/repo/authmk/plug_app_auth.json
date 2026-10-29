@@ -244,6 +244,80 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "device_codes": {
+      "columns": {
+        "client_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "device_code": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "last_polled_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "polling_interval": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "integer"
+        },
+        "scope": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_code": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "device_codes_device_code_index": {
+          "columns": ["device_code"],
+          "unique": true
+        },
+        "device_codes_user_code_index": {
+          "columns": ["user_code"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "invitations": {
       "columns": {
         "email": {
@@ -301,6 +375,31 @@
           "unique": false
         }
       },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "jwks": {
+      "columns": {
+        "algorithm": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "private_key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "public_key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        }
+      },
+      "indexes": {},
       "primary_key": "binary_id",
       "timestamps": true
     },
@@ -695,6 +794,12 @@
           "null": true,
           "references": null,
           "type": "boolean"
+        },
+        "last_sign_in_method": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
         },
         "name": {
           "default": null,

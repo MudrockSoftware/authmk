@@ -9,7 +9,10 @@ defmodule Authmk.Fuzz.Auth do
        send_otp: &__MODULE__.send_sms/2, sign_up_on_verification: true},
       Authmk.Plugins.Passkey,
       Authmk.Plugins.SIWE,
-      {Authmk.Plugins.APIKey, enable_sessions: true}
+      {Authmk.Plugins.APIKey, enable_sessions: true},
+      Authmk.Plugins.JWT,
+      Authmk.Plugins.DeviceAuthorization,
+      {Authmk.Plugins.LastSignInMethod, store_in_database: true}
     ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
@@ -24,6 +27,7 @@ defmodule Authmk.UntrustedInputFuzzTest do
   use Authmk.EmulationCase, async: true
   use ExUnitProperties
 
+  alias Authmk.Plugins.{JWT, LastSignInMethod}
   alias Authmk.Test.Browser
   alias Authmk.Testing.{FakeAuthenticator, FakeWallet}
 
@@ -206,6 +210,72 @@ defmodule Authmk.UntrustedInputFuzzTest do
       stranger = %{Browser.new(Authmk.Fuzz.Auth) | headers: [{"x-api-key", key}]}
       {_stranger, conn} = get(stranger, "/get-session")
       assert conn.status == 401
+    end
+  end
+
+  property "mangled JWTs never verify or crash", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+    {_browser, conn} = get(browser, "/token")
+    token = json(conn)["token"]
+
+    check all(
+            cut <- integer(0..400),
+            insert <- string(:printable, max_length: 20),
+            random <- string(:printable, max_length: 200)
+          ) do
+      {head, tail} = String.split_at(token, cut)
+      mangled = head <> insert <> String.slice(tail, String.length(insert)..-1//1)
+
+      # The last base64url characters have spare bits: changing them can
+      # decode to the same signature, so the mangling stays clear of them.
+      candidates =
+        if cut + String.length(insert) < byte_size(token) - 3,
+          do: [random, mangled],
+          else: [random]
+
+      for candidate <- candidates, candidate != token do
+        assert {:error, _error} = JWT.verify(Authmk.Fuzz.Auth, candidate)
+      end
+    end
+  end
+
+  property "only plain method names come back from the last sign-in cookie", %{browser: _browser} do
+    check all(value <- string(:printable, max_length: 80)) do
+      conn =
+        Plug.Test.put_req_cookie(Plug.Test.conn(:get, "/"), "authmk.last_sign_in_method", value)
+
+      case LastSignInMethod.get(conn, Authmk.Fuzz.Auth) do
+        nil -> :ok
+        method -> assert method =~ ~r/\A[a-zA-Z0-9_-]{1,64}\z/
+      end
+    end
+  end
+
+  property "made-up device and user codes get nowhere", %{browser: browser} do
+    {_browser, conn} = post(browser, "/device/code", %{client_id: "tv"})
+    assert conn.status == 200
+    {browser, _user} = sign_up(browser)
+
+    check all(
+            code <- string(:printable, max_length: 60),
+            grant <-
+              one_of([
+                constant("urn:ietf:params:oauth:grant-type:device_code"),
+                string(:printable, max_length: 30)
+              ])
+          ) do
+      {_device, conn} =
+        post(Browser.new(Authmk.Fuzz.Auth), "/device/token", %{
+          grant_type: grant,
+          device_code: code,
+          client_id: "tv"
+        })
+
+      assert conn.status == 400
+      refute Map.has_key?(json(conn), "access_token")
+
+      {_browser, conn} = post(browser, "/device/approve", %{user_code: code})
+      assert conn.status in [400, 404, 422]
     end
   end
 

@@ -355,14 +355,15 @@ Legend: `[ ]` planned, `[x]` done
 
 ## 0.6 Tokens and utilities
 
-- [ ] **Bearer tokens**: authenticate API and mobile requests with `Authorization: Bearer`
-- [ ] **JWT**: issue JWTs from a session; JWKS endpoint (custom path, remote URL); key algorithms EdDSA, ES256, RS256 and more; private keys encrypted at rest (can be turned off); key rotation; custom signing; customizable payload, issuer, audience, subject and expiry; custom key storage
-- [ ] **Multiple sessions**: several signed-in accounts per device; list, switch, revoke; maximum session count
-- [ ] **One-time tokens**: generate and verify single-use tokens (for cross-domain hand-off)
-- [ ] **Device authorization** (RFC 8628): device code, user code, polling, approve and deny, client validation, custom code generation, binding to a user in advance, choice of token type
-- [ ] **Captcha**: Cloudflare Turnstile, Google reCAPTCHA (v2 and v3 with score threshold), hCaptcha, CaptchaFox, Vercel BotID; per-endpoint
-- [ ] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
-- [ ] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
+- [x] **Bearer tokens**: authenticate API and mobile requests with `Authorization: Bearer`
+- [x] **JWT**: issue JWTs from a session; JWKS endpoint (custom path, remote URL); key algorithms EdDSA, ES256, RS256 and more; private keys encrypted at rest (can be turned off); key rotation; custom signing; customizable payload, issuer, audience, subject and expiry; custom key storage
+- [x] **Multiple sessions**: several signed-in accounts per device; list, switch, revoke; maximum session count
+- [x] **One-time tokens**: generate and verify single-use tokens (for cross-domain hand-off)
+- [x] **Device authorization** (RFC 8628): device code, user code, polling, approve and deny, client validation, custom code generation, binding to a user in advance, choice of token type
+- [x] **Captcha**: Cloudflare Turnstile, Google reCAPTCHA (v2 and v3 with score threshold), hCaptcha, CaptchaFox; per-endpoint
+- [ ] **Captcha**: Vercel BotID
+- [x] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
+- [x] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
 - [ ] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
 - [ ] **OpenAPI**: generate an OpenAPI spec for all enabled endpoints, plus a reference UI
 - [ ] **Test helpers**: ExUnit factories, database helpers, sign-in helpers for `Plug.Test` / LiveView tests, captured OTPs and emails

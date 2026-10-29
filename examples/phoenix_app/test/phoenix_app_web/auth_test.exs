@@ -45,7 +45,24 @@ defmodule PhoenixAppWeb.AuthTest do
 
   test "password reset email goes through the app's Swoosh mailer", %{conn: conn} do
     conn |> from_browser() |> post("/auth/sign-up/email", @user)
-    conn = conn |> from_browser() |> post("/auth/request-password-reset", %{email: @user.email})
+
+    # Without the captcha, no reset.
+    denied =
+      build_conn()
+      |> from_browser()
+      |> post("/auth/request-password-reset", %{email: @user.email})
+
+    assert json_response(denied, 400)["error"]["code"] == "captcha_required"
+
+    # Turnstile, played by the providers' stub.
+    Req.Test.stub(PhoenixApp.Providers, &Req.Test.json(&1, %{"success" => true}))
+
+    conn =
+      conn
+      |> from_browser()
+      |> put_req_header("x-captcha-response", "token-from-the-widget")
+      |> post("/auth/request-password-reset", %{email: @user.email})
+
     assert json_response(conn, 200) == %{"status" => true}
 
     assert_email_sent(fn email ->

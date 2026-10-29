@@ -15,6 +15,15 @@ defmodule PlugApp.Router do
     send_resp(conn, 200, "ok")
   end
 
+  # What a sign-in page needs: the method this browser used last.
+  get "/sign-in" do
+    last_used = Authmk.Plugins.LastSignInMethod.get(conn, PlugApp.Auth)
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, JSON.encode!(%{last_used: last_used}))
+  end
+
   # Only for signed-in users.
   get "/me" do
     conn =

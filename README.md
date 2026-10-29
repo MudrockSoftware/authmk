@@ -122,6 +122,19 @@ limits and rate limits, and `Authmk.Plugins.ServiceAccount` gives programs
 their own identities (with roles, expiry and IP allow-lists), seen by your
 plugs as `current_principal`.
 
+Sessions and security, also plugins:
+
+| Plugin | What it adds |
+|---|---|
+| `Authmk.Plugins.Bearer` | Sessions through `Authorization: Bearer` instead of cookies |
+| `Authmk.Plugins.JWT` | JWTs from sessions, with a JWKS endpoint and key rotation |
+| `Authmk.Plugins.MultiSession` | Several signed-in accounts on one device |
+| `Authmk.Plugins.OneTimeToken` | Hand a signed-in user over to another app or domain |
+| `Authmk.Plugins.DeviceAuthorization` | Sign-in on TVs and CLIs (RFC 8628) |
+| `Authmk.Plugins.Captcha` | Turnstile, reCAPTCHA, hCaptcha or CaptchaFox on chosen endpoints |
+| `Authmk.Plugins.HaveIBeenPwned` | Refuses passwords from known data breaches |
+| `Authmk.Plugins.LastSignInMethod` | Remembers how a user last signed in, for "Last used" hints |
+
 To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
 and `Authmk.Testing.FakeWallet` play the authenticator and the wallet.
 

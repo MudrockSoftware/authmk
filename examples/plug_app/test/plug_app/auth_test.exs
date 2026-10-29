@@ -30,7 +30,25 @@ defmodule PlugApp.AuthTest do
 
   test "password reset email goes through the app's mailer" do
     post_json("/auth/sign-up/email", @user)
+
+    # Without the captcha, no reset.
     conn = post_json("/auth/request-password-reset", %{email: "ada@example.com"})
+    assert json(conn)["error"]["code"] == "captcha_required"
+
+    # Turnstile, played by the providers' stub.
+    Req.Test.stub(PlugApp.Providers, &Req.Test.json(&1, %{"success" => true}))
+
+    conn =
+      Plug.Test.conn(
+        :post,
+        "/auth/request-password-reset",
+        JSON.encode!(%{email: "ada@example.com"})
+      )
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+      |> Plug.Conn.put_req_header("origin", "http://localhost:4001")
+      |> Plug.Conn.put_req_header("x-captcha-response", "token-from-the-widget")
+      |> call()
+
     assert json(conn) == %{"status" => true}
 
     assert_email_sent(fn email ->

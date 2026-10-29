@@ -33,6 +33,10 @@ defmodule PhoenixAppWeb.ConnCase do
 
   setup tags do
     PhoenixApp.DataCase.setup_sandbox(tags)
+
+    # Outside services (Have I Been Pwned, captchas, OAuth providers) answer
+    # nothing by default; tests that need them stub their own answers.
+    Req.Test.stub(PhoenixApp.Providers, &Plug.Conn.send_resp(&1, 200, ""))
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

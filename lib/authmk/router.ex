@@ -118,6 +118,7 @@ defmodule Authmk.Router do
   defp result_ctx({:ok, _body, ctx}, _ctx), do: ctx
   defp result_ctx({:redirect, _url, ctx}, _ctx), do: ctx
   defp result_ctx({:html, _status, _html, ctx}, _ctx), do: ctx
+  defp result_ctx({:json, _status, _body, ctx}, _ctx), do: ctx
   defp result_ctx({:error, _error, ctx}, _ctx), do: ctx
   defp result_ctx({:error, _error}, ctx), do: ctx
 
@@ -157,6 +158,10 @@ defmodule Authmk.Router do
 
       {:html, status, html, _ctx} ->
         conn |> put_resp_content_type("text/html") |> send_resp(status, html)
+
+      # For protocols with their own JSON (like OAuth's errors).
+      {:json, status, body, _ctx} ->
+        send_json(conn, status, body)
 
       {:error, error, _ctx} ->
         send_error(conn, error)

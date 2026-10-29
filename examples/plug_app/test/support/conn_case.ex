@@ -16,6 +16,10 @@ defmodule PlugApp.ConnCase do
   setup tags do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(PlugApp.Repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
+    # Outside services (Have I Been Pwned, captchas, OAuth providers) answer
+    # nothing by default; tests that need them stub their own answers.
+    Req.Test.stub(PlugApp.Providers, &Plug.Conn.send_resp(&1, 200, ""))
     :ok
   end
 

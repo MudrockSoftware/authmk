@@ -29,6 +29,7 @@ defmodule Authmk.Plugin do
   @type result ::
           {:ok, term(), Context.t()}
           | {:redirect, String.t(), Context.t()}
+          | {:json, pos_integer(), term(), Context.t()}
           | {:error, Error.t()}
           | {:error, Error.t(), Context.t()}
 
@@ -83,10 +84,14 @@ defmodule Authmk.Plugin do
   `{:principal, principal}` authenticates something that isn't a user, like
   a service account: there is no session or user then, and
   `Authmk.Plug.FetchSession` assigns it as `current_principal`.
+  `{:token, token}` hands over a session token found elsewhere than the
+  cookie (like an `Authorization: Bearer` header): it is checked and
+  refreshed exactly like the cookie's.
   """
   @callback authenticate_request(Context.t()) ::
               {:ok, session :: struct(), user :: struct()}
               | {:principal, term()}
+              | {:token, String.t()}
               | :none
               | {:error, Error.t()}
 

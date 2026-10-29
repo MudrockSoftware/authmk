@@ -6,6 +6,7 @@
   </p>
   <div :if={!@current_user} class="mt-4">
     <p>You are not signed in.</p>
+    <p :if={@last_used} class="mt-2">Last time you signed in with {@last_used}.</p>
     <%!-- POST /auth/sign-in/social answers with the provider's URL to go to. --%>
     <button
       :for={provider <- @providers}
@@ -14,6 +15,7 @@
       onclick="signInWith(this.dataset.provider)"
     >
       Sign in with {Phoenix.Naming.humanize(provider)}
+      <span :if={to_string(provider) == @last_used} class="badge">Last used</span>
     </button>
   </div>
   <script>

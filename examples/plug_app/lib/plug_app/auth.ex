@@ -17,6 +17,18 @@ defmodule PlugApp.Auth do
       {Authmk.Plugins.Organization, send_invitation_email: &__MODULE__.send_invitation/2},
       {Authmk.Plugins.APIKey, enable_sessions: true},
       Authmk.Plugins.ServiceAccount,
+      Authmk.Plugins.Bearer,
+      Authmk.Plugins.JWT,
+      Authmk.Plugins.MultiSession,
+      Authmk.Plugins.OneTimeToken,
+      Authmk.Plugins.DeviceAuthorization,
+      Authmk.Plugins.HaveIBeenPwned,
+      {Authmk.Plugins.LastSignInMethod, store_in_database: true},
+      # Cloudflare's test secret, which passes every token; use your own.
+      {Authmk.Plugins.Captcha,
+       provider: :turnstile,
+       secret_key: "1x0000000000000000000000000000000AA",
+       endpoints: [:request_password_reset]},
       {Authmk.Plugins.TwoFactor, issuer: "PlugApp", send_otp: &__MODULE__.send_two_factor_code/2}
     ]
 
