@@ -191,8 +191,9 @@ defmodule Authmk.MixProject do
       # Rebuilds the pages and the dashboard with bun, then compiles.
       build: [fn _args -> AuthmkPages.build_all() end, "compile"],
       # The package ships the built pages and dashboard: build them first.
-      "hex.build": ["compile", "hex.build"],
-      "hex.publish": ["compile", "hex.publish"],
+      # Only that compiler: a full compile drops the Hex archive from the code path.
+      "hex.build": ["compile.authmk_pages", "hex.build"],
+      "hex.publish": ["compile.authmk_pages", "hex.publish"],
       # As CI: fails under the threshold in test_coverage; HTML in cover/.
       coverage: ["test --cover"],
       # Only the fuzz tests (test/fuzz/), FUZZ_RUNS times each.
