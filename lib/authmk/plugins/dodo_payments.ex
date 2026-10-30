@@ -14,8 +14,11 @@ defmodule Authmk.Plugins.DodoPayments do
         ...
 
   The endpoints, plans, trials, organizations and hooks are
-  `Authmk.Payments`'. A plan's `trial_days` overrides the product's; a user
-  or organization that had a trial checks out with none.
+  `Authmk.Payments`'. A plan's `trial_days` overrides the product's trial;
+  without it, the product's own trial stands. A user or organization that
+  had a trial checks out with none. Sending `trial_period_days` tells Dodo
+  to grant that trial and to skip its own one-trial check, so authmk sends
+  `0` once the trial has been had, and omits it otherwise.
 
   In Dodo, add a webhook endpoint for `<base URL>/billing/webhook` with the
   `subscription.*` events. Webhooks are checked as Dodo signs them
@@ -73,17 +76,28 @@ defmodule Authmk.Plugins.DodoPayments do
 
   @impl Authmk.Payments.Provider
   def checkout(ctx, checkout, opts) do
-    body = %{
-      product_cart: [%{product_id: checkout.price_id, quantity: checkout.seats || 1}],
-      customer: %{customer_id: checkout.customer_id},
-      return_url: checkout.success_url,
-      metadata: %{reference_id: checkout.reference.id, reference_type: checkout.reference.type},
-      subscription_data: %{trial_period_days: checkout.trial_days || 0}
-    }
+    body =
+      %{
+        product_cart: [%{product_id: checkout.price_id, quantity: checkout.seats || 1}],
+        customer: %{customer_id: checkout.customer_id},
+        return_url: checkout.success_url,
+        metadata: %{reference_id: checkout.reference.id, reference_type: checkout.reference.type}
+      }
+      |> trial(checkout)
 
     with {:ok, %{"checkout_url" => url}} <- request(ctx, :post, "/checkouts", body, opts),
          do: {:ok, url}
   end
+
+  # A number here is granted, and it skips Dodo's own one-trial check.
+  # 0 is how a trial already had is refused. Omitting it leaves the product's.
+  defp trial(body, %{trial_allowed: false}),
+    do: Map.put(body, :subscription_data, %{trial_period_days: 0})
+
+  defp trial(body, %{trial_days: days}) when is_integer(days),
+    do: Map.put(body, :subscription_data, %{trial_period_days: days})
+
+  defp trial(body, _checkout), do: body
 
   @impl Authmk.Payments.Provider
   def portal(ctx, %{customer_id: customer_id, return_url: return_url}, opts) do
@@ -132,27 +146,71 @@ defmodule Authmk.Plugins.DodoPayments do
   end
 
   @doc false
+  # Dodo has no trialing status, and `trial_period_days` stays on the
+  # subscription after the trial (0 when there was none). The window runs
+  # from `created_at`. Recording `trial_start` is what stops a second trial:
+  # a later checkout would otherwise send the length again, and Dodo grants it.
   def normalize(object) do
     %{
       provider_subscription_id: object["subscription_id"],
       customer_id: get_in(object, ["customer", "customer_id"]),
-      status: status(object["status"]),
+      status: status(object),
       price_id: object["product_id"],
       seats: object["quantity"],
       period_start: Client.time(object["previous_billing_date"]),
       period_end: Client.time(object["next_billing_date"]),
       cancel_at_period_end: object["cancel_at_next_billing_date"] == true,
-      canceled_at: Client.time(object["cancelled_at"])
+      canceled_at: Client.time(object["cancelled_at"]),
+      trial_start: trial_start(object),
+      trial_end: trial_end(object)
     }
   end
 
-  # Dodo's statuses, in Authmk.Payments' words.
-  defp status("pending"), do: "incomplete"
-  defp status("on_hold"), do: "past_due"
-  defp status("cancelled"), do: "canceled"
-  defp status("expired"), do: "canceled"
-  defp status("failed"), do: "canceled"
-  defp status(status), do: status
+  # Dodo's statuses, in Authmk.Payments' words. An active subscription still
+  # inside its trial window is trialing.
+  defp status(object) do
+    mapped =
+      case object["status"] do
+        "pending" -> "incomplete"
+        "on_hold" -> "past_due"
+        "cancelled" -> "canceled"
+        "expired" -> "canceled"
+        "failed" -> "canceled"
+        status -> status
+      end
+
+    if mapped == "active" and in_trial?(object), do: "trialing", else: mapped
+  end
+
+  defp in_trial?(object) do
+    case trial_end(object) do
+      %DateTime{} = ends -> DateTime.after?(ends, DateTime.utc_now())
+      _none -> false
+    end
+  end
+
+  defp trial_start(object) do
+    case trial_window(object) do
+      {start, _ends} -> start
+      nil -> nil
+    end
+  end
+
+  defp trial_end(object) do
+    case trial_window(object) do
+      {_start, ends} -> ends
+      nil -> nil
+    end
+  end
+
+  defp trial_window(%{"trial_period_days" => days} = object) when is_integer(days) and days > 0 do
+    case Client.time(object["created_at"]) do
+      %DateTime{} = start -> {start, DateTime.add(start, days * 86_400, :second)}
+      nil -> nil
+    end
+  end
+
+  defp trial_window(_object), do: nil
 
   defp request(ctx, method, path, body, opts) do
     headers = [{"authorization", "Bearer " <> Options.secret(opts[:api_key])}]

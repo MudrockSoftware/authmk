@@ -33,7 +33,8 @@ defmodule Authmk.PaymentProvidersTest do
              api_key: "provider-key",
              webhook_secret: "whsec_" <> Base.encode64("provider webhook key"),
              plans: [
-               [name: "pro", id: "prod_pro", no_trial_id: "prod_pro_no_trial", trial_days: 7]
+               [name: "pro", id: "prod_pro", no_trial_id: "prod_pro_no_trial", trial_days: 7],
+               [name: "basic", id: "prod_basic"]
              ]
            ] ++ own}
         ]
@@ -199,21 +200,61 @@ defmodule Authmk.PaymentProvidersTest do
       %{provider: state}
     end
 
-    test "checkout, trials once, a signed webhook", %{browser: browser, provider: state} do
+    test "checkout, trials once, signed webhooks", %{browser: browser, provider: state} do
       {browser, _user_id} = signed_in(browser)
+
+      # No trial_days on the plan: the product's own trial is left alone.
+      {browser, _conn} =
+        post(browser, "/billing/checkout", %{plan: "basic", success_url: "/done"})
+
+      assert_received {:billing_request, "POST", "/checkouts", basic, _h}
+      refute Map.has_key?(basic, "subscription_data")
+
       {browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
       assert_received {:billing_request, "POST", "/checkouts", checkout, _h}
       assert checkout["product_cart"] == [%{"product_id" => "prod_pro", "quantity" => 1}]
       assert checkout["subscription_data"] == %{"trial_period_days" => 7}
       assert checkout["return_url"] == "http://localhost:4000/done"
 
+      # Dodo stays "active" through a trial. The window is created_at plus the days.
+      started = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
       FakeBilling.put(state, "sub_1", %{
         "subscription_id" => "sub_1",
         "customer" => %{"customer_id" => "cus_1"},
-        "status" => "cancelled",
+        "status" => "active",
         "product_id" => "prod_pro",
+        "created_at" => started,
+        "trial_period_days" => 7,
         "next_billing_date" => "2099-01-01T00:00:00Z"
       })
+
+      body =
+        JSON.encode!(%{
+          "type" => "subscription.active",
+          "data" => %{"subscription_id" => "sub_1"}
+        })
+
+      conn = FakeBilling.webhook(Dodo, body, FakeBilling.standard_headers(body, @standard_key))
+      assert conn.status == 200
+
+      # The trial is on record, which is what stops a second one.
+      assert [
+               %{
+                 "status" => "trialing",
+                 "active" => true,
+                 "trial_start" => trial_start,
+                 "trial_end" => trial_end
+               }
+             ] = subscriptions(browser)
+
+      assert DateTime.diff(
+               elem(DateTime.from_iso8601(trial_end), 1),
+               elem(DateTime.from_iso8601(trial_start), 1)
+             ) == 7 * 86_400
+
+      # Cancelled: the trial it had stays on record.
+      FakeBilling.put(state, "sub_1", %{FakeBilling.get(state, "sub_1") | "status" => "cancelled"})
 
       body =
         JSON.encode!(%{
@@ -223,7 +264,17 @@ defmodule Authmk.PaymentProvidersTest do
 
       conn = FakeBilling.webhook(Dodo, body, FakeBilling.standard_headers(body, @standard_key))
       assert conn.status == 200
-      assert [%{"status" => "canceled", "active" => false}] = subscriptions(browser)
+
+      assert [%{"status" => "canceled", "active" => false, "trial_start" => ^trial_start}] =
+               subscriptions(browser)
+
+      # A second checkout: no trial length, which would skip Dodo's own check,
+      # and the product without a trial.
+      {browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
+      assert_received {:billing_request, "POST", "/checkouts", again, _h}
+
+      assert again["product_cart"] == [%{"product_id" => "prod_pro_no_trial", "quantity" => 1}]
+      assert again["subscription_data"] == %{"trial_period_days" => 0}
 
       # The same body, signed with the undecoded secret: not Dodo's way.
       assert FakeBilling.webhook(Dodo, body, FakeBilling.standard_headers(body, @secret)).status ==
