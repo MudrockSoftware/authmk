@@ -55,6 +55,23 @@ defmodule PlugApp.AuthTest do
       assert email.to == [{"", "ada@example.com"}]
       assert email.subject == "Reset your password"
       assert email.text_body =~ "http://localhost:4001/auth/reset-password/"
+      send(self(), {:reset_link, Regex.run(~r{/auth/reset-password/\S+}, email.text_body)})
     end)
+
+    # No redirect_to: the link opens the app's reset_password_page.
+    assert_received {:reset_link, [link]}
+    conn = get_path(link)
+    assert "/reset-password?token=" <> token = Plug.Conn.get_resp_header(conn, "location") |> hd()
+    assert get_path("/reset-password?token=" <> token).resp_body =~ ~s(name="new_password")
+
+    # Have I Been Pwned, played by the stub: the new password isn't in a breach.
+    Req.Test.stub(PlugApp.Providers, &Plug.Conn.send_resp(&1, 200, ""))
+    conn = post_json("/auth/reset-password", %{token: token, new_password: "new password 1"})
+    assert json(conn) == %{"status" => true}
+
+    conn =
+      post_json("/auth/sign-in/email", %{email: "ada@example.com", password: "new password 1"})
+
+    assert conn.status == 200
   end
 end

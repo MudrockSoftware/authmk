@@ -5,6 +5,7 @@ defmodule Authmk.Plugins.OAuthProvider.Config do
   # don't depend on the plugin module, which depends on them.
 
   alias Authmk.Context
+  alias Authmk.OAuth.HTTP
 
   def opts(%Context{private: %{oauth_provider_plugin: plugin}} = ctx),
     do: Context.plugin_opts(ctx, plugin)
@@ -15,6 +16,17 @@ defmodule Authmk.Plugins.OAuthProvider.Config do
   @doc "The issuer identifier: the `issuer` option, or the base URL and path."
   def issuer(%Context{config: config} = ctx),
     do: opts(ctx)[:issuer] || base_url(ctx) <> config.base_path
+
+  @doc """
+  The context for requests to a client's own URLs (`jwks_uri`,
+  `backchannel_logout_uri`). Anyone may register a client, so only public
+  hosts, unless it's one of `trusted_clients`.
+  """
+  def http_context(ctx, client) do
+    if client.client_id in opts(ctx)[:trusted_clients],
+      do: ctx,
+      else: HTTP.public_hosts_only(ctx)
+  end
 
   # Server-side calls (a revocation from your code) have no request.
   defp base_url(%Context{base_url: nil, config: config}) do

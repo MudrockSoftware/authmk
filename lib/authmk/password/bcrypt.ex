@@ -8,6 +8,10 @@ if Code.ensure_loaded?(Bcrypt) do
     Argon2id (the default) is stronger for new apps. Bcrypt is here for
     existing databases, such as those created by `phx.gen.auth`. Cost comes
     from the `:bcrypt_elixir` application config.
+
+    Bcrypt only uses a password's first 72 bytes, so new passwords longer
+    than that are refused (`password_too_long`) rather than cut short.
+    Passwords set before keep working.
     """
 
     @behaviour Authmk.Password
@@ -20,5 +24,8 @@ if Code.ensure_loaded?(Bcrypt) do
 
     @impl true
     def no_user_verify, do: Bcrypt.no_user_verify()
+
+    @impl true
+    def max_bytes, do: 72
   end
 end

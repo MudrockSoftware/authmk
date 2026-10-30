@@ -52,9 +52,7 @@ defmodule Authmk.Plugins.Autumn do
 
   use Authmk.Plugin
 
-  require Logger
-
-  alias Authmk.{Context, Endpoint, Error, Origin}
+  alias Authmk.{Context, Endpoint, Error, Log, Origin}
   alias Authmk.OAuth.HTTP
   alias Authmk.Payments.{Client, Options, Reference, Webhook}
   alias Authmk.Plug.RawBody
@@ -185,7 +183,7 @@ defmodule Authmk.Plugins.Autumn do
       {:json, 200, %{received: true}, ctx}
     else
       {:error, reason} when is_atom(reason) ->
-        Logger.warning("authmk Autumn webhook refused (#{reason})")
+        Log.warning("authmk Autumn webhook refused (#{reason})")
         {:json, 400, %{error: "invalid_webhook"}, ctx}
 
       {:error, _decode} ->

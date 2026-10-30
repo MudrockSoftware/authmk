@@ -9,6 +9,7 @@ defmodule Authmk.Plugins.OAuthProvider.Assertions do
 
   alias Authmk.{Context, Store, Token}
   alias Authmk.OAuth.HTTP
+  alias Authmk.Plugins.OAuthProvider.Config
   alias Authmk.Storage.ETS
 
   @algorithms ~w(RS256 RS384 RS512 PS256 PS384 PS512 ES256 ES384 ES512 EdDSA)
@@ -108,7 +109,7 @@ defmodule Authmk.Plugins.OAuthProvider.Assertions do
   def keys(ctx, client) do
     cond do
       is_binary(client.jwks) -> jwks_keys(JSON.decode(client.jwks))
-      is_binary(client.jwks_uri) -> remote_keys(ctx, client.jwks_uri)
+      is_binary(client.jwks_uri) -> remote_keys(Config.http_context(ctx, client), client.jwks_uri)
       true -> []
     end
   end

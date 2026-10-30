@@ -190,6 +190,26 @@ defmodule Authmk.PhoneNumberTest do
     end
   end
 
+  # SMS pumping: changing IPs doesn't get around the limit for one number.
+  test "one number gets at most 5 codes an hour, whoever asks", %{browser: browser} do
+    for _attempt <- 1..5, do: request_code(Browser.new(Auth))
+
+    {_browser, conn} = post(browser, "/phone-number/send-otp", %{phone_number: @number})
+    assert conn.status == 429
+    assert json(conn)["error"]["code"] == "rate_limited"
+    refute_received {:sms, _number, _purpose, _code}
+
+    # Password resets share the limit, and answer the same whether or not
+    # the number is registered.
+    {_browser, conn} =
+      post(browser, "/phone-number/request-password-reset", %{phone_number: @number})
+
+    assert json(conn)["error"]["code"] == "rate_limited"
+
+    # Other numbers aren't affected.
+    {_browser, _code} = request_code(browser, "+14155550124")
+  end
+
   describe "a signed-in user's number" do
     test "is added with a code, and removed", %{browser: browser} do
       {browser, _user} = sign_up(browser)

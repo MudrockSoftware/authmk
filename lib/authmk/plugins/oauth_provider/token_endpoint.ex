@@ -91,18 +91,23 @@ defmodule Authmk.Plugins.OAuthProvider.TokenEndpoint do
           ctx,
           params["device_code"],
           client.client_id,
+          &device_scope_allowed(&1, client, &2),
           &issue_for_device(&1, client, &2, &3, resource)
         ),
       else: Errors.json(ctx, "invalid_target", "Unknown resource")
   end
 
-  defp issue_for_device(ctx, client, user, scope, resource) do
-    scopes = String.split(scope || "", " ", trim: true)
-    grant = %{user: user, scopes: scopes, auth_time: DateTime.utc_now(), resource: resource}
-
-    if Enum.all?(scopes, &(&1 in allowed_scopes(ctx, client))),
-      do: respond(ctx, client, grant),
+  # Checked before the device code is used up, so a refusal doesn't waste
+  # the user's approval.
+  defp device_scope_allowed(ctx, client, scope) do
+    if Enum.all?(Clients.list(scope), &(&1 in Clients.allowed_scopes(ctx, client))),
+      do: :ok,
       else: Errors.json(ctx, "invalid_scope", "The client can't ask for these scopes")
+  end
+
+  defp issue_for_device(ctx, client, user, scope, resource) do
+    grant = %{user: user, scopes: Clients.list(scope), auth_time: DateTime.utc_now()}
+    respond(ctx, client, Map.put(grant, :resource, resource))
   end
 
   # RFC 7523 2.1: the client signs an assertion naming the user it acts for.
@@ -110,7 +115,7 @@ defmodule Authmk.Plugins.OAuthProvider.TokenEndpoint do
     audiences = [Config.issuer(ctx), Authmk.URL.endpoint(ctx, "/oauth2/token")]
     scopes = String.split(params["scope"] || "", " ", trim: true)
 
-    allowed = allowed_scopes(ctx, client) -- ["offline_access"]
+    allowed = Clients.allowed_scopes(ctx, client) -- ["offline_access"]
 
     with {:ok, claims} <- Assertions.verify(ctx, client, params["assertion"], audiences),
          %{} = user <- Config.opts(ctx)[:jwt_bearer_subject].(claims["sub"], client, ctx) do
@@ -119,13 +124,6 @@ defmodule Authmk.Plugins.OAuthProvider.TokenEndpoint do
         else: Errors.json(ctx, "invalid_scope", "The client can't ask for these scopes")
     else
       _invalid -> Errors.json(ctx, "invalid_grant", "The assertion isn't valid")
-    end
-  end
-
-  defp allowed_scopes(ctx, client) do
-    case Clients.list(client.scopes) do
-      [] -> Config.opts(ctx)[:scopes]
-      scopes -> scopes
     end
   end
 

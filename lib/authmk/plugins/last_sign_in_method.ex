@@ -36,9 +36,7 @@ defmodule Authmk.Plugins.LastSignInMethod do
 
   use Authmk.Plugin
 
-  require Logger
-
-  alias Authmk.{BaseURL, Context, Cookies, Crypto, SessionStore, Store, Token}
+  alias Authmk.{BaseURL, Context, Cookies, Crypto, Log, SessionStore, Store, Token}
 
   @pending_max_age 600
   @method_format ~r/\A[a-zA-Z0-9_-]{1,64}\z/
@@ -138,7 +136,7 @@ defmodule Authmk.Plugins.LastSignInMethod do
       case Store.update(ctx, :user, session.user, %{last_sign_in_method: method}) do
         {:ok, _user} -> :ok
         # A hint isn't worth failing a sign-in over.
-        {:error, error} -> Logger.warning("authmk: last sign-in method not saved: #{error.code}")
+        {:error, error} -> Log.warning("authmk: last sign-in method not saved: #{error.code}")
       end
     end
 
@@ -153,7 +151,7 @@ defmodule Authmk.Plugins.LastSignInMethod do
     end
   rescue
     error ->
-      Logger.error("authmk: store_cookie raised #{inspect(error.__struct__)}")
+      Log.error("authmk: store_cookie raised #{inspect(error.__struct__)}")
       false
   end
 

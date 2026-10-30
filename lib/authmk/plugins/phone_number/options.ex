@@ -9,6 +9,21 @@ defmodule Authmk.Plugins.PhoneNumber.Options do
                 "Sends a code by SMS: called with `%{phone_number: number, code: code, purpose: purpose}` (`:verification` or `:password_reset`) and the context."
             ],
             otp_length: [type: :pos_integer, default: 6],
+            send_limit: [
+              type:
+                {:or,
+                 [
+                   {:in, [false]},
+                   {:keyword_list,
+                    [
+                      window: [type: :pos_integer, required: true],
+                      max: [type: :pos_integer, required: true]
+                    ]}
+                 ]},
+              default: [window: 3600, max: 5],
+              doc:
+                "At most `max` codes to one number every `window` seconds, from any client: `[window: 3600, max: 5]`, or `false` for no limit. Against SMS pumping."
+            ],
             otp_expires_in: [type: :pos_integer, default: 300, doc: "Seconds a code lasts."],
             allowed_attempts: [
               type: :pos_integer,

@@ -246,6 +246,62 @@ defmodule Authmk.OAuthProviderGrantsTest do
     assert "urn:ietf:params:oauth:grant-type:device_code" in json(conn)["grant_types_supported"]
   end
 
+  test "device codes are only for registered clients with the grant and the scope",
+       %{browser: browser} do
+    {:ok, web} =
+      OAuthProvider.create_client(Auth, %{"redirect_uris" => ["https://web.example/cb"]})
+
+    {:ok, tv} =
+      OAuthProvider.create_client(Auth, %{
+        "grant_types" => ["urn:ietf:params:oauth:grant-type:device_code"],
+        "token_endpoint_auth_method" => "none",
+        "scope" => "openid"
+      })
+
+    for {client_id, scope, error} <- [
+          {"made-up", nil, "invalid_client"},
+          {web.client_id, nil, "unauthorized_client"},
+          {tv.client_id, "openid email", "invalid_scope"}
+        ] do
+      {_tv, conn} =
+        post(%{browser | origin: nil}, "/device/code", %{client_id: client_id, scope: scope})
+
+      assert {conn.status, json(conn)["error"]} == {400, error}
+    end
+
+    assert Repo.aggregate("device_codes", :count) == 0
+  end
+
+  # The client lost a scope after the user approved: the code isn't used up.
+  test "the scope is checked before the device code is used up", %{browser: browser} do
+    {:ok, tv} =
+      OAuthProvider.create_client(Auth, %{
+        "grant_types" => ["urn:ietf:params:oauth:grant-type:device_code"],
+        "token_endpoint_auth_method" => "none",
+        "scope" => "openid profile"
+      })
+
+    {_tv, conn} =
+      post(%{browser | origin: nil}, "/device/code", %{client_id: tv.client_id, scope: "profile"})
+
+    %{"device_code" => device_code, "user_code" => user_code} = json(conn)
+    {browser, _user} = sign_up(browser)
+    {_browser, _conn} = post(browser, "/device/approve", %{user_code: user_code})
+
+    params = %{
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      device_code: device_code,
+      client_id: tv.client_id
+    }
+
+    Repo.update_all("oauth_clients", set: [scopes: "openid"])
+    assert {400, %{"error" => "invalid_scope"}} = token(params)
+    assert Repo.aggregate("device_codes", :count) == 1
+
+    Repo.update_all("oauth_clients", set: [scopes: "openid profile"])
+    assert {200, %{"access_token" => _, "scope" => "profile"}} = token(params)
+  end
+
   test "pairwise clients see their own subject for a user", %{browser: browser} do
     pairwise = fn host ->
       {:ok, client} =
@@ -321,5 +377,95 @@ defmodule Authmk.OAuthProviderGrantsTest do
                "redirect_uris" => ["https://a.example/cb", "https://b.example/cb"],
                "subject_type" => "pairwise"
              })
+  end
+end
+
+defmodule Authmk.OAuthProviderClientURLsTest do
+  # Real sockets: a client's jwks_uri on a private network.
+  use Authmk.EmulationCase, async: true
+
+  alias Authmk.Plugins.OAuthProvider
+  alias Authmk.Test.Browser
+
+  defmodule Auth do
+    use Authmk,
+      otp_app: :authmk,
+      repo: Authmk.Test.Repo,
+      base_url: "http://localhost:4000",
+      background: :inline,
+      rate_limit: [enabled: false],
+      plugins: [
+        Authmk.Plugins.JWT,
+        {Authmk.Plugins.OAuthProvider,
+         login_page: "/sign-in", consent_page: "/consent", trusted_clients: ["internal-app"]}
+      ]
+  end
+
+  @moduletag auth: Auth
+
+  defp listen do
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, ip: {127, 0, 0, 1}, active: false])
+    on_exit(fn -> :gen_tcp.close(listener) end)
+    {:ok, port} = :inet.port(listener)
+    {listener, port}
+  end
+
+  defp authenticate(client_id) do
+    jwk = JOSE.JWK.generate_key({:ec, "P-256"})
+    now = System.system_time(:second)
+
+    claims = %{
+      "iss" => client_id,
+      "sub" => client_id,
+      "aud" => "http://localhost:4000/auth/oauth2/token",
+      "exp" => now + 60,
+      "jti" => Base.encode16(:crypto.strong_rand_bytes(8))
+    }
+
+    {_alg, signed} =
+      jwk |> JOSE.JWT.sign(%{"alg" => "ES256"}, claims) |> JOSE.JWS.compact()
+
+    {_client, conn} =
+      post(%{Browser.new(Auth) | origin: nil}, "/oauth2/token", %{
+        grant_type: "client_credentials",
+        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        client_assertion: signed
+      })
+
+    conn.status
+  end
+
+  defp client(port, opts) do
+    {:ok, client} =
+      OAuthProvider.create_client(
+        Auth,
+        %{
+          "grant_types" => ["client_credentials"],
+          "token_endpoint_auth_method" => "private_key_jwt",
+          "jwks_uri" => "https://localhost:#{port}/jwks.json"
+        },
+        opts
+      )
+
+    client.client_id
+  end
+
+  test "keys on a private network aren't fetched for clients anyone could register" do
+    {listener, port} = listen()
+
+    assert authenticate(client(port, [])) == 401
+    assert :gen_tcp.accept(listener, 200) == {:error, :timeout}
+  end
+
+  test "your trusted clients may keep their keys on a private network" do
+    {listener, port} = listen()
+
+    accepted =
+      Task.async(fn ->
+        with {:ok, socket} <- :gen_tcp.accept(listener, 5_000), do: :gen_tcp.close(socket)
+      end)
+
+    assert authenticate(client(port, client_id: "internal-app")) == 401
+    assert Task.await(accepted) == :ok
   end
 end

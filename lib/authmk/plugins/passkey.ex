@@ -39,8 +39,13 @@ defmodule Authmk.Plugins.Passkey do
   request's `extensions`; their results stay in the browser.
 
   With `sign_up: true`, visitors register a passkey before they have an
-  account: they send `email` and `name` to the registration options, and
-  the account is created when the passkey is.
+  account: they send `email` and `name` (and optionally `callback_url`) to
+  the registration options, and the account is created when the passkey is.
+  Until its owner proves the email, the account has a placeholder,
+  `passkey-<random>@<rp_id>`: the email gets a change-email link
+  (`send_change_email_verification`), and opening it moves the account to
+  the address, verified. So a passkey registered with someone else's email
+  never holds their address, and can't keep them from signing up.
 
   ## Options
 
@@ -54,8 +59,10 @@ defmodule Authmk.Plugins.Passkey do
     Cookies,
     Crypto,
     Email,
+    EmailVerification,
     Endpoint,
     Error,
+    Origin,
     Serializer,
     Sessions,
     Store,
@@ -125,7 +132,9 @@ defmodule Authmk.Plugins.Passkey do
         :register_options,
         session: registration_session,
         rate_limit: [window: 60, max: 10],
-        params: extensions ++ [email: [type: :string], name: [type: :string]]
+        params:
+          extensions ++
+            [email: [type: :string], name: [type: :string], callback_url: [type: :string]]
       ),
       endpoint(
         :passkey_verify_registration,
@@ -190,7 +199,8 @@ defmodule Authmk.Plugins.Passkey do
          {:ok, credential} <- registered(WebAuthn.register(params.response, challenge)),
          :ok <- new_credential(ctx, credential),
          {:ok, user} <- registering_user(ctx, data),
-         {:ok, passkey} <- Store.insert(ctx, :passkey, passkey_attrs(ctx, user, credential)) do
+         {:ok, passkey} <- Store.insert(ctx, :passkey, passkey_attrs(ctx, user, credential)),
+         :ok <- confirm_email(ctx, user, data) do
       registered_answer(ctx, user, passkey)
     end
   end
@@ -255,11 +265,19 @@ defmodule Authmk.Plugins.Passkey do
     with :ok <- check(opts[:sign_up], Error.new(:unauthorized)),
          :ok <- check(is_binary(email) and Email.valid?(email), Error.new(:invalid_email)),
          :ok <-
-           check(is_nil(Store.get_by(ctx, :user, email: email)), Error.new(:user_already_exists)) do
+           check(is_nil(Store.get_by(ctx, :user, email: email)), Error.new(:user_already_exists)),
+         :ok <- Origin.check_redirect(ctx, params.callback_url) do
       settings = settings(ctx, :registration)
       challenge = WebAuthn.new_registration_challenge(settings)
       name = params.name || email |> String.split("@") |> hd()
-      data = %{"kind" => "register", "email" => email, "name" => name}
+
+      data = %{
+        "kind" => "register",
+        "email" => email,
+        "name" => name,
+        "callback_url" => params.callback_url
+      }
+
       handle = :crypto.strong_rand_bytes(16)
 
       with {:ok, ctx} <- start(ctx, challenge, data) do
@@ -310,8 +328,23 @@ defmodule Authmk.Plugins.Passkey do
     if user && to_string(user.id) == user_id, do: {:ok, user}, else: {:error, invalid_passkey()}
   end
 
-  defp registering_user(ctx, %{"email" => email, "name" => name}),
-    do: Store.insert(ctx, :user, %{email: email, name: name})
+  defp registering_user(ctx, %{"name" => name}),
+    do: Store.insert(ctx, :user, %{email: placeholder_email(ctx), name: name})
+
+  # A new account gets its email once the link sent there is opened. An
+  # address taken in the meantime gets nothing.
+  defp confirm_email(ctx, user, %{"email" => email, "callback_url" => callback_url}) do
+    if Store.get_by(ctx, :user, email: email),
+      do: :ok,
+      else: EmailVerification.send_change_email(ctx, user, email, callback_url)
+  end
+
+  defp confirm_email(_ctx, _user, _data), do: :ok
+
+  defp placeholder_email(ctx) do
+    random = 10 |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
+    "passkey-#{random}@#{settings(ctx, :registration).rp_id}"
+  end
 
   defp registered_answer(%Context{user: nil} = ctx, user, passkey) do
     with {:ok, ctx} <- Sessions.sign_in(ctx, user) do

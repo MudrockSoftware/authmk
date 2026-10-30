@@ -7,7 +7,7 @@ defmodule Authmk.Plugins.SSO.Providers do
   import Ecto.Query
 
   alias Authmk.{Context, Crypto, Error, Store, URL}
-  alias Authmk.OAuth.{Discovery, Provider, PublicHost}
+  alias Authmk.OAuth.{Discovery, HTTP, Provider, PublicHost}
   alias Authmk.OAuth.Providers.Generic
   alias Authmk.Plugins.SSO.{Config, SAMLConfig}
 
@@ -144,7 +144,7 @@ defmodule Authmk.Plugins.SSO.Providers do
       provider =
         oauth_provider(ctx, %{provider_id: params.provider_id, issuer: params.issuer, oidc: oidc})
 
-      case Discovery.resolve(ctx, provider) do
+      case Discovery.resolve(HTTP.public_hosts_only(ctx), provider) do
         {:ok, provider} -> {:ok, provider}
         _failed -> check(false, "The issuer's discovery document couldn't be read")
       end
@@ -165,6 +165,15 @@ defmodule Authmk.Plugins.SSO.Providers do
            Store.update(ctx, :sso_provider, provider.record, %{domain_verified: true}),
          do: :ok
   end
+
+  @doc """
+  The context for a provider's outbound requests. Providers registered at
+  runtime chose their own URLs (issuer, and the endpoints its discovery
+  document lists), so those requests only go to public hosts, over HTTPS.
+  Providers from config are the app's own, and may be internal.
+  """
+  def http_context(ctx, %{record: nil}), do: ctx
+  def http_context(ctx, _registered), do: HTTP.public_hosts_only(ctx)
 
   @doc "The OAuth client side of a provider, for the authorization code flow."
   def oauth_provider(ctx, provider) do

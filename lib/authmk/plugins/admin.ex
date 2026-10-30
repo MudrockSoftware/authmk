@@ -197,7 +197,7 @@ defmodule Authmk.Plugins.Admin do
          :ok <- valid_role(ctx, role),
          :ok <-
            check(is_nil(Store.get_by(ctx, :user, email: email)), Error.new(:user_already_exists)),
-         :ok <- valid_password(params.password),
+         :ok <- valid_password(ctx, params.password),
          attrs =
            Map.merge(data(params.data), %{"email" => email, "name" => params.name, "role" => role}),
          {:ok, user} <- create_with_password(ctx, attrs, params.password) do
@@ -255,7 +255,7 @@ defmodule Authmk.Plugins.Admin do
   @doc false
   def set_password(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, user: [:set_password]),
-         :ok <- valid_password(params.new_password),
+         :ok <- valid_password(ctx, params.new_password),
          {:ok, user} <- fetch_user(ctx, params.user_id),
          :ok <- may_manage(ctx, user),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
@@ -426,7 +426,7 @@ defmodule Authmk.Plugins.Admin do
     email = Email.normalize(attrs[:email] || "")
 
     with :ok <- check(Email.valid?(email), Error.new(:invalid_email)),
-         :ok <- valid_password(attrs[:password]) do
+         :ok <- valid_password(ctx, attrs[:password]) do
       case Store.get_by(ctx, :user, email: email) do
         nil -> create_new_admin(ctx, email, attrs, role)
         user -> promote(ctx, user, role)
@@ -590,8 +590,8 @@ defmodule Authmk.Plugins.Admin do
     )
   end
 
-  defp valid_password(nil), do: :ok
-  defp valid_password(password), do: PasswordPolicy.check_length(password, 8, 128)
+  defp valid_password(_ctx, nil), do: :ok
+  defp valid_password(ctx, password), do: PasswordPolicy.check(ctx, password, 8, 128)
 
   defp session_token({:ok, token}), do: {:ok, token}
   defp session_token(_none), do: {:error, Error.new(:unauthorized)}

@@ -257,6 +257,10 @@ defmodule Authmk.PasskeySignUpTest do
         {Authmk.Plugins.Passkey,
          sign_up: true, origin: "https://app.example.com", rp_id: "example.com"}
       ]
+
+    @impl Authmk
+    def send_change_email_verification(link, _ctx),
+      do: send(self(), {:email, :change_email, link})
   end
 
   @moduletag auth: Auth
@@ -265,7 +269,11 @@ defmodule Authmk.PasskeySignUpTest do
     authenticator = FakeAuthenticator.new(origin: "https://app.example.com")
 
     {browser, conn} =
-      post(browser, "/passkey/generate-register-options", %{email: "Ada@Example.com", name: "Ada"})
+      post(browser, "/passkey/generate-register-options", %{
+        email: "Ada@Example.com",
+        name: "Ada",
+        callback_url: "/welcome"
+      })
 
     options = json(conn)
     assert options["rp"]["id"] == "example.com"
@@ -273,7 +281,17 @@ defmodule Authmk.PasskeySignUpTest do
 
     response = FakeAuthenticator.register(authenticator, options)
     {browser, conn} = post(browser, "/passkey/verify-registration", %{response: response})
+    assert json(conn)["user"]["email"] =~ ~r/\Apasskey-[a-z0-9]+@example\.com\z/
+    assert json(conn)["user"]["email_verified"] == false
+
+    # The address joins the account once its owner opens the link.
+    link = assert_email(:change_email)
+    assert link.new_email == "ada@example.com"
+    assert link.url =~ "callback_url=%2Fwelcome"
+    {browser, _conn} = get(browser, "/verify-email", %{token: link.token})
+    {browser, conn} = get(browser, "/get-session")
     assert json(conn)["user"]["email"] == "ada@example.com"
+    assert json(conn)["user"]["email_verified"] == true
 
     {browser, _conn} = post(browser, "/sign-out")
 
@@ -295,6 +313,35 @@ defmodule Authmk.PasskeySignUpTest do
       post(browser, "/passkey/generate-register-options", %{email: "ada@example.com"})
 
     assert json(conn)["error"]["code"] == "user_already_exists"
+  end
+
+  # Until then, the passkey holds nobody's address: its owner can still sign up.
+  test "a passkey signing up with someone's email doesn't take it", %{browser: browser} do
+    authenticator = FakeAuthenticator.new(origin: "https://app.example.com")
+
+    {browser, conn} =
+      post(browser, "/passkey/generate-register-options", %{email: "ada@example.com"})
+
+    response = FakeAuthenticator.register(authenticator, json(conn))
+    {_browser, conn} = post(browser, "/passkey/verify-registration", %{response: response})
+    assert json(conn)["user"]["email"] != "ada@example.com"
+    link = assert_email(:change_email)
+
+    {_owner, user} = sign_up(Browser.new(Auth))
+    assert user["email"] == "ada@example.com"
+
+    {_browser, conn} = get(Browser.new(Auth), "/verify-email", %{token: link.token})
+    assert json(conn)["error"]["code"] == "email_cannot_be_updated"
+  end
+
+  test "an untrusted callback URL is refused", %{browser: browser} do
+    {_browser, conn} =
+      post(browser, "/passkey/generate-register-options", %{
+        email: "ada@example.com",
+        callback_url: "https://evil.example"
+      })
+
+    assert conn.status == 403
   end
 
   test "an email is needed", %{browser: browser} do

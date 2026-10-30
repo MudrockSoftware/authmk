@@ -4,7 +4,7 @@ defmodule Authmk.Credentials do
   with `provider_id: "credential"`.
   """
 
-  alias Authmk.{Background, Context, Error, Sessions, Store}
+  alias Authmk.{Background, Context, Error, PasswordPolicy, Sessions, Store}
 
   @provider_id "credential"
 
@@ -38,15 +38,17 @@ defmodule Authmk.Credentials do
   @doc "Sets the user's password, creating their password account when needed."
   @spec set_password(Context.t(), struct(), String.t()) :: {:ok, struct()} | {:error, Error.t()}
   def set_password(%Context{config: config} = ctx, user, password) do
-    hash = config.password_hasher.hash(password)
+    with :ok <- PasswordPolicy.check_hashable(config, password) do
+      hash = config.password_hasher.hash(password)
 
-    case account(ctx, user.id) do
-      nil ->
-        attrs = %{user_id: user.id, account_id: to_string(user.id), provider_id: @provider_id}
-        Store.insert(ctx, :account, Map.put(attrs, :password, hash))
+      case account(ctx, user.id) do
+        nil ->
+          attrs = %{user_id: user.id, account_id: to_string(user.id), provider_id: @provider_id}
+          Store.insert(ctx, :account, Map.put(attrs, :password, hash))
 
-      account ->
-        Store.update(ctx, :account, account, %{password: hash})
+        account ->
+          Store.update(ctx, :account, account, %{password: hash})
+      end
     end
   end
 

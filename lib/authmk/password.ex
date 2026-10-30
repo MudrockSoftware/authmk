@@ -15,4 +15,14 @@ defmodule Authmk.Password do
   no user, so response times don't reveal which emails are registered.
   """
   @callback no_user_verify() :: false
+
+  @doc """
+  The longest password, in bytes, that `hash/1` uses in full. Bcrypt
+  ignores everything after 72 bytes, so two passwords that start the same
+  would both work; longer new passwords are refused with
+  `password_too_long` instead. Leave it out when every byte counts.
+  """
+  @callback max_bytes() :: pos_integer()
+
+  @optional_callbacks max_bytes: 0
 end

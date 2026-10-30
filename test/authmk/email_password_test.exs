@@ -11,6 +11,19 @@ defmodule Authmk.EmailPasswordTest.Auth do
   def send_reset_password(link, _ctx), do: send(self(), {:email, :reset_password, link})
 end
 
+defmodule Authmk.EmailPasswordTest.ResetPageAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [{Authmk.Plugins.EmailPassword, reset_password_page: "/account/new-password"}],
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false]
+
+  @impl Authmk
+  def send_reset_password(link, _ctx), do: send(self(), {:email, :reset_password, link})
+end
+
 defmodule Authmk.EmailPasswordTest.BcryptAuth do
   use Authmk,
     otp_app: :authmk,
@@ -166,6 +179,37 @@ defmodule Authmk.EmailPasswordTest do
     assert conn.status == 200
   end
 
+  # Bcrypt ignores everything after 72 bytes: "x" * 72 <> "anything" would all work.
+  @tag auth: Authmk.EmailPasswordTest.BcryptAuth
+  test "Bcrypt refuses new passwords it would cut short", %{browser: browser} do
+    for password <- [String.duplicate("x", 73), String.duplicate("€", 25)] do
+      {_browser, conn} =
+        post(browser, "/sign-up/email", %{email: "ada@example.com", password: password})
+
+      assert json(conn)["error"]["code"] == "password_too_long"
+    end
+
+    assert Repo.aggregate("users", :count) == 0
+    {browser, _user} = sign_up(browser, %{password: String.duplicate("x", 72)})
+
+    {browser, conn} =
+      post(browser, "/change-password", %{
+        current_password: String.duplicate("x", 72),
+        new_password: String.duplicate("x", 72) <> "y"
+      })
+
+    assert json(conn)["error"]["code"] == "password_too_long"
+
+    # A long password set before still signs in.
+    long = String.duplicate("y", 100)
+    Repo.update_all("accounts", set: [password: Bcrypt.hash_pwd_salt(long)])
+
+    {_browser, conn} =
+      post(browser, "/sign-in/email", %{email: "ada@example.com", password: long})
+
+    assert conn.status == 200
+  end
+
   test "set_password gives a password to a user without one, once", %{browser: browser} do
     # A user that signed up some other way, like a social provider.
     user = Repo.insert!(%Auth.User{name: "Ada", email: "ada@example.com"})
@@ -244,7 +288,13 @@ defmodule Authmk.EmailPasswordTest do
 
     test "the token works only once", %{browser: browser} do
       {_signed_in, _user} = sign_up(browser)
-      {_browser, _conn} = post(browser, "/request-password-reset", %{email: "ada@example.com"})
+
+      {_browser, _conn} =
+        post(browser, "/request-password-reset", %{
+          email: "ada@example.com",
+          redirect_to: "/reset"
+        })
+
       link = assert_email(:reset_password)
 
       {_browser, conn} =
@@ -259,10 +309,61 @@ defmodule Authmk.EmailPasswordTest do
     end
 
     test "unknown emails get the same answer and no email", %{browser: browser} do
-      {_browser, conn} = post(browser, "/request-password-reset", %{email: "nobody@example.com"})
+      {_browser, conn} =
+        post(browser, "/request-password-reset", %{
+          email: "nobody@example.com",
+          redirect_to: "/reset"
+        })
 
       assert json(conn) == %{"status" => true}
       refute_received {:email, :reset_password, _}
+    end
+
+    # Without redirect_to the link still opens a page, never a JSON error.
+    test "a link requested without redirect_to ends on the error page", %{browser: browser} do
+      {_signed_in, _user} = sign_up(browser)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          post(browser, "/request-password-reset", %{email: "ada@example.com"})
+        end)
+
+      assert log =~ "reset_password_page"
+      link = assert_email(:reset_password)
+
+      {_browser, conn} =
+        get(browser, URI.parse(link.url).path |> String.replace_prefix("/auth", ""))
+
+      assert redirected_to(conn) =~ "/auth/error?error=reset_password_page_missing"
+    end
+  end
+
+  describe "password reset with a reset_password_page" do
+    @describetag auth: Authmk.EmailPasswordTest.ResetPageAuth
+
+    test "links requested without redirect_to open it", %{browser: browser} do
+      {_signed_in, _user} =
+        sign_up(browser)
+
+      {_browser, _conn} = post(browser, "/request-password-reset", %{email: "ada@example.com"})
+      link = assert_email(:reset_password)
+
+      {_browser, conn} =
+        get(browser, URI.parse(link.url).path |> String.replace_prefix("/auth", ""))
+
+      assert redirected_to(conn) == "/account/new-password?token=#{link.token}"
+
+      # redirect_to still wins.
+      {_browser, _conn} =
+        post(browser, "/request-password-reset", %{
+          email: "ada@example.com",
+          redirect_to: "/reset"
+        })
+
+      link = assert_email(:reset_password)
+      {path, query} = {URI.parse(link.url).path, URI.decode_query(URI.parse(link.url).query)}
+      {_browser, conn} = get(browser, String.replace_prefix(path, "/auth", ""), query)
+      assert redirected_to(conn) == "/reset?token=#{link.token}"
     end
   end
 

@@ -162,7 +162,8 @@ defmodule Authmk.Plugins.OAuthProvider.Logout do
     }
 
     with {:ok, token} <- JWT.sign_claims(ctx, claims, %{"typ" => "logout+jwt"}) do
-      _response = HTTP.post_form(ctx, client.backchannel_logout_uri, %{logout_token: token})
+      remote = Config.http_context(ctx, client)
+      _response = HTTP.post_form(remote, client.backchannel_logout_uri, %{logout_token: token})
     end
   end
 end

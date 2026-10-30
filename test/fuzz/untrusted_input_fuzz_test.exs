@@ -12,6 +12,7 @@ defmodule Authmk.Fuzz.Auth do
       {Authmk.Plugins.APIKey, enable_sessions: true},
       Authmk.Plugins.JWT,
       Authmk.Plugins.DeviceAuthorization,
+      {Authmk.Plugins.OneTap, require_nonce: true},
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
       Authmk.Plugins.SCIM,
       {Authmk.Plugins.Stripe, api_key: "sk_test_fuzz", webhook_secret: "whsec_fuzz"},
@@ -38,6 +39,7 @@ defmodule Authmk.Fuzz.Auth do
     ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
+    social_providers: [google: [client_id: "google-id", client_secret: "google-secret"]],
     background: :inline,
     rate_limit: [enabled: false],
     advanced: [ip_address_headers: ["x-forwarded-for"]]
@@ -679,7 +681,17 @@ defmodule Authmk.UntrustedInputFuzzTest do
   end
 
   property "made-up device and user codes get nowhere", %{browser: browser} do
-    {_browser, conn} = post(browser, "/device/code", %{client_id: "tv"})
+    {:ok, _tv} =
+      OAuthProvider.create_client(
+        Authmk.Fuzz.Auth,
+        %{
+          "grant_types" => ["urn:ietf:params:oauth:grant-type:device_code"],
+          "token_endpoint_auth_method" => "none"
+        },
+        client_id: "tv-device"
+      )
+
+    {_browser, conn} = post(browser, "/device/code", %{client_id: "tv-device"})
     assert conn.status == 200
     {browser, _user} = sign_up(browser)
 
@@ -695,7 +707,7 @@ defmodule Authmk.UntrustedInputFuzzTest do
         post(Browser.new(Authmk.Fuzz.Auth), "/device/token", %{
           grant_type: grant,
           device_code: code,
-          client_id: "tv"
+          client_id: "tv-device"
         })
 
       assert conn.status == 400
@@ -703,6 +715,38 @@ defmodule Authmk.UntrustedInputFuzzTest do
 
       {_browser, conn} = post(browser, "/device/approve", %{user_code: code})
       assert conn.status in [400, 404, 422]
+    end
+  end
+
+  # The nonce is read from the token before its signature is checked.
+  property "garbled One Tap credentials never crash or sign anyone in", %{browser: browser} do
+    {_browser, conn} = post(browser, "/one-tap/nonce")
+    nonce = json(conn)["nonce"]
+
+    segment =
+      one_of([
+        string(:printable, max_length: 80),
+        map(binary(max_length: 80), &Base.url_encode64(&1, padding: false)),
+        map(
+          map_of(string(:printable, max_length: 10), term(), max_length: 4),
+          fn claims ->
+            claims
+            |> Map.put("nonce", nonce)
+            |> inspect()
+            |> Base.url_encode64(padding: false)
+          end
+        ),
+        constant(Base.url_encode64(~s({"nonce":"#{nonce}"}), padding: false))
+      ])
+
+    check all(parts <- list_of(segment, max_length: 4)) do
+      credential = Enum.join(parts, ".")
+
+      {browser, conn} = post(browser, "/one-tap/callback", %{id_token: credential})
+      assert conn.status in [400, 401, 422]
+      refute Map.has_key?(json(conn), "user")
+      {_browser, conn} = get(browser, "/get-session")
+      assert json(conn) == nil
     end
   end
 

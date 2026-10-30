@@ -81,7 +81,7 @@ defmodule Authmk.Plugins.OAuthProvider do
   use Authmk.Plugin
 
   alias Authmk.{BaseURL, Context, Endpoint, Error}
-  alias Authmk.Plugins.JWT
+  alias Authmk.Plugins.{DeviceAuthorization, JWT}
 
   alias Authmk.Plugins.OAuthProvider.{
     Authorize,
@@ -97,6 +97,8 @@ defmodule Authmk.Plugins.OAuthProvider do
     Tokens,
     Userinfo
   }
+
+  @device_grant "urn:ietf:params:oauth:grant-type:device_code"
 
   @impl true
   def init(opts) do
@@ -222,6 +224,38 @@ defmodule Authmk.Plugins.OAuthProvider do
         params: client_id
       )
     ] ++ registration(opts)
+  end
+
+  # Device codes (Authmk.Plugins.DeviceAuthorization) are for this server's
+  # clients that have the device code grant, asking for scopes they may
+  # have; unless the app checks clients itself with `validate_client`.
+  @impl true
+  def before_endpoint(endpoint, %Context{params: params} = ctx)
+      when endpoint in [:device_code, :device_token] and is_binary(params.client_id) do
+    if Context.plugin_opts(ctx, DeviceAuthorization)[:validate_client] do
+      {:cont, ctx}
+    else
+      scope = if endpoint == :device_code, do: params.scope
+
+      case check_device_client(ctx, params.client_id, scope) do
+        :ok -> {:cont, ctx}
+        code -> {:respond, {:json, 400, %{error: code}, ctx}}
+      end
+    end
+  end
+
+  def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
+
+  defp check_device_client(ctx, client_id, scope) do
+    ctx = Context.put_private(ctx, :oauth_provider_plugin, __MODULE__)
+    client = Clients.fetch(ctx, client_id)
+
+    cond do
+      is_nil(client) -> "invalid_client"
+      @device_grant not in Clients.list(client.grant_types) -> "unauthorized_client"
+      Enum.all?(Clients.list(scope), &(&1 in Clients.allowed_scopes(ctx, client))) -> :ok
+      true -> "invalid_scope"
+    end
   end
 
   # Back-channel logout. Called from any endpoint that ends sessions, so the

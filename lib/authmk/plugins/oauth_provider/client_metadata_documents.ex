@@ -7,8 +7,10 @@ defmodule Authmk.Plugins.OAuthProvider.ClientMetadataDocuments do
   #
   # The URL is chosen by whoever sends the request, so fetching it is
   # guarded: HTTPS only, no redirects, 5 KB at most, 5 seconds at most, and
-  # never to loopback, private or link-local addresses. Clients found this
-  # way can't hold secrets: they're public, or use `private_key_jwt`.
+  # never to loopback, private or link-local addresses, checked again when
+  # connecting (`HTTP.public_hosts_only/1`) so DNS rebinding can't get
+  # around it. Clients found this way can't hold secrets: they're public, or
+  # use `private_key_jwt`.
 
   alias Authmk.OAuth.{HTTP, PublicHost}
   alias Authmk.Plugins.OAuthProvider.Config
@@ -43,7 +45,8 @@ defmodule Authmk.Plugins.OAuthProvider.ClientMetadataDocuments do
   defp refresh(ctx, client_id, stored, register) do
     with :ok <- valid_url?(client_id),
          :ok <- public_host(ctx, URI.parse(client_id).host),
-         {:ok, 200, body, headers} <- HTTP.get_limited(ctx, client_id, @max_bytes),
+         {:ok, 200, body, headers} <-
+           HTTP.get_limited(HTTP.public_hosts_only(ctx), client_id, @max_bytes),
          {:ok, %{} = document} <- JSON.decode(body),
          :ok <- check_document(document, client_id),
          {:ok, client} <- save(ctx, register, stored, client_id, document, ttl(headers)) do

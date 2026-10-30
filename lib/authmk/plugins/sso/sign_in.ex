@@ -20,7 +20,7 @@ defmodule Authmk.Plugins.SSO.SignIn do
   end
 
   defp start_oidc(%Context{params: params} = ctx, provider) do
-    with {:ok, oauth} <- discovered(ctx, provider) do
+    with {:ok, oauth} <- discovered(Providers.http_context(ctx, provider), provider) do
       data = %{
         "sso_provider_id" => provider.provider_id,
         "callback_url" => params.callback_url,
@@ -95,11 +95,12 @@ defmodule Authmk.Plugins.SSO.SignIn do
          %{} = provider <-
            Providers.find(ctx, state["sso_provider_id"]) || {:error, Error.new(:state_mismatch)},
          :ok <- no_provider_error(params),
-         {:ok, oauth} <- discovered(ctx, provider),
+         remote = Providers.http_context(ctx, provider),
+         {:ok, oauth} <- discovered(remote, provider),
          {:ok, tokens} <-
-           Flow.exchange_code(ctx, oauth, params["code"] || "", state["code_verifier"]),
-         {:ok, tokens} <- verify_id_token(ctx, oauth, tokens, state["nonce"]),
-         {:ok, profile} <- profile(ctx, oauth, tokens),
+           Flow.exchange_code(remote, oauth, params["code"] || "", state["code_verifier"]),
+         {:ok, tokens} <- verify_id_token(remote, oauth, tokens, state["nonce"]),
+         {:ok, profile} <- profile(remote, oauth, tokens),
          {:ok, info} <- oauth.module.map_profile(profile, tokens, oauth),
          {:ok, user, status} <- Users.resolve(ctx, provider, info, profile) do
       Outcome.complete(ctx, user, status, state)

@@ -80,8 +80,12 @@ POST /auth/passkey/verify-authentication  {"response": {...}}
 ```
 
 Registering needs a signed-in user, unless `sign_up: true`: then visitors
-send `email` and `name` to `generate-register-options`, and the account is
-created with the passkey. Sign-in options without a session list no
+send `email` and `name` (and optionally `callback_url`) to
+`generate-register-options`, and the account is created with the passkey.
+Until its owner proves the email, the account has a placeholder
+(`passkey-<random>@<rp_id>`): the email gets a link through
+`send_change_email_verification/2`, and opening it moves the account there,
+verified. Sign-in options without a session list no
 credentials, so the browser offers every passkey for the site, autofill
 included. `GET /auth/passkey/list-user-passkeys`,
 `POST /auth/passkey/update-passkey` (`id`, `name`) and
@@ -92,8 +96,10 @@ Each challenge works once, from the browser that asked for it. A passkey
 whose counter goes backwards is refused (`passkey_cloned`). A passkey that
 verified the user (PIN, biometrics) counts as two factors and skips 2FA;
 one that didn't goes through 2FA like a password. Set
-`user_verification: "required"` to always ask. With `sign_up`, registering
-doesn't verify the email.
+`user_verification: "required"` to always ask. With `sign_up`, a passkey
+registered with someone else's email never holds their address, so it
+can't keep them from signing up, or wait in the account they'd reach with
+a magic link or a password reset.
 
 In tests, `Authmk.Testing.FakeAuthenticator` plays browser and
 authenticator: `register/2` and `authenticate/2` turn options into a
@@ -213,8 +219,16 @@ In tests, `Authmk.SMS.Test` sends `{:sms, to, body}` to the test process.
 Security notes: codes are stored encrypted, work once, and stop after
 `allowed_attempts` (3) wrong guesses. Wrong passwords and unknown numbers
 fail the same way, and reset requests answer the same either way. Clients
-can't set `phone_number` directly: only a code does. Every SMS costs money,
-so keep rate limits on and consider a captcha on `/phone-number/send-otp`.
+can't set `phone_number` directly: only a code does.
+
+Every SMS costs money, and fraudsters ask for codes to premium numbers they
+earn from ("SMS pumping"). Besides the per-client rate limit, one number
+gets at most `send_limit` codes (`[window: 3600, max: 5]`), however many
+clients ask; reset requests count too, before the number is looked up.
+Also accept only the countries you serve with `validator`, put a captcha on
+`/phone-number/send-otp` (add `:send_phone_number_otp` to the Captcha
+plugin's `endpoints`), and set spending limits and geo permissions with
+your SMS provider.
 
 ## Username
 
@@ -284,6 +298,20 @@ cookie and field must match) instead of authmk's origin check, and refuses
 any `Origin` but `https://accounts.google.com`. It redirects to
 `redirect_url`, or to `error_url` with `?error=<code>`.
 
+Turn on `require_nonce: true` so a credential that leaks (from a log, a
+proxy, an extension) can't be replayed. Before showing the prompt, get a
+nonce and pass it to Google:
+
+```js
+const { nonce } = await (await fetch("/auth/one-tap/nonce", { method: "POST" })).json()
+google.accounts.id.initialize({ client_id: "...", nonce, callback })
+```
+
+Each nonce works once, for `nonce_expires_in` seconds (600). Credentials
+without one of authmk's unused nonces fail with `invalid_id_token`. It's
+off by default so apps that give Google their own nonces keep working;
+new apps should turn it on.
+
 ## Sign-In with Ethereum
 
 For web3 apps: wallets sign an EIP-4361 message instead of a password.
@@ -304,12 +332,17 @@ POST /auth/siwe/verify  {"message": "...", "signature": "0x...", "wallet_address
 ```
 
 The client builds the message with the nonce, and the wallet signs it with
-`personal_sign`. `domain` defaults to the base URL's host. With
-`anonymous: false`, new wallets must also send an `email`.
+`personal_sign`. `domain` defaults to the base URL's host. New users get a
+placeholder email, `<address>@<domain>`. With `anonymous: false`, new
+wallets must also send an `email` (and optionally `callback_url`): it gets
+a link through `send_change_email_verification/2`, and opening it moves
+the account there, verified. Until then no wallet holds the address.
 
 Security notes: the message's address must have signed it and match
-`wallet_address`; its domain, chain and nonce (single use) must match, and
-it must be within its time window. Wallets never join an account by email.
+`wallet_address`; its domain, chain and nonce must match, and it must be
+within its time window. Each nonce works once, for the wallet it was
+issued to; asking for another doesn't cancel it, so nobody can keep a
+wallet's sign-in failing by asking for nonces. Wallets never join an account by email.
 In tests, `Authmk.Testing.FakeWallet` signs messages like a wallet.
 
 ## One-time tokens

@@ -31,6 +31,20 @@ defmodule Authmk.Plugins.PhoneNumber do
   working after `allowed_attempts` wrong guesses. Asking for a password
   reset answers the same whether or not the number is registered.
 
+  ## SMS pumping
+
+  Anyone can ask for a code to any number, and fraudsters use that to send
+  texts to premium numbers they're paid for. Besides the per-client rate
+  limit, each number gets at most `send_limit` codes (5 an hour by
+  default), however many clients ask. Also:
+
+    * Only accept the countries you serve, with `validator`:
+      `validator: &(&1 =~ ~r/^\+(1|44)[0-9]{6,14}$/)` takes E.164 numbers
+      from the US, Canada and the UK only.
+    * Put a captcha on it: add `:send_phone_number_otp` to
+      `Authmk.Plugins.Captcha`'s `endpoints`.
+    * Set spending limits and geo permissions with your SMS provider.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Plugins.PhoneNumber.Options.schema())}
@@ -46,6 +60,7 @@ defmodule Authmk.Plugins.PhoneNumber do
     Error,
     OTP,
     PasswordPolicy,
+    RateLimit,
     Serializer,
     Sessions,
     Store
@@ -126,7 +141,8 @@ defmodule Authmk.Plugins.PhoneNumber do
   def send_otp(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
-    with :ok <- valid_number(params.phone_number, opts) do
+    with :ok <- valid_number(params.phone_number, opts),
+         :ok <- within_send_limit(ctx, params.phone_number, opts[:send_limit]) do
       send_code(ctx, @verify_purpose, params.phone_number, :verification, opts)
     end
   end
@@ -159,9 +175,12 @@ defmodule Authmk.Plugins.PhoneNumber do
   def request_reset(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
-    case Store.get_by(ctx, :user, phone_number: params.phone_number) do
-      nil -> {:ok, %{status: true}, ctx}
-      _user -> send_code(ctx, @reset_purpose, params.phone_number, :password_reset, opts)
+    # Counted before the lookup, so the limit doesn't tell registered numbers apart.
+    with :ok <- within_send_limit(ctx, params.phone_number, opts[:send_limit]) do
+      case Store.get_by(ctx, :user, phone_number: params.phone_number) do
+        nil -> {:ok, %{status: true}, ctx}
+        _user -> send_code(ctx, @reset_purpose, params.phone_number, :password_reset, opts)
+      end
     end
   end
 
@@ -169,7 +188,7 @@ defmodule Authmk.Plugins.PhoneNumber do
   def reset_password(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
-    with :ok <- valid_password(params.new_password, opts),
+    with :ok <- valid_password(ctx, params.new_password, opts),
          :ok <- check_code(ctx, @reset_purpose, opts),
          %{} = user <- Store.get_by(ctx, :user, phone_number: params.phone_number),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password),
@@ -199,6 +218,13 @@ defmodule Authmk.Plugins.PhoneNumber do
       {:ok, %{status: true}, ctx}
     end
   end
+
+  # Codes to one number, from any client. Every request that may text a
+  # number counts, sent or not.
+  defp within_send_limit(_ctx, _number, false), do: :ok
+
+  defp within_send_limit(ctx, number, limit),
+    do: RateLimit.check_key(ctx, "phone-number:#{number}", limit[:window], limit[:max])
 
   defp check_code(%Context{params: params} = ctx, purpose, opts) do
     OTP.verify(ctx, purpose, params.phone_number, params.code,
@@ -283,7 +309,8 @@ defmodule Authmk.Plugins.PhoneNumber do
 
   defp check_verified(%Context{params: params} = ctx, user, opts) do
     if opts[:require_verification] and not user.phone_number_verified do
-      with {:ok, _sent, _ctx} <-
+      with :ok <- within_send_limit(ctx, params.phone_number, opts[:send_limit]),
+           {:ok, _sent, _ctx} <-
              send_code(ctx, @verify_purpose, params.phone_number, :verification, opts) do
         {:error, Error.custom(:phone_number_not_verified, 403, "Verify your phone number first")}
       end
@@ -298,9 +325,10 @@ defmodule Authmk.Plugins.PhoneNumber do
       else: {:error, Error.custom(:invalid_phone_number, 422, "This phone number isn't valid")}
   end
 
-  defp valid_password(password, opts),
+  defp valid_password(ctx, password, opts),
     do:
-      PasswordPolicy.check_length(
+      PasswordPolicy.check(
+        ctx,
         password,
         opts[:min_password_length],
         opts[:max_password_length]

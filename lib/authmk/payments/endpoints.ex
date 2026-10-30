@@ -3,9 +3,7 @@ defmodule Authmk.Payments.Endpoints do
   # The endpoints every payment plugin shares; the plugin (an
   # Authmk.Payments.Provider) talks to its provider.
 
-  require Logger
-
-  alias Authmk.{Context, Endpoint, Error, Origin, Serializer}
+  alias Authmk.{Context, Endpoint, Error, Log, Origin, Serializer}
   alias Authmk.Payments.{Options, Reference, Store}
   alias Authmk.Plug.RawBody
 
@@ -152,14 +150,12 @@ defmodule Authmk.Payments.Endpoints do
         {:json, 500, %{error: "not_saved"}, ctx}
 
       {:error, :raw_body_unavailable} ->
-        Logger.error(
-          "authmk billing webhook: no raw body. Add Authmk.Plug.RawBody to Plug.Parsers"
-        )
+        Log.error("authmk billing webhook: no raw body. Add Authmk.Plug.RawBody to Plug.Parsers")
 
         {:json, 500, %{error: "raw_body_unavailable"}, ctx}
 
       {:error, reason} ->
-        Logger.warning("authmk billing webhook refused (#{reason})")
+        Log.warning("authmk billing webhook refused (#{reason})")
         {:json, 400, %{error: "invalid_webhook"}, ctx}
     end
   end
@@ -172,7 +168,7 @@ defmodule Authmk.Payments.Endpoints do
   # Without the provider's ids there's nothing to match it to.
   defp sync(_ctx, _plugin, _opts, %{provider_subscription_id: id, customer_id: customer})
        when not is_binary(id) or not is_binary(customer) do
-    Logger.warning("authmk billing: a subscription without its ids was ignored")
+    Log.warning("authmk billing: a subscription without its ids was ignored")
     :ok
   end
 
@@ -190,7 +186,7 @@ defmodule Authmk.Payments.Endpoints do
       save(ctx, provider, attrs, opts)
     else
       # Not ours (made for another app on the same account): nothing to save.
-      Logger.warning("authmk billing: a subscription for an unknown customer was ignored")
+      Log.warning("authmk billing: a subscription for an unknown customer was ignored")
       :ok
     end
   end
@@ -201,7 +197,7 @@ defmodule Authmk.Payments.Endpoints do
         :ok
 
       {:error, error} ->
-        Logger.warning("authmk billing: subscription not saved (#{error.code})")
+        Log.warning("authmk billing: subscription not saved (#{error.code})")
         :not_saved
     end
   end
@@ -232,7 +228,7 @@ defmodule Authmk.Payments.Endpoints do
 
     case ensure_customer(ctx, plugin, reference, opts) do
       {:ok, _customer_id} -> :ok
-      {:error, error} -> Logger.warning("authmk billing: customer not created (#{error.code})")
+      {:error, error} -> Log.warning("authmk billing: customer not created (#{error.code})")
     end
   end
 

@@ -147,6 +147,24 @@ defmodule Authmk.SCIMTest do
     assert {204, nil} = scim(directory, :delete, "/Users/" <> id)
     assert {404, _} = scim(directory, :get, "/Users/" <> id)
     assert_raise ArgumentError, fn -> Authmk.Testing.sign_in(signed_in, Auth, user) end
+
+    # Provisioned again: the same user, back in.
+    assert {201, %{"id" => ^id, "active" => true}} = scim(directory, :post, "/Users", ada())
+    assert Authmk.Testing.get_user_by(Auth, email: "ada@acme.example").id == user.id
+    assert %Plug.Conn{} = Authmk.Testing.sign_in(signed_in, Auth, user)
+  end
+
+  test "another directory can't provision someone this one deleted", %{
+    directory: directory,
+    admin: admin,
+    org_id: org_id
+  } do
+    {201, %{"id" => id}} = scim(directory, :post, "/Users", ada())
+    assert {204, nil} = scim(directory, :delete, "/Users/" <> id)
+
+    {_admin, conn} = post(admin, "/scim/connections", %{organization_id: org_id, name: "Entra"})
+    other = directory(json(conn)["token"])
+    assert {409, %{"scimType" => "uniqueness"}} = scim(other, :post, "/Users", ada())
   end
 
   test "groups give roles, and changes reconcile them", %{directory: directory, org_id: org_id} do

@@ -97,8 +97,10 @@ HTTPS URL that serves its metadata as JSON, as MCP clients do. There is no
 registration step: authmk fetches the document when the client shows up,
 and again when it goes stale (after its `max-age`, between 5 minutes and a
 day). The fetch is guarded: HTTPS only, no redirects, at most 5 KB and 5
-seconds, and never to private, loopback or link-local addresses. The
-document's `client_id` must equal its URL, and it can't hold a secret, so
+seconds, and never to private, loopback or link-local addresses. That's
+checked again when connecting, against the address the connection uses,
+so DNS rebinding can't get around it. The document's `client_id` must
+equal its URL, and it can't hold a secret, so
 these clients are public or use `private_key_jwt`. A document that can't
 be fetched again isn't trusted.
 
@@ -192,6 +194,11 @@ with `"dpop_bound_access_tokens" => true` must use DPoP (RFC 9449).
     `backchannel_logout_uri` are told with a signed logout token, and the
     access tokens that session gave out end with it.
 
+Anyone who can register a client chooses its `jwks_uri` and
+`backchannel_logout_uri`, so authmk only sends requests there over HTTPS,
+to public addresses (checked when connecting). Your own apps listed in
+`trusted_clients` may use addresses on your private network.
+
 The token, introspection and revocation endpoints authenticate the client
 with the method it registered: HTTP Basic, `client_secret` in the body,
 a `private_key_jwt` assertion, or for public clients only `client_id`.
@@ -281,9 +288,7 @@ Add `Authmk.Plugins.DeviceAuthorization` for the device code grant (RFC
 endpoint:
 
 ```elixir
-{Authmk.Plugins.DeviceAuthorization,
- verification_uri: "https://example.com/device",
- validate_client: &(Authmk.Plugins.OAuthProvider.public_client(MyApp.Auth, &1) != nil)}
+{Authmk.Plugins.DeviceAuthorization, verification_uri: "https://example.com/device"}
 ```
 
 ```http
@@ -298,8 +303,12 @@ which client asks, and posts `user_code` to `POST /auth/device/approve` or
 `POST /auth/device/deny`. The device polls `POST /auth/oauth2/token` with
 `grant_type=urn:ietf:params:oauth:grant-type:device_code`, its
 `device_code` and `client_id` (and `resource`, for an MCP server), and gets
-`authorization_pending` or `slow_down` until the user decides. The client
-must be registered with that grant type. Device codes are stored hashed
-and work once. Without `validate_client`, any string may ask for codes as
-its `client_id`, and your page would show it; the token endpoint still
-refuses clients that aren't registered.
+`authorization_pending` or `slow_down` until the user decides. Device codes
+are stored hashed and work once.
+
+Only registered, enabled clients with that grant type get codes, for
+scopes they may ask for: others get `invalid_client`,
+`unauthorized_client` or `invalid_scope`, so a code never names a client
+that doesn't exist. The scope is checked again before an approved code is
+used up. Pass DeviceAuthorization's `validate_client` to decide yourself
+instead.

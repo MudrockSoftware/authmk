@@ -9,9 +9,13 @@ defmodule Authmk.OAuth.HTTP do
   internal address (server-side request forgery); `http_options` can't turn
   that back on. Requests time out after 10 seconds and aren't retried.
   `advanced: [http_options: ...]` adds Req options, for example a test stub.
+
+  URLs that someone else chose (client metadata documents, identity
+  providers registered at runtime) go through `public_hosts_only/1`.
   """
 
   alias Authmk.Context
+  alias Authmk.OAuth.PublicTCP
 
   @defaults [
     redirect: false,
@@ -21,6 +25,17 @@ defmodule Authmk.OAuth.HTTP do
   ]
 
   @type response :: {:ok, pos_integer(), term()} | {:error, term()}
+
+  @doc """
+  Marks `ctx` so its requests only go to public addresses over HTTPS, for
+  URLs someone else chose (server-side request forgery). The host is
+  resolved when connecting, every address it resolves to must be public
+  (not loopback, private, link-local or multicast), and the connection goes
+  to an address that was checked, so DNS rebinding can't reach a private
+  network. Other URLs fail with `:host_not_public`.
+  """
+  @spec public_hosts_only(Context.t()) :: Context.t()
+  def public_hosts_only(ctx), do: Context.put_private(ctx, :public_hosts_only, true)
 
   @doc "GET request. `headers` is a list of `{name, value}`."
   @spec get(Context.t(), String.t(), [{String.t(), String.t()}]) :: response()
@@ -57,7 +72,7 @@ defmodule Authmk.OAuth.HTTP do
   """
   @spec get_limited(Context.t(), String.t(), pos_integer()) ::
           {:ok, pos_integer(), binary(), map()} | {:error, :too_large | term()}
-  def get_limited(%Context{config: config}, url, max_bytes) do
+  def get_limited(%Context{config: config} = ctx, url, max_bytes) do
     opts =
       @defaults
       |> Keyword.merge(config.advanced[:http_options] || [])
@@ -71,6 +86,12 @@ defmodule Authmk.OAuth.HTTP do
         into: &collect(&1, &2, max_bytes)
       )
 
+    with {:ok, opts} <- guard(ctx, opts) do
+      send_limited(opts)
+    end
+  end
+
+  defp send_limited(opts) do
     case Req.request(opts) do
       {:ok, %Req.Response{private: %{body: :too_large}}} ->
         {:error, :too_large}
@@ -91,7 +112,7 @@ defmodule Authmk.OAuth.HTTP do
       else: {:cont, {request, Req.Response.put_private(response, :body, body)}}
   end
 
-  defp request(%Context{config: config}, opts) do
+  defp request(%Context{config: config} = ctx, opts) do
     opts =
       @defaults
       |> Keyword.merge(config.advanced[:http_options] || [])
@@ -103,9 +124,32 @@ defmodule Authmk.OAuth.HTTP do
         &[{"user-agent", "authmk"}, {"accept", "application/json"} | &1]
       )
 
-    case Req.request(opts) do
-      {:ok, %Req.Response{status: status, body: body}} -> {:ok, status, body}
-      {:error, exception} -> {:error, exception}
+    with {:ok, opts} <- guard(ctx, opts) do
+      case Req.request(opts) do
+        {:ok, %Req.Response{status: status, body: body}} -> {:ok, status, body}
+        {:error, exception} -> {:error, exception}
+      end
     end
   end
+
+  # With `public_hosts_only/1`: HTTPS only, and connections through
+  # `PublicTCP`. One module for every host, so Req keeps a single pool.
+  defp guard(%Context{private: %{public_hosts_only: true}}, opts) do
+    case URI.parse(to_string(opts[:url])) do
+      %URI{scheme: "https", host: host} when host not in [nil, ""] ->
+        connect_options =
+          opts
+          |> Keyword.get(:connect_options, [])
+          |> Keyword.update(:transport_opts, [tcp_module: PublicTCP], fn transport_opts ->
+            Keyword.put(transport_opts, :tcp_module, PublicTCP)
+          end)
+
+        {:ok, Keyword.put(opts, :connect_options, connect_options)}
+
+      _other ->
+        {:error, :host_not_public}
+    end
+  end
+
+  defp guard(_ctx, opts), do: {:ok, opts}
 end

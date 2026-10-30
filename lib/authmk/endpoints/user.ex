@@ -117,12 +117,12 @@ defmodule Authmk.Endpoints.User do
     end
   end
 
+  # An unverified address waits for the new one's link too: otherwise an
+  # account could hold an address its owner never proved, and keep the real
+  # owner from signing up. Nobody proved the current one, so it isn't asked.
   defp change_unverified_email(ctx, new_email, callback_url) do
-    send? = ctx.config.email_verification[:send_on_sign_up]
-
-    with {:ok, user} <- Store.update(ctx, :user, ctx.user, %{email: new_email}),
-         :ok <- EmailVerification.maybe_send_verification(ctx, send?, user, callback_url) do
-      {:ok, %{status: true}, %{ctx | user: user}}
+    with :ok <- EmailVerification.send_change_email(ctx, ctx.user, new_email, callback_url) do
+      {:ok, %{status: true}, ctx}
     end
   end
 

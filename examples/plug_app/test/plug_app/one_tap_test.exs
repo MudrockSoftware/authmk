@@ -2,8 +2,9 @@ defmodule PlugApp.OneTapTest do
   # SQLite takes one writer at a time: tests that sign up run one by one.
   use PlugApp.ConnCase, async: false
 
-  # Plays Google: its keys, and an ID token signed with them.
-  defp google_credential do
+  # Plays Google: its keys, and an ID token signed with them, carrying the
+  # nonce the page passed to Google's prompt.
+  defp google_credential(nonce) do
     jwk = JOSE.JWK.generate_key({:rsa, 2048})
     {_kty, public} = jwk |> JOSE.JWK.to_public() |> JOSE.JWK.to_map()
     keys = %{"keys" => [Map.merge(public, %{"kid" => "google-key", "alg" => "RS256"})]}
@@ -19,7 +20,8 @@ defmodule PlugApp.OneTapTest do
       "email_verified" => true,
       "name" => "Ada",
       "iat" => now,
-      "exp" => now + 600
+      "exp" => now + 600,
+      "nonce" => nonce
     }
 
     {_alg, token} =
@@ -31,8 +33,15 @@ defmodule PlugApp.OneTapTest do
   end
 
   test "sign in with Google One Tap" do
-    conn = post_json("/auth/one-tap/callback", %{id_token: google_credential()})
+    nonce = json(post_json("/auth/one-tap/nonce", %{}))["nonce"]
+    credential = google_credential(nonce)
+
+    conn = post_json("/auth/one-tap/callback", %{id_token: credential})
     assert json(conn)["user"]["email"] == "ada@example.com"
+
+    # The same credential again: refused.
+    replayed = post_json("/auth/one-tap/callback", %{id_token: credential})
+    assert json(replayed)["error"]["code"] == "invalid_id_token"
 
     assert json(get_path("/me", cookies(conn))) == %{
              "email" => "ada@example.com",

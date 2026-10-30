@@ -72,7 +72,7 @@ defmodule Authmk.Plugins.SCIM.Users do
   # All or nothing: no half-provisioned user when joining the organization fails.
   defp provision(ctx, connection, attrs) do
     with {:ok, user} <- user_for(ctx, connection, attrs),
-         {:ok, link} <- insert_link(ctx, connection, user, attrs),
+         {:ok, link} <- save_link(ctx, connection, user, attrs),
          :ok <- join_organization(ctx, connection, user) do
       {:ok, {link, user}}
     else
@@ -247,30 +247,36 @@ defmodule Authmk.Plugins.SCIM.Users do
       else: {:scim_error, 409, "uniqueness", "userName is taken"}
   end
 
-  # The app's choice, then an existing user (when allowed), then a new one.
+  # The app's choice, then the default: an existing user (when allowed), or
+  # a new one.
   defp user_for(ctx, connection, attrs) do
-    opts = Config.opts(ctx)
-    email = Email.normalize(attrs.email)
-
     choice =
-      case opts[:resolve_user] do
+      case Config.opts(ctx)[:resolve_user] do
         nil -> :default
         resolve -> resolve.(attrs, connection, ctx)
       end
 
+    case choice do
+      {:ok, %{}} -> choice
+      {:error, _reason} -> {:scim_error, 409, "uniqueness", "The user can't be provisioned"}
+      _create_or_default -> default_user(ctx, connection, attrs)
+    end
+  end
+
+  defp default_user(ctx, connection, attrs) do
+    email = Email.normalize(attrs.email)
     existing = Store.get_by(ctx, :user, email: email)
 
     cond do
-      match?({:ok, %{}}, choice) ->
-        choice
-
-      match?({:error, _}, choice) ->
-        {:scim_error, 409, "uniqueness", "The user can't be provisioned"}
-
       is_nil(existing) ->
         Store.insert(ctx, :user, %{email: email, name: attrs.name, email_verified: false})
 
-      opts[:link_existing_users] and member?(ctx, connection, existing) ->
+      # Deleted from this directory earlier and kept (`on_delete:
+      # :deactivate`): the same person, provisioned again.
+      deprovisioned_link(ctx, connection, existing) ->
+        {:ok, existing}
+
+      Config.opts(ctx)[:link_existing_users] and member?(ctx, connection, existing) ->
         {:ok, existing}
 
       true ->
@@ -290,12 +296,31 @@ defmodule Authmk.Plugins.SCIM.Users do
       else: true
   end
 
-  defp insert_link(ctx, connection, user, attrs) do
-    Store.insert(
-      ctx,
-      :scim_user,
-      Map.merge(link_attrs(attrs), %{scim_connection_id: connection.id, user_id: user.id})
-    )
+  # A user this connection deprovisioned gets their old link back, with its id.
+  defp save_link(ctx, connection, user, attrs) do
+    case deprovisioned_link(ctx, connection, user) do
+      nil ->
+        Store.insert(
+          ctx,
+          :scim_user,
+          Map.merge(link_attrs(attrs), %{scim_connection_id: connection.id, user_id: user.id})
+        )
+
+      link ->
+        Store.update(ctx, :scim_user, link, Map.put(link_attrs(attrs), :deprovisioned_at, nil))
+    end
+  end
+
+  defp deprovisioned_link(ctx, connection, user) do
+    query =
+      from(l in Store.module(ctx, :scim_user),
+        where:
+          l.scim_connection_id == ^connection.id and l.user_id == ^user.id and
+            not is_nil(l.deprovisioned_at),
+        limit: 1
+      )
+
+    ctx |> Store.list(:scim_user, query) |> List.first()
   end
 
   defp link_attrs(attrs) do

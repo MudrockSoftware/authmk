@@ -58,13 +58,14 @@ defmodule Authmk.BackgroundObanTest do
 
   # Each database has its own Oban engine; only PostgreSQL has schemas.
   defp engine do
-    case Repo.__adapter__() do
-      Ecto.Adapters.SQLite3 -> Oban.Engines.Lite
-      Ecto.Adapters.Postgres -> Oban.Engines.Basic
+    case System.get_env("AUTHMK_TEST_DB", "sqlite") do
+      "sqlite" -> Oban.Engines.Lite
+      "postgres" -> Oban.Engines.Basic
     end
   end
 
-  defp prefix, do: if(Repo.__adapter__() == Ecto.Adapters.Postgres, do: "public", else: false)
+  defp prefix,
+    do: if(System.get_env("AUTHMK_TEST_DB") == "postgres", do: "public", else: false)
 
   test "a magic link waits as a job, encrypted, and works once it runs", %{browser: browser} do
     {browser, _user} = sign_up(browser)

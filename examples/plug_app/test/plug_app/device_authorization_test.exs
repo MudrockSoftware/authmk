@@ -5,7 +5,19 @@ defmodule PlugApp.DeviceAuthorizationTest do
   @grant "urn:ietf:params:oauth:grant-type:device_code"
 
   test "a TV signs in, approved by a signed-in user" do
-    codes = json(post_json("/auth/device/code", %{client_id: "tv"}))
+    # With the OAuth provider, device apps are registered clients (once, in
+    # seeds or a release task). Unknown ones get no codes.
+    assert json(post_json("/auth/device/code", %{client_id: "tv-device"}))["error"] ==
+             "invalid_client"
+
+    {:ok, _tv} =
+      Authmk.Plugins.OAuthProvider.create_client(
+        PlugApp.Auth,
+        %{"grant_types" => [@grant], "token_endpoint_auth_method" => "none"},
+        client_id: "tv-device"
+      )
+
+    codes = json(post_json("/auth/device/code", %{client_id: "tv-device"}))
 
     phone =
       cookies(
@@ -23,7 +35,7 @@ defmodule PlugApp.DeviceAuthorizationTest do
         post_json("/auth/device/token", %{
           grant_type: @grant,
           device_code: codes["device_code"],
-          client_id: "tv"
+          client_id: "tv-device"
         })
       )
 

@@ -2,8 +2,9 @@ defmodule PhoenixAppWeb.OneTapTest do
   # SQLite takes one writer at a time: tests that sign up run one by one.
   use PhoenixAppWeb.ConnCase, async: false
 
-  # Plays Google: its keys, and an ID token signed with them.
-  defp google_credential do
+  # Plays Google: its keys, and an ID token signed with them, carrying the
+  # nonce the page passed to Google's prompt.
+  defp google_credential(nonce) do
     jwk = JOSE.JWK.generate_key({:rsa, 2048})
     {_kty, public} = jwk |> JOSE.JWK.to_public() |> JOSE.JWK.to_map()
     keys = %{"keys" => [Map.merge(public, %{"kid" => "google-key", "alg" => "RS256"})]}
@@ -19,7 +20,8 @@ defmodule PhoenixAppWeb.OneTapTest do
       "email_verified" => true,
       "name" => "Ada",
       "iat" => now,
-      "exp" => now + 600
+      "exp" => now + 600,
+      "nonce" => nonce
     }
 
     {_alg, token} =
@@ -33,11 +35,17 @@ defmodule PhoenixAppWeb.OneTapTest do
   test "Google posts the credential in redirect mode, and the user lands signed in", %{
     conn: conn
   } do
+    # The page asks for a nonce, and passes it to Google's prompt.
+    nonce = build_conn() |> post("/auth/one-tap/nonce") |> json_response(200) |> Map.get("nonce")
+
     conn =
       conn
       |> put_req_header("origin", "https://accounts.google.com")
       |> put_req_cookie("g_csrf_token", "csrf-1")
-      |> post("/auth/one-tap/redirect", %{credential: google_credential(), g_csrf_token: "csrf-1"})
+      |> post("/auth/one-tap/redirect", %{
+        credential: google_credential(nonce),
+        g_csrf_token: "csrf-1"
+      })
 
     assert redirected_to(conn) == "/"
 

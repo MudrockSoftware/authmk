@@ -2,6 +2,7 @@ defmodule PhoenixAppWeb.AuthTest do
   # SQLite takes one writer at a time: tests that sign up run one by one.
   use PhoenixAppWeb.ConnCase, async: false
 
+  import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
   @user %{email: "ada@example.com", password: "correct horse", name: "Ada"}
@@ -68,6 +69,13 @@ defmodule PhoenixAppWeb.AuthTest do
     assert_email_sent(fn email ->
       assert email.subject == "Reset your password"
       assert email.text_body =~ "http://localhost:4000/auth/reset-password/"
+      send(self(), {:reset_link, Regex.run(~r{/auth/reset-password/\S+}, email.text_body)})
     end)
+
+    # No redirect_to: the link opens the reset_password_page, a LiveView.
+    assert_received {:reset_link, [link]}
+    "/reset-password?token=" <> _token = path = build_conn() |> get(link) |> redirected_to()
+    {:ok, _view, html} = live(build_conn(), path)
+    assert html =~ "new_password"
   end
 end

@@ -7,7 +7,22 @@ defmodule PhoenixAppWeb.DeviceAuthorizationTest do
   defp from_browser(conn), do: put_req_header(conn, "origin", "http://localhost:4000")
 
   test "a TV signs in, approved by a signed-in user", %{conn: conn} do
-    codes = build_conn() |> post("/auth/device/code", %{client_id: "tv"}) |> json_response(200)
+    # With the OAuth provider, device apps are registered clients (once, in
+    # seeds or a release task). Unknown ones get no codes.
+    assert build_conn()
+           |> post("/auth/device/code", %{client_id: "tv-device"})
+           |> json_response(400) ==
+             %{"error" => "invalid_client"}
+
+    {:ok, _tv} =
+      Authmk.Plugins.OAuthProvider.create_client(
+        PhoenixApp.Auth,
+        %{"grant_types" => [@grant], "token_endpoint_auth_method" => "none"},
+        client_id: "tv-device"
+      )
+
+    codes =
+      build_conn() |> post("/auth/device/code", %{client_id: "tv-device"}) |> json_response(200)
 
     user = %{email: "ada@example.com", password: "correct horse", name: "Ada"}
     conn = conn |> from_browser() |> post("/auth/sign-up/email", user)
@@ -22,7 +37,7 @@ defmodule PhoenixAppWeb.DeviceAuthorizationTest do
       |> post("/auth/device/token", %{
         grant_type: @grant,
         device_code: codes["device_code"],
-        client_id: "tv"
+        client_id: "tv-device"
       })
       |> json_response(200)
 

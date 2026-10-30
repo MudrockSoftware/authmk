@@ -25,14 +25,20 @@ defmodule Authmk.Plugins.SIWE do
 
   The signed message decides who signs in: its address must have signed it,
   and match `wallet_address`; its domain must be `domain`, its chain the
-  requested one, its nonce the one just issued (each works once), and it
+  requested one, its nonce one issued for this wallet (each works once, and
+  asking for a new one doesn't cancel the others), and it
   must not be expired or not yet valid. Users have wallet addresses per
   chain; the same address on another chain signs in the same user. Wallets
   never join an account by email: owning a wallet doesn't prove owning an
   email.
 
   New users are named after their ENS name (with `ens_lookup`) or their
-  address.
+  address. Their email is a placeholder, `<address>@<email_domain>`. With
+  `anonymous: false`, new wallets send an `email` (and optionally
+  `callback_url`): it gets a change-email link
+  (`send_change_email_verification`), and opening it moves the account to
+  the address, verified. Until then the account keeps the placeholder, so a
+  wallet can't hold someone else's address.
 
   ## Options
 
@@ -44,8 +50,10 @@ defmodule Authmk.Plugins.SIWE do
   alias Authmk.{
     Context,
     Email,
+    EmailVerification,
     Endpoint,
     Error,
+    Origin,
     Serializer,
     Sessions,
     Store,
@@ -118,7 +126,8 @@ defmodule Authmk.Plugins.SIWE do
             [
               message: [type: :string, required: true],
               signature: [type: :string, required: true],
-              email: [type: :string]
+              email: [type: :string],
+              callback_url: [type: :string]
             ]
       )
     ]
@@ -130,11 +139,9 @@ defmodule Authmk.Plugins.SIWE do
 
     with {:ok, address} <- address(params.wallet_address) do
       nonce = nonce_string()
-      key = nonce_key(address, params.chain_id)
-      :ok = Verification.delete(ctx, @purpose, key)
+      key = nonce_key(address, params.chain_id, nonce)
 
-      with {:ok, _key} <-
-             Verification.create(ctx, @purpose, %{"nonce" => nonce}, opts[:nonce_expires_in], key) do
+      with {:ok, _key} <- Verification.create(ctx, @purpose, %{}, opts[:nonce_expires_in], key) do
         {:ok, %{nonce: nonce}, ctx}
       end
     end
@@ -144,7 +151,8 @@ defmodule Authmk.Plugins.SIWE do
   def verify(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
-    with {:ok, message} <- parse(params.message),
+    with :ok <- Origin.check_redirect(ctx, params.callback_url),
+         {:ok, message} <- parse(params.message),
          :ok <- check_message(ctx, message, opts),
          :ok <- check(Ethereum.checksummed?(message.address), invalid_message()),
          {:ok, address} <- address(params.wallet_address),
@@ -186,16 +194,15 @@ defmodule Authmk.Plugins.SIWE do
     check(Enum.all?(checks), invalid_message())
   end
 
-  # Used up whether or not the rest checks out.
+  # Each nonce is stored under its own key, so asking for another one leaves
+  # the pending ones alone: nobody else can keep a wallet's sign-in failing.
+  # A nonce is used up whether or not the rest checks out.
   defp use_nonce(ctx, message) do
-    key = nonce_key(message.address, message.chain_id)
+    key = nonce_key(message.address, message.chain_id, message.nonce)
 
     case Verification.consume(ctx, @purpose, key) do
-      {:ok, %{"nonce" => nonce}} ->
-        check(Plug.Crypto.secure_compare(nonce, message.nonce), invalid_nonce())
-
-      {:error, _not_found} ->
-        {:error, invalid_nonce()}
+      {:ok, _data} -> :ok
+      {:error, _not_found} -> {:error, invalid_nonce()}
     end
   end
 
@@ -226,11 +233,25 @@ defmodule Authmk.Plugins.SIWE do
   defp sign_up(%Context{params: params} = ctx, address, chain_id, opts) do
     ens = if opts[:ens_lookup], do: opts[:ens_lookup].(address)
 
-    with {:ok, email} <- new_user_email(ctx, address, params.email, opts) do
-      attrs = %{email: email, name: (ens && ens[:name]) || address, image: ens && ens[:avatar]}
-      create_user_with_wallet(ctx, attrs, address, chain_id)
+    with {:ok, email} <- new_user_email(ctx, params.email, opts) do
+      attrs = %{
+        email: placeholder(ctx, address, opts),
+        name: (ens && ens[:name]) || address,
+        image: ens && ens[:avatar]
+      }
+
+      with {:ok, user} <- create_user_with_wallet(ctx, attrs, address, chain_id),
+           :ok <- confirm_email(ctx, user, email, params.callback_url) do
+        {:ok, user}
+      end
     end
   end
+
+  # The account gets the email once the link sent there is opened.
+  defp confirm_email(_ctx, _user, nil, _callback_url), do: :ok
+
+  defp confirm_email(ctx, user, email, callback_url),
+    do: EmailVerification.send_change_email(ctx, user, email, callback_url)
 
   defp create_user_with_wallet(ctx, attrs, address, chain_id) do
     Store.transaction(ctx, fn ->
@@ -248,10 +269,10 @@ defmodule Authmk.Plugins.SIWE do
     end
   end
 
-  defp new_user_email(ctx, address, email, opts) do
+  defp new_user_email(ctx, email, opts) do
     cond do
       opts[:anonymous] ->
-        {:ok, placeholder(ctx, address, opts)}
+        {:ok, nil}
 
       is_nil(email) ->
         {:error, Error.custom(:email_required, 400, "An email is needed to sign up")}
@@ -291,7 +312,8 @@ defmodule Authmk.Plugins.SIWE do
     end
   end
 
-  defp nonce_key(address, chain_id), do: "#{String.downcase(address)}:#{chain_id}"
+  defp nonce_key(address, chain_id, nonce),
+    do: "#{String.downcase(address)}:#{chain_id}:#{nonce}"
 
   # 128 random bits in base 36: alphanumeric, as EIP-4361 asks.
   defp nonce_string do

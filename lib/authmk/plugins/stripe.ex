@@ -38,11 +38,9 @@ defmodule Authmk.Plugins.Stripe do
 
   use Authmk.Plugin
 
-  require Logger
-
   @behaviour Authmk.Payments.Provider
 
-  alias Authmk.{Background, Context, Error}
+  alias Authmk.{Background, Context, Error, Log}
   alias Authmk.OAuth.HTTP
   alias Authmk.Payments.{Endpoints, Options, Schema, Webhook}
   alias Authmk.Plugins.Stripe.Options, as: StripeOptions
@@ -243,10 +241,10 @@ defmodule Authmk.Plugins.Stripe do
   defp stripe_error(body) do
     case body do
       %{"error" => %{"code" => code}} when is_binary(code) ->
-        Logger.warning("authmk Stripe refused a request (#{code})")
+        Log.warning("authmk Stripe refused a request (#{code})")
 
       _other ->
-        Logger.warning("authmk Stripe refused a request")
+        Log.warning("authmk Stripe refused a request")
     end
 
     Error.custom(:payment_provider_error, 502, "Stripe refused the request")

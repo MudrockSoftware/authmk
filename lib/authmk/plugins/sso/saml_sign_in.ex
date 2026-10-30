@@ -14,9 +14,7 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
   # IdP-initiated sign-in (no request) is refused unless the provider has
   # `allow_idp_initiated: true`.
 
-  require Logger
-
-  alias Authmk.{Context, Error, Origin, SessionStore, URL, Verification}
+  alias Authmk.{Context, Error, Log, Origin, SessionStore, URL, Verification}
   alias Authmk.OAuth.State
   alias Authmk.Plugins.SSO.{Config, Outcome, Providers, SAMLConfig, Users}
   alias Authmk.Plugins.SSO.SAML.{Metadata, Profile, Replay, Request, Response}
@@ -64,7 +62,7 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
       {:redirect, URL.endpoint(ctx, "/sso/saml2/finish", code: code), ctx}
     else
       {:error, reason} when is_atom(reason) ->
-        Logger.warning("authmk SSO: SAML response refused (#{reason})")
+        Log.warning("authmk SSO: SAML response refused (#{reason})")
         Outcome.redirect_error(ctx, nil, :invalid_saml_response)
 
       _unknown_provider ->

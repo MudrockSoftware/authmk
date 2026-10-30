@@ -4,6 +4,63 @@ authmk follows [Semantic Versioning](https://semver.org). See the
 [stability guide](guides/stability.md) for what a version number promises,
 and how to upgrade.
 
+## Unreleased
+
+Hardening from the 1.x roadmap.
+
+### Security
+
+- **SSRF guards are checked when connecting.** Requests to URLs someone
+  else chose resolve the host, refuse it unless every address is public,
+  and connect to the address that was checked, so DNS rebinding can't
+  reach a private network (`Authmk.OAuth.HTTP.public_hosts_only/1`). This
+  covers client metadata documents and SSO providers registered at
+  runtime, now including the token, user info and JWKS endpoints their
+  discovery documents list, which weren't checked before and must be
+  HTTPS. It also covers OAuth clients' `jwks_uri` and
+  `backchannel_logout_uri`, except for `trusted_clients`.
+- **Passkey and SIWE sign-ups no longer hold unproven emails.** The account
+  gets a placeholder email, and the address it was given gets a change-email
+  link; the address joins the account, verified, when the link is opened.
+  Before, anyone could take an address this way, keep its owner from
+  signing up, and wait in the account the owner would reach with a magic
+  link or a password reset. Both endpoints take an optional `callback_url`
+  for that link.
+- **Unverified emails change through a link too.** `POST /change-email`
+  used to move an unverified account to the new address at once; now the
+  new address gets the link, as for verified ones, so no account holds an
+  address nobody proved.
+- **SIWE nonces can't be cancelled by others.** Asking for a nonce used to
+  replace the wallet's pending one, so anyone could keep a wallet's sign-in
+  failing. Each nonce now stands alone, and still works once.
+- **Phone codes are limited per number.** `send_limit` (5 an hour by
+  default) caps codes to one number from any client, against SMS pumping;
+  reset requests count before the number is looked up.
+- **Bcrypt refuses new passwords over 72 bytes** with `password_too_long`,
+  instead of ignoring the rest. Passwords set before keep working.
+- **Device authorization**: with the OAuth provider, only its registered
+  clients with the device code grant get codes, for scopes they may ask
+  for. The scope is checked again before an approved code is used up.
+
+### Added
+
+- Google One Tap `require_nonce: true` and `POST /one-tap/nonce`: a
+  credential only works with an unused nonce from authmk, so a leaked one
+  can't be replayed.
+- EmailPassword `reset_password_page`: where reset links go when they were
+  requested without `redirect_to`. Without either, the link ends on the
+  error page (it used to answer with a JSON error) and a warning is logged.
+- The optional `c:Authmk.Password.max_bytes/0` callback, and
+  `Authmk.PasswordPolicy.check/4`.
+- SCIM: a user deactivated by `DELETE` (`on_delete: :deactivate`) can be
+  provisioned again by the same connection, with their account and SCIM id.
+
+### Changed
+
+- Every log message goes through `Authmk.Log`, so `domain: [:authmk]`
+  filters catch the billing, SSO, Stripe, Dub, Autumn, last sign-in method
+  and dashboard messages too.
+
 ## 1.0.0
 
 The first stable release. Its public API, plugin API, endpoints and error

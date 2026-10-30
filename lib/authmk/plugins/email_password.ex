@@ -36,6 +36,7 @@ defmodule Authmk.Plugins.EmailPassword do
     Endpoint,
     Error,
     Input,
+    Log,
     Origin,
     PasswordPolicy,
     Serializer,
@@ -79,10 +80,7 @@ defmodule Authmk.Plugins.EmailPassword do
         params: [email: [type: :string, required: true], redirect_to: [type: :string]]
       ),
       endpoint(:reset_password_callback, :get, "/reset-password/:token", :reset_password_callback,
-        params: [
-          token: [type: :string, required: true],
-          callback_url: [type: :string, required: true]
-        ]
+        params: [token: [type: :string, required: true], callback_url: [type: :string]]
       ),
       endpoint(:reset_password, :post, "/reset-password", :reset_password,
         rate_limit: @strict,
@@ -119,7 +117,7 @@ defmodule Authmk.Plugins.EmailPassword do
   def set_password(auth, user, password) do
     ctx = Context.new(auth.config())
 
-    with :ok <- validate_password(password, Context.plugin_opts(ctx, __MODULE__)),
+    with :ok <- validate_password(ctx, password, Context.plugin_opts(ctx, __MODULE__)),
          :ok <- no_password_yet(ctx, user) do
       Credentials.set_password(ctx, user, password)
     end
@@ -139,7 +137,7 @@ defmodule Authmk.Plugins.EmailPassword do
 
     with :ok <- check(not opts[:disable_sign_up], :sign_up_disabled),
          :ok <- check(Email.valid?(email), :invalid_email),
-         :ok <- validate_password(params.password, opts),
+         :ok <- validate_password(ctx, params.password, opts),
          :ok <- Origin.check_redirect(ctx, params.callback_url) do
       case Store.get_by(ctx, :user, email: email) do
         nil -> create_user(ctx, opts, email)
@@ -182,6 +180,8 @@ defmodule Authmk.Plugins.EmailPassword do
 
     user = Store.get_by(ctx, :user, email: Email.normalize(params.email))
 
+    :ok = warn_without_reset_page(params.redirect_to, opts)
+
     # Unknown emails get the same answer, so this can't find registered ones.
     with :ok <- Origin.check_redirect(ctx, params.redirect_to),
          :ok <- send_reset_link(ctx, opts, user, params.redirect_to) do
@@ -191,15 +191,29 @@ defmodule Authmk.Plugins.EmailPassword do
 
   @doc false
   def reset_password_callback(%Context{params: params} = ctx) do
-    with :ok <- Origin.check_redirect(ctx, params.callback_url) do
+    page = params.callback_url || Context.plugin_opts(ctx, __MODULE__)[:reset_password_page]
+
+    with :ok <- Origin.check_redirect(ctx, page) do
       query =
         case Verification.peek(ctx, @reset_purpose, params.token) do
           {:ok, _data} -> [token: params.token]
           {:error, error} -> [error: error.code]
         end
 
-      {:redirect, URL.append_query(params.callback_url, query), ctx}
+      if page,
+        do: {:redirect, URL.append_query(page, query), ctx},
+        else: {:redirect, no_reset_page_url(ctx), ctx}
     end
+  end
+
+  # A link from a request without `redirect_to`, and no `reset_password_page`.
+  defp no_reset_page_url(%Context{config: config} = ctx) do
+    url = config.errors[:error_url] || URL.endpoint(ctx, "/error")
+
+    URL.append_query(url,
+      error: "reset_password_page_missing",
+      error_description: "This link can't open the page to choose a new password."
+    )
   end
 
   @doc """
@@ -219,7 +233,7 @@ defmodule Authmk.Plugins.EmailPassword do
   def reset_password(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
-    with :ok <- validate_password(params.new_password, opts),
+    with :ok <- validate_password(ctx, params.new_password, opts),
          {:ok, %{"user_id" => user_id}} <- Verification.consume(ctx, @reset_purpose, params.token),
          %{} = user <- Store.get_by(ctx, :user, id: user_id),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
@@ -236,7 +250,7 @@ defmodule Authmk.Plugins.EmailPassword do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
     with :ok <- Credentials.check_password(ctx, user, params.current_password),
-         :ok <- validate_password(params.new_password, opts),
+         :ok <- validate_password(ctx, params.new_password, opts),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
       if params.revoke_other_sessions, do: Sessions.revoke_others(ctx, user.id, ctx.session.id)
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
@@ -320,6 +334,20 @@ defmodule Authmk.Plugins.EmailPassword do
     end
   end
 
+  # For the developer: the link would end on the error page.
+  defp warn_without_reset_page(nil, opts) do
+    if is_nil(opts[:reset_password_page]) do
+      Log.warning(
+        "A password reset was requested without redirect_to, and EmailPassword has no " <>
+          "reset_password_page: the emailed link can't open a page to choose a new password"
+      )
+    end
+
+    :ok
+  end
+
+  defp warn_without_reset_page(_redirect_to, _opts), do: :ok
+
   defp send_reset_link(_ctx, _opts, nil = _unknown_user, _redirect_to), do: :ok
 
   defp send_reset_link(ctx, opts, user, redirect_to) do
@@ -333,9 +361,10 @@ defmodule Authmk.Plugins.EmailPassword do
     end
   end
 
-  defp validate_password(password, opts),
+  defp validate_password(ctx, password, opts),
     do:
-      PasswordPolicy.check_length(
+      PasswordPolicy.check(
+        ctx,
         password,
         opts[:min_password_length],
         opts[:max_password_length]

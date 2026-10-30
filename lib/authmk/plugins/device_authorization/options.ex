@@ -13,7 +13,7 @@ defmodule Authmk.Plugins.DeviceAuthorization.Options do
             validate_client: [
               type: {:fun, 1},
               doc:
-                "Returns whether a `client_id` may ask for codes. Every client may, without it."
+                "Returns whether a `client_id` may ask for codes. Without it: with `Authmk.Plugins.OAuthProvider`, its clients that have the device code grant; otherwise any."
             ],
             generate_device_code: [
               type: {:fun, 0},

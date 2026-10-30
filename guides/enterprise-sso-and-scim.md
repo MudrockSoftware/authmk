@@ -46,7 +46,11 @@ POST /auth/sso/register
 `provider_id` is lowercase letters, digits and dashes. The issuer must be
 an HTTPS URL on a public host that answers OpenID Connect discovery;
 authmk fetches it when you register, and refuses private network
-addresses. The client secret is stored encrypted and never shown again.
+addresses. Every later request to a registered provider (discovery again,
+the token, user info and JWKS endpoints its document lists) is held to the
+same rule: HTTPS, to public addresses, checked when connecting so DNS
+rebinding can't get around it. Providers from `default_providers` are
+yours, and may be internal. The client secret is stored encrypted and never shown again.
 `oidc_config` may also take `scopes` (default `openid email profile`).
 
 The customer registers `<base URL>/auth/sso/callback/<provider_id>` as the
@@ -273,7 +277,9 @@ queries, so nothing reaches SQL unescaped.
   * `active: false` deactivates a user: they keep their account, can't
     sign in by any method, and their sessions end.
   * `DELETE /Users/:id` deactivates too, or deletes the user with
-    `on_delete: :delete`.
+    `on_delete: :delete`. A user the same connection deactivated this way
+    can be provisioned again with `POST /Users`: they get their account
+    and their SCIM id back. Other connections still can't claim them.
   * With `group_roles` (`fn group_display_name -> role | nil end`), group
     members get organization roles. A user in several groups gets the
     first role in `role_priority` (`owner`, `admin`, `member`). Mapping a

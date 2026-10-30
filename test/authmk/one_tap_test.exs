@@ -134,3 +134,105 @@ defmodule Authmk.OneTapTest do
     end
   end
 end
+
+defmodule Authmk.OneTapNonceTest do
+  use Authmk.EmulationCase, async: true
+
+  alias Authmk.Test.{Browser, FakeProvider}
+
+  defmodule Auth do
+    use Authmk,
+      otp_app: :authmk,
+      repo: Authmk.Test.Repo,
+      base_url: "http://localhost:4000",
+      background: :inline,
+      rate_limit: [enabled: false],
+      social_providers: [google: [client_id: "google-id", client_secret: "client-secret"]],
+      plugins: [{Authmk.Plugins.OneTap, require_nonce: true}],
+      advanced: [http_options: [plug: {Req.Test, __MODULE__}]]
+  end
+
+  @moduletag auth: Auth
+
+  setup do
+    {jwk, jwks} = FakeProvider.signing_key()
+    FakeProvider.stub(Auth, jwks: jwks)
+    %{jwk: jwk}
+  end
+
+  defp credential(jwk, nonce) do
+    now = System.system_time(:second)
+
+    claims =
+      %{
+        "iss" => "https://accounts.google.com",
+        "aud" => "google-id",
+        "sub" => "g-1",
+        "email" => "ada@example.com",
+        "email_verified" => true,
+        "iat" => now,
+        "exp" => now + 600
+      }
+
+    FakeProvider.id_token(jwk, if(nonce, do: Map.put(claims, "nonce", nonce), else: claims))
+  end
+
+  defp new_nonce(browser) do
+    {browser, conn} = post(browser, "/one-tap/nonce")
+    {browser, json(conn)["nonce"]}
+  end
+
+  test "a credential works once, with a nonce from authmk", %{browser: browser, jwk: jwk} do
+    {browser, nonce} = new_nonce(browser)
+    token = credential(jwk, nonce)
+
+    {browser, conn} = post(browser, "/one-tap/callback", %{id_token: token})
+    assert json(conn)["user"]["email"] == "ada@example.com"
+    {_browser, _conn} = post(browser, "/sign-out")
+
+    # A leaked credential can't be used again.
+    {_browser, conn} = post(Browser.new(Auth), "/one-tap/callback", %{id_token: token})
+    assert json(conn)["error"]["code"] == "invalid_id_token"
+  end
+
+  test "a credential without one of authmk's nonces is refused", %{browser: browser, jwk: jwk} do
+    for token <- [credential(jwk, nil), credential(jwk, "made-up"), "not a jwt"] do
+      {_browser, conn} = post(browser, "/one-tap/callback", %{id_token: token})
+      assert json(conn)["error"]["code"] == "invalid_id_token", token
+    end
+  end
+
+  # The nonce is used up before the signature is checked, and the signed
+  # claim must still match it: a forged token can't borrow a real nonce.
+  test "a nonce in a token signed by someone else is refused", %{browser: browser, jwk: jwk} do
+    {browser, nonce} = new_nonce(browser)
+    {other_key, _jwks} = FakeProvider.signing_key()
+
+    {browser, conn} =
+      post(browser, "/one-tap/callback", %{id_token: credential(other_key, nonce)})
+
+    assert json(conn)["error"]["code"] == "invalid_id_token"
+
+    {_browser, conn} = post(browser, "/one-tap/callback", %{id_token: credential(jwk, nonce)})
+    assert json(conn)["error"]["code"] == "invalid_id_token"
+  end
+
+  test "redirect mode checks the nonce too", %{browser: browser, jwk: jwk} do
+    {browser, nonce} = new_nonce(browser)
+    google = %{browser | origin: "https://accounts.google.com"}
+    google = %{google | cookies: Map.put(google.cookies, "g_csrf_token", "csrf")}
+
+    {_browser, conn} =
+      post(google, "/one-tap/redirect", %{credential: credential(jwk, nil), g_csrf_token: "csrf"})
+
+    assert redirected_to(conn) =~ "error=invalid_id_token"
+
+    {_browser, conn} =
+      post(google, "/one-tap/redirect", %{
+        credential: credential(jwk, nonce),
+        g_csrf_token: "csrf"
+      })
+
+    assert redirected_to(conn) == "/"
+  end
+end

@@ -315,6 +315,34 @@ defmodule Authmk.SSOTest do
     assert signed_in_email(browser) == "ada@globex.example"
   end
 
+  # A registered provider chose its own endpoints too: authmk only sends its
+  # client secret and codes to public hosts, over HTTPS.
+  test "a registered provider's endpoints must be HTTPS", %{browser: browser} do
+    test = self()
+    document = Map.put(@document, "token_endpoint", "http://idp.acme.example/token")
+
+    Req.Test.stub(Auth, fn conn ->
+      send(test, {:requested, conn.request_path})
+      Req.Test.json(conn, document)
+    end)
+
+    {owner, _user} = sign_up(browser, %{email: "owner@other.example"})
+    {_owner, conn} = register(owner)
+    assert json(conn)["provider_id"] == "acme"
+
+    {browser, conn} = post(Browser.new(Auth), "/sign-in/sso", %{provider_id: "acme"})
+    approved = FakeProvider.approve(json(conn)["url"])
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        {_browser, conn} = get(browser, "/sso/callback/acme", approved)
+        assert redirected_to(conn) =~ "error="
+      end)
+
+    assert log =~ "host_not_public"
+    refute_received {:requested, "/token"}
+  end
+
   test "bad issuers and forged answers are refused", %{browser: browser, key: key} do
     {owner, _user} = sign_up(browser, %{email: "owner@other.example"})
 

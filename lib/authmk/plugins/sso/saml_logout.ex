@@ -15,11 +15,9 @@ defmodule Authmk.Plugins.SSO.SAMLLogout do
   # Sessions are found by their SAML fields: in the database, so single
   # logout from the provider needs sessions stored there.
 
-  require Logger
-
   import Ecto.Query, only: [dynamic: 2]
 
-  alias Authmk.{Context, Cookies, Origin, SessionStore, Store, Verification}
+  alias Authmk.{Context, Cookies, Log, Origin, SessionStore, Store, Verification}
   alias Authmk.Plugins.SSO.{Config, Outcome, Providers, SAMLConfig}
   alias Authmk.Plugins.SSO.SAML.{Logout, RedirectBinding, Request}
 
@@ -86,7 +84,7 @@ defmodule Authmk.Plugins.SSO.SAMLLogout do
       handle(ctx, provider, kind, fields, relay_state)
     else
       {:error, reason} when is_atom(reason) ->
-        Logger.warning("authmk SSO: SAML logout message refused (#{reason})")
+        Log.warning("authmk SSO: SAML logout message refused (#{reason})")
         Outcome.redirect_error(ctx, nil, :invalid_saml_logout)
 
       _unknown_provider ->

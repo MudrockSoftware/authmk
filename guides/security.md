@@ -20,6 +20,10 @@ from, and which extra defenses it wants. This guide covers both.
     more strictly.
   * Outbound requests (OAuth providers, captchas, Have I Been Pwned) never
     follow redirects and time out after 10 seconds (`Authmk.OAuth.HTTP`).
+    Requests to URLs someone else chose (client metadata documents, a
+    client's `jwks_uri` and `backchannel_logout_uri`, SSO providers
+    registered at runtime) only go over HTTPS to public addresses, checked
+    when connecting, so DNS rebinding can't reach your private network.
 
 ## Secrets
 
@@ -242,8 +246,9 @@ token requests to OAuth providers, failing audit destinations or
 `on_event` callbacks, and a low-entropy secret. Its messages are written to
 leave out secrets, tokens, codes and passwords.
 
-Messages sent through `Authmk.Log` carry `domain: [:authmk]`, so standard
-Logger filters can silence or route them:
+Every message authmk logs, the billing, SSO and plugin ones included, goes
+through `Authmk.Log` and carries `domain: [:authmk]`, so standard Logger
+filters can silence or route them all:
 
 ```elixir
 # In Application.start/2

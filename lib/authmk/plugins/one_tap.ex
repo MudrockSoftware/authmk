@@ -13,6 +13,7 @@ defmodule Authmk.Plugins.OneTap do
 
   | Method | Path | Session |
   |---|---|---|
+  | POST | `/one-tap/nonce` | none |
   | POST | `/one-tap/callback` | none |
   | POST | `/one-tap/redirect` | none |
 
@@ -26,6 +27,23 @@ defmodule Authmk.Plugins.OneTap do
   match) and accepts no `Origin` other than `https://accounts.google.com`.
   It redirects to `redirect_url`, or to the error page with `?error=<code>`.
 
+  ## Nonces
+
+  With `require_nonce: true`, a credential only works with a nonce from
+  authmk, once, so one that leaks (from a log, a proxy, a browser
+  extension) can't be replayed. Before showing the prompt, the page gets
+  one from `POST /one-tap/nonce` and passes it to Google:
+
+  ```js
+  const { nonce } = await (await fetch("/auth/one-tap/nonce", { method: "POST" })).json()
+  google.accounts.id.initialize({ client_id: "...", nonce, callback })
+  ```
+
+  Google puts it in the credential's `nonce` claim; credentials without one
+  of authmk's unused nonces are refused with `invalid_id_token`. Turn it on
+  for new apps. Without it, the `nonce` claim isn't checked, so apps that
+  pass Google their own nonces keep working.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Plugins.OneTap.Options.schema())}
@@ -33,11 +51,12 @@ defmodule Authmk.Plugins.OneTap do
 
   use Authmk.Plugin
 
-  alias Authmk.{Context, Endpoint, Error, URL}
+  alias Authmk.{Context, Endpoint, Error, Token, URL, Verification}
   alias Authmk.Endpoints.Social
   alias Authmk.Plugins.OneTap.Options
 
   @google_origin "https://accounts.google.com"
+  @nonce_purpose "one-tap-nonce"
 
   @impl true
   def init(opts), do: NimbleOptions.validate!(opts, Options.schema())
@@ -45,6 +64,13 @@ defmodule Authmk.Plugins.OneTap do
   @impl true
   def endpoints(_opts) do
     [
+      Endpoint.new(
+        name: :one_tap_nonce,
+        method: :post,
+        path: "/one-tap/nonce",
+        handler: {__MODULE__, :nonce},
+        rate_limit: [window: 60, max: 10]
+      ),
       Endpoint.new(
         name: :one_tap_callback,
         method: :post,
@@ -70,8 +96,18 @@ defmodule Authmk.Plugins.OneTap do
   end
 
   @doc false
-  def callback(%Context{params: params} = ctx),
-    do: Social.id_token_sign_in(ctx, :google, params.id_token)
+  def nonce(%Context{} = ctx) do
+    opts = Context.plugin_opts(ctx, __MODULE__)
+    nonce = Token.generate(16)
+
+    with {:ok, _nonce} <-
+           Verification.create(ctx, @nonce_purpose, %{}, opts[:nonce_expires_in], nonce) do
+      {:ok, %{nonce: nonce}, ctx}
+    end
+  end
+
+  @doc false
+  def callback(%Context{params: params} = ctx), do: sign_in(ctx, params.id_token)
 
   @doc false
   def redirect(%Context{params: params} = ctx) do
@@ -79,7 +115,7 @@ defmodule Authmk.Plugins.OneTap do
 
     with :ok <- from_google(ctx),
          :ok <- double_submitted(ctx),
-         {:ok, body, ctx} <- Social.id_token_sign_in(ctx, :google, params.credential) do
+         {:ok, body, ctx} <- sign_in(ctx, params.credential) do
       case body do
         %{user: _signed_in} -> {:redirect, opts[:redirect_url], ctx}
         %{redirect_url: url} when is_binary(url) -> {:redirect, url, ctx}
@@ -88,6 +124,33 @@ defmodule Authmk.Plugins.OneTap do
     else
       {:error, error} -> fail(ctx, opts, error)
     end
+  end
+
+  defp sign_in(ctx, credential) do
+    with {:ok, nonce} <- use_nonce(ctx, credential) do
+      Social.id_token_sign_in(ctx, :google, credential, nonce)
+    end
+  end
+
+  # The claimed nonce, used up before the signature is checked: then the
+  # signed token must carry it. Only someone who has the nonce can use it up.
+  defp use_nonce(ctx, credential) do
+    if Context.plugin_opts(ctx, __MODULE__)[:require_nonce] do
+      with nonce when is_binary(nonce) <- claimed_nonce(credential),
+           {:ok, _data} <- Verification.consume(ctx, @nonce_purpose, nonce) do
+        {:ok, nonce}
+      else
+        _missing_or_used -> {:error, Error.new(:invalid_id_token)}
+      end
+    else
+      {:ok, nil}
+    end
+  end
+
+  defp claimed_nonce(credential) do
+    credential |> JOSE.JWS.peek_payload() |> JSON.decode!() |> Map.get("nonce")
+  rescue
+    _malformed -> nil
   end
 
   defp from_google(%Context{conn: conn}) do

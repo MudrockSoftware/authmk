@@ -3,7 +3,8 @@ defmodule PhoenixApp.Auth do
     otp_app: :phoenix_app,
     repo: PhoenixApp.Repo,
     plugins: [
-      Authmk.Plugins.EmailPassword,
+      # Reset links requested without redirect_to open this page.
+      {Authmk.Plugins.EmailPassword, reset_password_page: "/reset-password"},
       Authmk.Plugins.Username,
       Authmk.Plugins.Anonymous,
       {Authmk.Plugins.PhoneNumber,
@@ -11,7 +12,9 @@ defmodule PhoenixApp.Auth do
       {Authmk.Plugins.MagicLink, send_magic_link: &__MODULE__.send_magic_link/2},
       {Authmk.Plugins.EmailOTP, send_otp: &__MODULE__.send_email_code/2},
       Authmk.Plugins.Passkey,
-      Authmk.Plugins.OneTap,
+      # Pages get a nonce from /auth/one-tap/nonce for Google's prompt, so a
+      # leaked credential can't be replayed.
+      {Authmk.Plugins.OneTap, require_nonce: true},
       Authmk.Plugins.SIWE,
       Authmk.Plugins.Admin,
       {Authmk.Plugins.Organization, send_invitation_email: &__MODULE__.send_invitation/2},

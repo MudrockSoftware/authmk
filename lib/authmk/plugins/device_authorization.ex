@@ -14,6 +14,13 @@ defmodule Authmk.Plugins.DeviceAuthorization do
      `urn:ietf:params:oauth:grant-type:device_code`, its `device_code` and
      `client_id`, every `interval` seconds, until it gets an `access_token`.
 
+  Which clients may ask for codes: `validate_client` decides. Without it,
+  with `Authmk.Plugins.OAuthProvider`, only its enabled clients that have
+  the `urn:ietf:params:oauth:grant-type:device_code` grant, for scopes they
+  may ask for; so a code can't name a client that doesn't exist. Without
+  either, any `client_id` works: set `validate_client` then, since users
+  see the client's name when they approve.
+
   The token endpoint answers like OAuth: `authorization_pending`,
   `slow_down` (polling too fast adds 5 seconds to the interval),
   `expired_token`, `access_denied`, `invalid_grant` or `invalid_client`,
@@ -112,13 +119,12 @@ defmodule Authmk.Plugins.DeviceAuthorization do
 
   @doc false
   def code(%Context{params: params} = ctx) do
-    if valid_client?(ctx, params.client_id) do
-      case issue_codes(ctx, params.client_id, params.scope, nil) do
-        {:ok, body} -> {:ok, body, ctx}
-        error -> error
-      end
+    with :ok <- check_client(ctx, params.client_id),
+         {:ok, body} <- issue_codes(ctx, params.client_id, params.scope, nil) do
+      {:ok, body, ctx}
     else
-      oauth_error(ctx, "invalid_client")
+      {:oauth_error, code} -> oauth_error(ctx, code)
+      error -> error
     end
   end
 
@@ -130,7 +136,7 @@ defmodule Authmk.Plugins.DeviceAuthorization do
              "invalid_request"
            ),
          :ok <- check(params.grant_type == @grant_type, "unsupported_grant_type"),
-         :ok <- check(valid_client?(ctx, params.client_id), "invalid_client"),
+         :ok <- check_client(ctx, params.client_id),
          %{} = device <-
            Store.get_by(ctx, :device_code, device_code: Token.hash(params.device_code)),
          :ok <- check(device.client_id == params.client_id, "invalid_grant") do
@@ -143,22 +149,25 @@ defmodule Authmk.Plugins.DeviceAuthorization do
 
   @doc false
   # For Authmk.Plugins.OAuthProvider's token endpoint, which authenticates
-  # the client itself: the same polling, with `issue.(ctx, user, scope)`
-  # making the tokens once the user approved.
-  def redeem(ctx, device_code, client_id, issue) do
+  # the client itself: the same polling. Once the user approved,
+  # `check_scope.(ctx, scope)` answers `:ok` or the error response, before
+  # the code is used up; then `issue.(ctx, user, scope)` makes the tokens.
+  def redeem(ctx, device_code, client_id, check_scope, issue) do
     with true <- is_binary(device_code),
          %{} = device <- Store.get_by(ctx, :device_code, device_code: Token.hash(device_code)),
          true <- device.client_id == client_id do
-      poll(ctx, device, &issue_approved(&1, &2, issue))
+      poll(ctx, device, &issue_approved(&1, &2, check_scope, issue))
     else
       _unknown -> oauth_error(ctx, "invalid_grant")
     end
   end
 
-  defp issue_approved(ctx, device, issue) do
-    case take_approved(ctx, device) do
-      {:ok, user} -> issue.(ctx, user, device.scope)
-      :error -> oauth_error(ctx, "invalid_grant")
+  defp issue_approved(ctx, device, check_scope, issue) do
+    with :ok <- check_scope.(ctx, device.scope) do
+      case take_approved(ctx, device) do
+        {:ok, user} -> issue.(ctx, user, device.scope)
+        :error -> oauth_error(ctx, "invalid_grant")
+      end
     end
   end
 
@@ -342,10 +351,12 @@ defmodule Authmk.Plugins.DeviceAuthorization do
       URI.parse(base_url) |> Map.merge(%{path: "/device", query: nil}) |> URI.to_string()
   end
 
-  defp valid_client?(ctx, client_id) do
+  # The app's check, or any client. With Authmk.Plugins.OAuthProvider and
+  # no `validate_client`, that plugin checks clients before this one runs.
+  defp check_client(ctx, client_id) do
     case opts(ctx)[:validate_client] do
-      nil -> true
-      validate -> validate.(client_id) == true
+      nil -> :ok
+      validate -> check(validate.(client_id) == true, "invalid_client")
     end
   end
 

@@ -41,7 +41,10 @@ defmodule Authmk.UserTest.ChangeEmailAuth do
     base_url: "http://localhost:4000",
     background: :inline,
     rate_limit: [enabled: false],
-    user: [change_email: [enabled: true]]
+    user: [change_email: [enabled: true, confirm_current_email: true]]
+
+  @impl Authmk
+  def send_change_email_verification(link, _ctx), do: send(self(), {:email, :change_email, link})
 end
 
 defmodule Authmk.UserTest do
@@ -99,7 +102,8 @@ defmodule Authmk.UserTest do
   end
 
   @tag auth: Authmk.UserTest.ChangeEmailAuth
-  test "an unverified email changes at once, but not to a taken one", %{browser: browser} do
+  test "an unverified email changes once the new address confirms, never to a taken one",
+       %{browser: browser} do
     {_bob, _user} =
       sign_up(Browser.new(Authmk.UserTest.ChangeEmailAuth), %{
         email: "bob@example.com"
@@ -113,10 +117,20 @@ defmodule Authmk.UserTest do
     {browser, conn} = get(browser, "/get-session")
     assert json(conn)["user"]["email"] == "ada@example.com"
 
+    refute_received {:email, :change_email, _link}
+
+    # Nobody proved the current address, so the new one gets the link directly.
     {browser, conn} = post(browser, "/change-email", %{new_email: "ada@new.example"})
     assert json(conn) == %{"status" => true}
+    {browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@example.com"
+
+    link = assert_email(:change_email)
+    assert link.new_email == "ada@new.example"
+    {browser, _conn} = get(browser, "/verify-email", %{token: link.token})
     {_browser, conn} = get(browser, "/get-session")
     assert json(conn)["user"]["email"] == "ada@new.example"
+    assert json(conn)["user"]["email_verified"] == true
   end
 
   describe "delete-user" do

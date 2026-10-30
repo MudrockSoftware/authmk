@@ -285,10 +285,11 @@ defmodule Authmk.Endpoints.Social do
 
   @doc false
   # For plugins that receive a provider's ID tokens their own way, like
-  # Google One Tap. Signs in like `POST /sign-in/social` with an `id_token`.
-  def id_token_sign_in(ctx, provider_id, token) do
+  # Google One Tap. Signs in like `POST /sign-in/social` with an `id_token`;
+  # with a `nonce`, the token's `nonce` claim must be that one.
+  def id_token_sign_in(ctx, provider_id, token, nonce \\ nil) do
     with {:ok, provider} <- provider(ctx, provider_id) do
-      sign_in_with_id_token(ctx, provider, %{"token" => token})
+      sign_in_with_id_token(ctx, provider, %{"token" => token, "nonce" => nonce})
     end
   end
 

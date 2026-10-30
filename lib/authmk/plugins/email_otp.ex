@@ -208,7 +208,8 @@ defmodule Authmk.Plugins.EmailOTP do
     email = Email.normalize(params.email)
 
     with :ok <-
-           PasswordPolicy.check_length(
+           PasswordPolicy.check(
+             ctx,
              params.password,
              opts[:min_password_length],
              opts[:max_password_length]

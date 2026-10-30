@@ -54,6 +54,31 @@ defmodule PlugApp.Router do
     conn |> put_resp_content_type("text/html") |> send_resp(200, html)
   end
 
+  # Where emailed reset links land (EmailPassword's reset_password_page):
+  # ?token=..., or ?error= when the link is used up or expired.
+  get "/reset-password" do
+    params = fetch_query_params(conn).query_params
+
+    html =
+      case params do
+        %{"token" => token} ->
+          """
+          <!doctype html>
+          <form method="post" action="/auth/reset-password">
+            <input type="hidden" name="authmk_redirect" value="/sign-in-form">
+            <input type="hidden" name="token" value="#{Plug.HTML.html_escape(token)}">
+            <input type="password" name="new_password" required>
+            <button>Set password</button>
+          </form>
+          """
+
+        _error ->
+          "<!doctype html><p role=\"alert\">This link has expired. Ask for a new one.</p>"
+      end
+
+    conn |> put_resp_content_type("text/html") |> send_resp(200, html)
+  end
+
   # Only for signed-in users (not service accounts).
   get "/me" do
     conn = guard(conn, Authmk.Plug.RequireUser, [])

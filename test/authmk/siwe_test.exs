@@ -3,7 +3,7 @@ defmodule Authmk.SIWETest do
 
   import Ecto.Query
 
-  alias Authmk.Test.Repo
+  alias Authmk.Test.{Browser, Repo}
   alias Authmk.Testing.FakeWallet
 
   defmodule Auth do
@@ -208,35 +208,51 @@ defmodule Authmk.SIWETest do
     assert json(conn)["error"]["code"] == "invalid_siwe_signature"
   end
 
-  test "a nonce works once, and only the latest one", %{browser: browser} do
+  test "asking for a nonce doesn't cancel the pending one", %{browser: browser} do
     wallet = FakeWallet.new()
     {browser, first} = get_nonce(browser, wallet)
-    {browser, second} = get_nonce(browser, wallet)
 
-    stale = FakeWallet.message(wallet, domain: @domain, nonce: first)
+    # Someone else asks for a nonce for the same wallet.
+    {_other, _nonce} = get_nonce(Browser.new(Auth), wallet)
 
-    signed = %{
-      message: stale,
-      signature: FakeWallet.sign(wallet, stale),
-      wallet_address: wallet.address,
-      chain_id: 1
-    }
+    {browser, conn} = verify_with(browser, wallet, first)
+    assert json(conn)["success"] == true
+    {browser, _conn} = post(browser, "/sign-out")
 
-    {browser, conn} = post(browser, "/siwe/verify", signed)
+    # Each nonce works once.
+    {_browser, conn} = verify_with(browser, wallet, first)
+    assert json(conn)["error"]["code"] == "invalid_siwe_nonce"
+  end
+
+  test "a made-up nonce is refused and uses nothing up", %{browser: browser} do
+    wallet = FakeWallet.new()
+    {browser, nonce} = get_nonce(browser, wallet)
+
+    {browser, conn} = verify_with(browser, wallet, "madeup12345")
     assert json(conn)["error"]["code"] == "invalid_siwe_nonce"
 
-    # The failed attempt used up the latest nonce too.
-    fresh = FakeWallet.message(wallet, domain: @domain, nonce: second)
+    {_browser, conn} = verify_with(browser, wallet, nonce)
+    assert json(conn)["success"] == true
+  end
 
-    signed = %{
-      message: fresh,
-      signature: FakeWallet.sign(wallet, fresh),
+  test "a nonce only works for the wallet it was issued for", %{browser: browser} do
+    wallet = FakeWallet.new()
+    other = FakeWallet.new()
+    {browser, nonce} = get_nonce(browser, wallet)
+
+    {_browser, conn} = verify_with(browser, other, nonce)
+    assert json(conn)["error"]["code"] == "invalid_siwe_nonce"
+  end
+
+  defp verify_with(browser, wallet, nonce) do
+    message = FakeWallet.message(wallet, domain: @domain, nonce: nonce)
+
+    post(browser, "/siwe/verify", %{
+      message: message,
+      signature: FakeWallet.sign(wallet, message),
       wallet_address: wallet.address,
       chain_id: 1
-    }
-
-    {_browser, conn} = post(browser, "/siwe/verify", signed)
-    assert json(conn)["error"]["code"] == "invalid_siwe_nonce"
+    })
   end
 
   test "a signed message can't be replayed", %{browser: browser} do
@@ -307,6 +323,10 @@ defmodule Authmk.SIWEEmailTest do
         Authmk.Plugins.EmailPassword,
         {Authmk.Plugins.SIWE, anonymous: false, domain: "app.example.com"}
       ]
+
+    @impl Authmk
+    def send_change_email_verification(link, _ctx),
+      do: send(self(), {:email, :change_email, link})
   end
 
   @moduletag auth: Auth
@@ -334,7 +354,31 @@ defmodule Authmk.SIWEEmailTest do
     {_browser, conn} = verify(browser, wallet, %{email: "ada@example.com"})
     assert json(conn)["error"]["code"] == "user_already_exists"
 
-    {_browser, conn} = verify(browser, wallet, %{email: "Grace@Example.com"})
+    {browser, conn} = verify(browser, wallet, %{email: "Grace@Example.com"})
+    placeholder = String.downcase(wallet.address) <> "@app.example.com"
+    assert json(conn)["user"]["email"] == placeholder
+
+    # The address joins the account once its owner opens the link.
+    link = assert_email(:change_email)
+    assert link.new_email == "grace@example.com"
+    {browser, _conn} = get(browser, "/verify-email", %{token: link.token})
+    {_browser, conn} = get(browser, "/get-session")
     assert json(conn)["user"]["email"] == "grace@example.com"
+    assert json(conn)["user"]["email_verified"] == true
+  end
+
+  # Until then, the wallet holds nobody's address: its owner can still sign up.
+  test "a wallet signing up with someone's email doesn't take it", %{browser: browser} do
+    wallet = FakeWallet.new()
+    {_browser, conn} = verify(browser, wallet, %{email: "ada@example.com"})
+    assert json(conn)["success"] == true
+    link = assert_email(:change_email)
+
+    {_owner, user} = sign_up(Browser.new(Auth))
+    assert user["email"] == "ada@example.com"
+
+    # The squatter's link no longer moves anything.
+    {_browser, conn} = get(Browser.new(Auth), "/verify-email", %{token: link.token})
+    assert json(conn)["error"]["code"] == "email_cannot_be_updated"
   end
 end

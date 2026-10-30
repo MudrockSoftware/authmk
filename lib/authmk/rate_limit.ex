@@ -30,6 +30,22 @@ defmodule Authmk.RateLimit do
     end
   end
 
+  @doc """
+  Counts a hit on `key`, whoever sends it: `:ok` for the first `max` in
+  each `window` of seconds, then a `:rate_limited` error. For limits on
+  something other than the client, like codes sent to one phone number.
+  Uses the configured rate limit storage, even with rate limiting off.
+  """
+  @spec check_key(Context.t(), String.t(), pos_integer(), pos_integer()) ::
+          :ok | {:error, Error.t()}
+  def check_key(ctx, key, window, max) do
+    window_index = div(System.system_time(:second), window)
+
+    if increment(ctx, "rate-limit:key:#{key}:#{window_index}", window) > max,
+      do: {:error, Error.new(:rate_limited, %{retry_after: retry_after(window)})},
+      else: :ok
+  end
+
   defp increment(%Context{config: config} = ctx, key, window) do
     case config.rate_limit[:storage] do
       :memory -> Storage.ETS.increment([table: Storage.ETS.table(config.auth)], key, window)

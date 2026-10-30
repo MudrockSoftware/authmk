@@ -517,16 +517,16 @@ Planned after 1.0, as minor releases. None of these change existing APIs.
 
 Lower-risk issues found while writing the 1.0 guides, for the next minor releases.
 
-- [ ] SIWE: asking for a nonce replaces the address's pending one, so others can keep a wallet's sign-in failing
-- [ ] Passkey and SIWE sign-up with an email: the address isn't verified, so it can block its real owner's sign-up
-- [ ] Google One Tap: send and check a nonce, so a captured credential can't be replayed
-- [ ] Phone number: `send-otp` texts any number; add a guard against SMS pumping besides the rate limit
-- [ ] SSRF guards: pin the checked address for the connection (DNS rebinding) when fetching client metadata documents and SSO discovery
-- [ ] Device authorization: check the scope before the device code is used up; validate `client_id` by default
-- [ ] SCIM: provisioning someone again after `DELETE` (with `on_delete: :deactivate`)
-- [ ] Password reset links when `redirect_to` is left out
-- [ ] Bcrypt: refuse passwords over 72 bytes instead of truncating
-- [ ] Log every message through `Authmk.Log`, so `domain: [:authmk]` filters catch them all
+- [x] SIWE: asking for a nonce replaces the address's pending one, so others can keep a wallet's sign-in failing
+- [x] Passkey and SIWE sign-up with an email: the address isn't verified, so it can block its real owner's sign-up
+- [x] Google One Tap: send and check a nonce, so a captured credential can't be replayed
+- [x] Phone number: `send-otp` texts any number; add a guard against SMS pumping besides the rate limit
+- [x] SSRF guards: pin the checked address for the connection (DNS rebinding) when fetching client metadata documents and SSO discovery
+- [x] Device authorization: check the scope before the device code is used up; validate `client_id` by default
+- [x] SCIM: provisioning someone again after `DELETE` (with `on_delete: :deactivate`)
+- [x] Password reset links when `redirect_to` is left out
+- [x] Bcrypt: refuse passwords over 72 bytes instead of truncating
+- [x] Log every message through `Authmk.Log`, so `domain: [:authmk]` filters catch them all
 
 ---
 

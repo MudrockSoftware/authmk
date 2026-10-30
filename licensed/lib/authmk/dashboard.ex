@@ -34,10 +34,8 @@ defmodule Authmk.Dashboard do
 
   import Plug.Conn
 
-  require Logger
-
   alias Authmk.Dashboard.{Access, API}
-  alias Authmk.License
+  alias Authmk.{License, Log}
 
   @headers [
     {"x-frame-options", "DENY"},
@@ -103,7 +101,7 @@ defmodule Authmk.Dashboard do
   end
 
   defp unlicensed(conn, reason) do
-    Logger.error("authmk dashboard refused: " <> License.explain(reason))
+    Log.error("authmk dashboard refused: " <> License.explain(reason))
 
     conn
     |> put_resp_content_type("text/plain")

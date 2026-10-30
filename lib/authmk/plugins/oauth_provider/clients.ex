@@ -151,6 +151,14 @@ defmodule Authmk.Plugins.OAuthProvider.Clients do
 
   defp cache_key(client_id), do: "oauth-client:" <> client_id
 
+  @doc "The scopes a client may ask for: its own, or else the server's."
+  def allowed_scopes(ctx, client) do
+    case list(client.scopes) do
+      [] -> Config.opts(ctx)[:scopes]
+      scopes -> scopes
+    end
+  end
+
   @doc "Whether the client skips consent: marked so, or one of `trusted_clients`."
   def trusted?(ctx, client),
     do: client.skip_consent or client.client_id in Config.opts(ctx)[:trusted_clients]

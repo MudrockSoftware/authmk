@@ -188,3 +188,54 @@ defmodule Authmk.ClientMetadataDocumentsTest do
     refute_received {:fetched, "internal.example" <> _}
   end
 end
+
+defmodule Authmk.ClientMetadataDocumentsRebindingTest do
+  # Real sockets: the host passes the check, then resolves to loopback
+  # when authmk connects (DNS rebinding).
+  use Authmk.EmulationCase, async: true
+
+  defmodule Auth do
+    use Authmk,
+      otp_app: :authmk,
+      repo: Authmk.Test.Repo,
+      base_url: "http://localhost:4000",
+      background: :inline,
+      rate_limit: [enabled: false],
+      plugins: [
+        Authmk.Plugins.EmailPassword,
+        Authmk.Plugins.JWT,
+        {Authmk.Plugins.OAuthProvider,
+         login_page: "/sign-in",
+         consent_page: "/consent",
+         client_id_metadata_documents: true,
+         resolve_host: &__MODULE__.resolve/1}
+      ]
+
+    # The check sees a public address; DNS later says 127.0.0.1.
+    def resolve("localhost"), do: {:ok, [{93, 184, 216, 34}]}
+  end
+
+  @moduletag auth: Auth
+
+  test "the connection only goes to the address that was checked", %{browser: browser} do
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, ip: {127, 0, 0, 1}, active: false])
+    on_exit(fn -> :gen_tcp.close(listener) end)
+    {:ok, port} = :inet.port(listener)
+    client_id = "https://localhost:#{port}/client.json"
+
+    {browser, _user} = sign_up(browser)
+
+    {_browser, conn} =
+      get(browser, "/oauth2/authorize", %{
+        response_type: "code",
+        client_id: client_id,
+        redirect_uri: "https://localhost/callback",
+        scope: "openid",
+        code_challenge: String.duplicate("a", 43),
+        code_challenge_method: "S256"
+      })
+
+    assert redirected_to(conn) =~ "error=invalid_client"
+    assert :gen_tcp.accept(listener, 200) == {:error, :timeout}
+  end
+end

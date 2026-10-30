@@ -29,8 +29,9 @@ in the background (see `background:`). Without them, it logs a warning.
 The plugin takes `require_email_verification` (default `false`),
 `auto_sign_in` after sign-up (`true`), `disable_sign_up` (`false`),
 `min_password_length` and `max_password_length` (8 and 128),
-`reset_password_token_expires_in` (3600 seconds) and
-`revoke_sessions_on_password_reset` (`true`).
+`reset_password_token_expires_in` (3600 seconds),
+`revoke_sessions_on_password_reset` (`true`) and `reset_password_page`
+(see Password reset).
 
 ## Signing up and signing in
 
@@ -85,8 +86,11 @@ config :argon2_elixir, t_cost: 1, m_cost: 8
 
 For a database that already holds Bcrypt hashes, like one made by
 `phx.gen.auth`, add `{:bcrypt_elixir, "~> 3.2"}` to your deps and set
-`password_hasher: Authmk.Password.Bcrypt`. Any module that implements
-`Authmk.Password` (`hash/1`, `verify/2`, `no_user_verify/0`) works too.
+`password_hasher: Authmk.Password.Bcrypt`. Bcrypt only uses a password's
+first 72 bytes, so new passwords longer than that fail with
+`password_too_long` instead of being cut short; passwords set before keep
+working. Any module that implements `Authmk.Password` (`hash/1`,
+`verify/2`, `no_user_verify/0`, and optionally `max_bytes/0`) works too.
 
 `Authmk.Plugins.EmailPassword.set_password(MyApp.Auth, user, password)` gives
 one to a user who signed up another way, or fails with `password_already_set`.
@@ -121,8 +125,11 @@ POST /auth/request-password-reset
 
 The answer is always the same, and unknown emails get no email. A known user
 gets a link to `GET /auth/reset-password/<token>`, which redirects to
-`/reset-password?token=...` (or `?error=invalid_token`). Always pass
-`redirect_to`: the link needs it. Your page then sends the new password:
+`/reset-password?token=...` (or `?error=invalid_token`). Without
+`redirect_to`, the link goes to the plugin's `reset_password_page`
+(`reset_password_page: "/reset-password"`); without either, it ends on
+authmk's error page, and requesting it logs a warning. Your page then
+sends the new password:
 
 ```http
 POST /auth/reset-password
@@ -153,11 +160,13 @@ reveal who has an account; then nothing changes and nothing is sent. A link
 only works while the user still has the address it was sent from: changing
 the email again makes older links useless.
 
-A verified email doesn't change yet: `send_change_email_verification/2`
-mails a link to the new address, and opening it moves the user there,
-verified. With `confirm_current_email: true`, `send_change_email_confirmation/2`
-first mails the current address; its link (`GET /auth/change-email/confirm`)
-then sends the one for the new address. An unverified email changes at once.
+The email doesn't change yet: `send_change_email_verification/2` mails a
+link to the new address, and opening it moves the user there, verified.
+For a verified email with `confirm_current_email: true`,
+`send_change_email_confirmation/2` first mails the current address; its
+link (`GET /auth/change-email/confirm`) then sends the one for the new
+address. An unverified email waits for the link too, so no account holds
+an address nobody proved.
 
 ## Deleting the account
 

@@ -29,9 +29,7 @@ defmodule Authmk.Plugins.Dub do
 
   use Authmk.Plugin
 
-  require Logger
-
-  alias Authmk.{Background, Context, Error}
+  alias Authmk.{Background, Context, Error, Log}
   alias Authmk.Payments.{Client, Options}
 
   @api "https://api.dub.co"
@@ -88,7 +86,7 @@ defmodule Authmk.Plugins.Dub do
 
     case request(ctx, "/track/lead", body, opts) do
       {:ok, _lead} -> :ok
-      {:error, error} -> Logger.warning("authmk Dub: lead not tracked (#{error.code})")
+      {:error, error} -> Log.warning("authmk Dub: lead not tracked (#{error.code})")
     end
   end
 
