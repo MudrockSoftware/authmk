@@ -75,6 +75,16 @@ defmodule Authmk.SecretTest do
     assert log =~ "looks low-entropy"
   end
 
+  test "a malformed AUTHMK_SECRETS entry is named by position, never shown" do
+    error =
+      assert_raise ArgumentError, fn ->
+        Authmk.Secrets.parse!("3:#{@new}, oops-#{@old}")
+      end
+
+    assert error.message =~ "position 2"
+    refute error.message =~ @old
+  end
+
   test "secrets never appear when the config is inspected" do
     restart_with(secret: @new)
     refute inspect(Auth.config()) =~ @new

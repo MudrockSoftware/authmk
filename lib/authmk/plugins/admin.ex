@@ -232,8 +232,9 @@ defmodule Authmk.Plugins.Admin do
   @doc false
   def update_user(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, user: [:update]),
+         {:ok, data} <- updatable(params.data),
          {:ok, user} <- fetch_user(ctx, params.user_id),
-         {:ok, user} <- Store.update(ctx, :user, user, data(params.data)) do
+         {:ok, user} <- Store.update(ctx, :user, user, data) do
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
     end
   end
@@ -443,6 +444,25 @@ defmodule Authmk.Plugins.Admin do
   # Extra user fields an admin may set. Roles and bans have their own endpoints.
   defp data(nil), do: %{}
   defp data(data), do: Map.drop(data, ["id", "role", "banned", "ban_reason", "ban_expires"])
+
+  # The id is the user's identity; roles and bans have their own endpoints,
+  # with their own permissions. Asking to change them here is an error, not
+  # something to drop quietly.
+  defp updatable(data) do
+    data = data || %{}
+
+    cond do
+      Map.has_key?(data, "id") ->
+        {:error, Error.custom(:user_id_cannot_be_updated, 400, "A user's id can't be changed")}
+
+      key = Enum.find(["role", "banned", "ban_reason", "ban_expires"], &Map.has_key?(data, &1)) ->
+        {:error,
+         Error.custom(:field_not_updatable, 400, "Change #{key} with set-role, ban or unban")}
+
+      true ->
+        {:ok, data}
+    end
+  end
 
   defp user_query(ctx, params) do
     case UserQuery.build(Store.module(ctx, :user), params) do

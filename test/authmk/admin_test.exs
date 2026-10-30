@@ -91,14 +91,27 @@ defmodule Authmk.AdminTest do
       assert json(conn)["user"]["name"] == "Grace"
 
       {browser, conn} =
-        post(browser, "/admin/update-user", %{
-          user_id: grace["id"],
-          data: %{name: "Grace H.", role: "admin,user"}
-        })
+        post(browser, "/admin/update-user", %{user_id: grace["id"], data: %{name: "Grace H."}})
 
-      # Roles change only through set-role.
       assert json(conn)["user"]["name"] == "Grace H."
+
+      # The id never changes, and roles and bans change through their own
+      # endpoints: asking here is an error.
+      for {data, code} <- [
+            {%{id: Ecto.UUID.generate()}, "user_id_cannot_be_updated"},
+            {%{name: "X", role: "admin,user"}, "field_not_updatable"},
+            {%{banned: false}, "field_not_updatable"}
+          ] do
+        {_browser, conn} =
+          post(browser, "/admin/update-user", %{user_id: grace["id"], data: data})
+
+        assert conn.status == 400
+        assert json(conn)["error"]["code"] == code
+      end
+
+      {browser, conn} = get(browser, "/admin/get-user", %{id: grace["id"]})
       assert json(conn)["user"]["role"] == "admin"
+      assert json(conn)["user"]["name"] == "Grace H."
 
       {browser, conn} =
         post(browser, "/admin/set-role", %{user_id: grace["id"], role: "superuser"})

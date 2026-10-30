@@ -12,6 +12,23 @@ defmodule Authmk.Providers.HubSpotTest do
     assert user["email"] == "ada@example.com"
     assert user["email_verified"] == false
   end
+
+  # The token is one path segment, whatever it holds.
+  test "the token is escaped in the token info path", %{browser: browser} do
+    test = self()
+
+    info = fn conn ->
+      send(test, {:token_segment, List.last(conn.path_info)})
+      %{"user" => "ada@example.com", "user_id" => 1}
+    end
+
+    sign_in(browser,
+      public_routes: %{"/oauth/v1/access-tokens/*" => info},
+      access_token: "a/b c?d"
+    )
+
+    assert_received {:token_segment, "a%2Fb%20c%3Fd"}
+  end
 end
 
 defmodule Authmk.Providers.GumroadTest do

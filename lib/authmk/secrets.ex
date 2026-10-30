@@ -41,12 +41,16 @@ defmodule Authmk.Secrets do
   def parse!(value) do
     value
     |> String.split(",", trim: true)
-    |> Enum.map(fn entry ->
+    |> Enum.with_index(1)
+    |> Enum.map(fn {entry, position} ->
       with [version, secret] <- String.split(String.trim(entry), ":", parts: 2),
            {version, ""} when version >= 0 <- Integer.parse(version) do
         {version, secret}
       else
-        _ -> raise ArgumentError, ~s(invalid AUTHMK_SECRETS entry. Expected "<version>:<secret>")
+        # The position, never the entry: it holds a secret.
+        _ ->
+          raise ArgumentError,
+                ~s(invalid AUTHMK_SECRETS entry at position #{position}. Expected "<version>:<secret>")
       end
     end)
   end

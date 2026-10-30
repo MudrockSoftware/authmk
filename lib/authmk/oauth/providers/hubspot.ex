@@ -32,7 +32,8 @@ defmodule Authmk.OAuth.Providers.HubSpot do
   # The token's metadata names its user: `user` (the email) and `user_id`.
   @impl true
   def user_info(%{access_token: token}, provider, ctx) when is_binary(token) do
-    case HTTP.get(ctx, provider.userinfo_url <> "/" <> URI.encode_www_form(token)) do
+    # One path segment: every reserved character escaped, spaces as %20.
+    case HTTP.get(ctx, provider.userinfo_url <> "/" <> URI.encode(token, &URI.char_unreserved?/1)) do
       {:ok, 200, %{} = info} -> {:ok, info}
       _failed -> {:error, :no_user_info}
     end

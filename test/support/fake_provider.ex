@@ -14,7 +14,8 @@ defmodule Authmk.Test.FakeProvider do
   #     Every other POST is a token request.
   #   * `public_routes:` - GET paths answered without a bearer token.
   #   * `jwks:` served at `jwks_path:` (Google's by default), without a token.
-  #   * `id_token:`, `expires_in:`, `refresh_token:`, `scope:` - token response fields.
+  #   * `id_token:`, `expires_in:`, `refresh_token:`, `scope:`, `access_token:` -
+  #     token response fields.
   #   * `redirect_uri:` - the callback the code was issued for: code exchanges
   #     must send it, as real providers require.
   #   * `client_secret:` (default "client-secret"); `token_auth: :basic | :post`
@@ -185,7 +186,7 @@ defmodule Authmk.Test.FakeProvider do
 
   defp tokens(opts, prefix) do
     %{
-      "access_token" => "#{prefix}-#{System.unique_integer([:positive])}",
+      "access_token" => opts[:access_token] || "#{prefix}-#{System.unique_integer([:positive])}",
       "refresh_token" => opts[:refresh_token] || "refresh-token",
       "expires_in" => Keyword.get(opts, :expires_in, 3600),
       "scope" => opts[:scope] || "read:user user:email",
