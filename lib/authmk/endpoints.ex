@@ -33,7 +33,7 @@ defmodule Authmk.Endpoints do
   | GET | `/account-info` | required |
   """
 
-  alias Authmk.{Context, Endpoint, Error, Pages}
+  alias Authmk.{Branding, Context, Endpoint, Error, Log, Pages}
   alias Authmk.Endpoints.{EmailVerification, Session, Social, User}
 
   @strict [window: 10, max: 3]
@@ -179,23 +179,56 @@ defmodule Authmk.Endpoints do
   # A plain page for errors in redirect flows. Everything shown is escaped.
   def error_page(%{params: params} = ctx) do
     code = params.error || "unknown_error"
+    message = params.error_description || error_message(code)
+    data = error_page_data(ctx, code, message)
 
-    message =
-      case Enum.find(Error.codes(), fn {known, _} -> Atom.to_string(known) == code end) do
-        {_code, {_status, text}} -> text
-        nil -> "Something went wrong while signing you in."
-      end
+    {:html, 400, error_page_html(ctx, data), page_headers(ctx)}
+  end
 
-    message = params.error_description || message
-    data = %{code: code, message: message, app_name: ctx.config.app_name, home: "/"}
+  defp error_message(code) do
+    case Enum.find(Error.codes(), fn {known, _} -> Atom.to_string(known) == code end) do
+      {_code, {_status, text}} -> text
+      nil -> "Something went wrong while signing you in."
+    end
+  end
 
-    html =
-      case Pages.render("error", data) do
-        {:ok, html} -> html
-        :missing -> render_error_page(code, message)
-      end
+  defp error_page_data(ctx, code, message) do
+    branding = Branding.get(ctx)
 
-    {:html, 400, html, page_headers(ctx)}
+    %{
+      code: code,
+      message: message,
+      app_name: branding.app_name,
+      home: "/",
+      logo_url: Branding.page_logo_url(branding, ctx),
+      primary_color: branding.primary_color,
+      primary_content_color: branding.primary_content_color
+    }
+  end
+
+  defp error_page_html(ctx, data) do
+    with :default <- custom_error_page(ctx.config.errors[:page], data, ctx),
+         :missing <- Pages.render("error", data) do
+      render_error_page(data.code, data.message)
+    else
+      {:ok, html} -> html
+    end
+  end
+
+  # The app's own template (`errors: [page: {module, function}]`). If it
+  # fails, people still get a page: authmk's.
+  defp custom_error_page(nil, _data, _ctx), do: :default
+
+  defp custom_error_page({module, function}, data, ctx) do
+    {:ok, IO.iodata_to_binary(apply(module, function, [data, ctx]))}
+  rescue
+    exception ->
+      Log.error(
+        "authmk error page: #{inspect(module)}.#{function}/2 failed " <>
+          "(#{inspect(exception.__struct__)}); serving authmk's page"
+      )
+
+      :default
   end
 
   # Only this site may frame it, which no one should.

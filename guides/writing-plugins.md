@@ -120,6 +120,7 @@ def before_endpoint(_endpoint, ctx), do: {:cont, ctx}
 | `on_response/2` | Just before the response is sent; gets the `Plug.Conn` |
 | `database_hook/4` | Around every insert, update and delete |
 | `sign_in_challenge/3` | Before any sign-in creates a session; can ask for another step first |
+| `branding/1` | When authmk renders its error page or an `Authmk.Emails` email; returns the app's name, logo and colour (see `Authmk.Branding`) |
 
 `sign_in_challenge/3` is how `Authmk.Plugins.TwoFactor` works: it answers
 `{:challenge, body, ctx}` for users with 2FA on, and its own endpoint

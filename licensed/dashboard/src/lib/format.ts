@@ -68,3 +68,37 @@ export function device(agent: string | null): string {
             : "";
   return os ? `${browser} on ${os}` : browser;
 }
+
+// A day ("2026-10-30") as on a chart's axis: "30 Oct".
+export function shortDay(day: string): string {
+  return new Date(day).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+// A date as the API takes it: YYYY-MM-DD, in UTC like the API's days.
+export function isoDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+// The day `days` days before today (UTC).
+export function daysAgo(days: number): string {
+  const day = new Date();
+  day.setUTCDate(day.getUTCDate() - days);
+  return isoDay(day);
+}
+
+// An amount in the currency's minor units (cents, pence), for people.
+export function money(amount: number, currency: string): string {
+  try {
+    const format = new Intl.NumberFormat("en-GB", { style: "currency", currency });
+    const digits = format.resolvedOptions().maximumFractionDigits ?? 2;
+    return format.format(amount / 10 ** digits);
+  } catch {
+    return `${amount.toLocaleString("en-GB")} ${currency.toUpperCase()} (minor units)`;
+  }
+}
+
+// Turns names like "sign_in.failed" or "invalid_credentials" into words.
+export function humanise(name: string): string {
+  const words = name.replace(/[._-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

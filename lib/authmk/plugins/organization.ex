@@ -61,6 +61,22 @@ defmodule Authmk.Plugins.Organization do
   `member`, `invitation` and `team` come from the `schema:` option like any
   model's `additional_fields`.
 
+  ## From server code
+
+  Your own code (a back office, provisioning, an admin dashboard) manages
+  organizations without being a member: `create_organization/3`,
+  `update_organization/3`, `delete_organization/2`, `add_member/4`,
+  `set_member_role/4`, `remove_member/3`, `invite_member/6`,
+  `cancel_invitation/2`, and with teams `create_team/3`, `update_team/3`,
+  `remove_team/2`, `add_team_member/3` and `remove_team_member/3`. They make
+  the endpoints' checks, minus the signed-in member's own permissions, run
+  the hooks, and keep an owner in every organization. They return
+  `{:ok, record}` or `{:error, %Authmk.Error{}}`; ids that don't exist or
+  aren't valid ids give the `*_not_found` errors.
+
+      {:ok, organization} =
+        Authmk.Plugins.Organization.create_organization(MyApp.Auth, %{name: "Acme", slug: "acme"}, user_id)
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Plugins.Organization.Options.schema())}
@@ -68,7 +84,7 @@ defmodule Authmk.Plugins.Organization do
 
   use Authmk.Plugin
 
-  alias Authmk.{Context, Endpoint, Store}
+  alias Authmk.{BaseURL, Context, Endpoint, Error, Input, Store}
 
   alias Authmk.Plugins.Organization.{
     Access,
@@ -404,6 +420,51 @@ defmodule Authmk.Plugins.Organization do
   end
 
   @doc """
+  Creates an organization owned by the user `owner_user_id`, from your own
+  server code (for example an admin dashboard). `attrs` takes `name` and
+  `slug` (required), `logo`, `metadata` and the extra `organization` fields
+  your app declares with `input: true`, with atom or string keys. The slug
+  must be free; the owner joins with `creator_role`. Runs the
+  `:create_organization` and `:add_member` hooks.
+
+  It doesn't apply `allow_user_to_create_organization` or
+  `organization_limit`: those limit what users do themselves, and here your
+  server decides.
+
+      Authmk.Plugins.Organization.create_organization(MyApp.Auth, %{name: "Acme", slug: "acme"}, user_id)
+  """
+  @spec create_organization(module(), map(), term()) ::
+          {:ok, struct()} | {:error, Error.t()}
+  def create_organization(auth, attrs, owner_user_id) do
+    ctx = server_ctx(auth)
+
+    with {:ok, owner} <- fetch_user(ctx, owner_user_id),
+         {:ok, organization, _member} <-
+           Organizations.insert(ctx, input(ctx, :organization, attrs), owner) do
+      {:ok, organization}
+    end
+  end
+
+  @doc """
+  Updates an organization, from your own server code: the fields
+  `create_organization/3` takes, all optional. A new slug must be free.
+  Runs the `:update_organization` hooks.
+  """
+  @spec update_organization(module(), term(), map()) :: {:ok, struct()} | {:error, Error.t()}
+  def update_organization(auth, organization_id, attrs) do
+    with_organization(auth, organization_id, &Organizations.change(&1, &2, string_keys(attrs)))
+  end
+
+  @doc """
+  Deletes an organization, from your own server code, with its members,
+  invitations and teams. Runs the `:delete_organization` hooks.
+  """
+  @spec delete_organization(module(), term()) :: {:ok, struct()} | {:error, Error.t()}
+  def delete_organization(auth, organization_id) do
+    with_organization(auth, organization_id, &Organizations.remove/2)
+  end
+
+  @doc """
   Adds a user to an organization, from your own server code (for example
   when you provision accounts). Checks the membership limit and runs the
   `:add_member` hooks.
@@ -411,17 +472,9 @@ defmodule Authmk.Plugins.Organization do
       Authmk.Plugins.Organization.add_member(MyApp.Auth, organization_id, user_id, "member")
   """
   @spec add_member(module(), term(), term(), String.t()) ::
-          {:ok, struct()} | {:error, Authmk.Error.t()}
+          {:ok, struct()} | {:error, Error.t()}
   def add_member(auth, organization_id, user_id, role) do
-    ctx = auth.config() |> Context.new() |> Context.put_private(:organization_plugin, __MODULE__)
-
-    with {:ok, organization} <- Access.fetch_organization(ctx, organization_id),
-         %{} = user <- Store.get_by(ctx, :user, id: user_id) do
-      Members.add(ctx, organization, user, role)
-    else
-      nil -> {:error, Authmk.Error.custom(:user_not_found, 404, "User not found")}
-      error -> error
-    end
+    with_member(auth, organization_id, user_id, &Members.add(&1, &2, &3, role))
   end
 
   @doc """
@@ -430,8 +483,7 @@ defmodule Authmk.Plugins.Organization do
   """
   @spec list_for_user(module(), struct()) :: [struct()]
   def list_for_user(auth, user) do
-    ctx = auth.config() |> Context.new() |> Context.put_private(:organization_plugin, __MODULE__)
-    Organizations.user_organizations(ctx, user)
+    Organizations.user_organizations(server_ctx(auth), user)
   end
 
   @doc """
@@ -439,28 +491,159 @@ defmodule Authmk.Plugins.Organization do
   directory changes someone's groups). The last owner can't be demoted.
   """
   @spec set_member_role(module(), term(), term(), String.t()) ::
-          {:ok, struct()} | {:error, Authmk.Error.t()}
+          {:ok, struct()} | {:error, Error.t()}
   def set_member_role(auth, organization_id, user_id, role) do
     with_member(auth, organization_id, user_id, &Members.set_role(&1, &2, &3, role))
   end
 
   @doc "Removes a user from an organization, from your own server code. Not the last owner."
-  @spec remove_member(module(), term(), term()) :: {:ok, struct()} | {:error, Authmk.Error.t()}
+  @spec remove_member(module(), term(), term()) :: {:ok, struct()} | {:error, Error.t()}
   def remove_member(auth, organization_id, user_id) do
     with_member(auth, organization_id, user_id, &Members.remove_user/3)
   end
 
-  defp with_member(auth, organization_id, user_id, fun) do
-    ctx = auth.config() |> Context.new() |> Context.put_private(:organization_plugin, __MODULE__)
+  @doc """
+  Invites `email` to an organization with `role`, from your own server code,
+  on behalf of the user `inviter_user_id`. The invite endpoint's checks
+  apply, minus the inviter's own permissions: a valid email and role, not a
+  member yet, the invitation limit, and one pending invitation per email.
+  The invitation goes out through `send_invitation_email`, in the
+  background.
+
+  Options: `team_id:` (with teams enabled), and `resend: true` to send a
+  pending invitation again with a new expiry.
+  """
+  @spec invite_member(module(), term(), String.t(), String.t(), term(), keyword()) ::
+          {:ok, struct()} | {:error, Error.t()}
+  def invite_member(auth, organization_id, email, role, inviter_user_id, opts \\ []) do
+    opts = Keyword.validate!(opts, [:team_id, resend: false])
+    ctx = server_ctx(auth)
 
     with {:ok, organization} <- Access.fetch_organization(ctx, organization_id),
-         %{} = user <- Store.get_by(ctx, :user, id: user_id) do
-      fun.(ctx, organization, user)
-    else
-      nil -> {:error, Authmk.Error.custom(:user_not_found, 404, "User not found")}
-      error -> error
+         {:ok, inviter} <- fetch_user(ctx, inviter_user_id) do
+      Invitations.invite_from_server(ctx, organization, inviter, email, role, opts)
     end
   end
+
+  @doc "Cancels a pending invitation, from your own server code. Runs the `:cancel_invitation` hooks."
+  @spec cancel_invitation(module(), term()) :: {:ok, struct()} | {:error, Error.t()}
+  def cancel_invitation(auth, invitation_id) do
+    Invitations.cancel_from_server(server_ctx(auth), invitation_id)
+  end
+
+  @doc """
+  Creates a team in an organization, from your own server code: `attrs`
+  takes `name` and the extra `team` fields your app declares with
+  `input: true`. `maximum_teams` applies. Runs the `:create_team` hooks.
+  Needs `teams: [enabled: true]` (`feature_disabled` otherwise), like every
+  team function.
+  """
+  @spec create_team(module(), term(), map()) :: {:ok, struct()} | {:error, Error.t()}
+  def create_team(auth, organization_id, attrs) do
+    ctx = server_ctx(auth)
+
+    with :ok <- teams_enabled(ctx),
+         {:ok, organization} <- Access.fetch_organization(ctx, organization_id) do
+      Teams.insert(ctx, organization, input(ctx, :team, attrs))
+    end
+  end
+
+  @doc "Updates a team, from your own server code. Runs the `:update_team` hooks."
+  @spec update_team(module(), term(), map()) :: {:ok, struct()} | {:error, Error.t()}
+  def update_team(auth, team_id, attrs) do
+    with_team(auth, team_id, &Teams.change(&1, &2, string_keys(attrs)))
+  end
+
+  @doc """
+  Deletes a team, from your own server code. With
+  `allow_removing_all_teams: false`, an organization keeps its last team.
+  Runs the `:delete_team` hooks.
+  """
+  @spec remove_team(module(), term()) :: {:ok, struct()} | {:error, Error.t()}
+  def remove_team(auth, team_id) do
+    with_team(auth, team_id, &Teams.delete/2)
+  end
+
+  @doc """
+  Adds a member of the team's organization to the team, from your own
+  server code. `maximum_members_per_team` applies. Runs the
+  `:add_team_member` hooks.
+  """
+  @spec add_team_member(module(), term(), term()) :: {:ok, struct()} | {:error, Error.t()}
+  def add_team_member(auth, team_id, user_id) do
+    with_team(auth, team_id, &Teams.add_user(&1, &2, user_id))
+  end
+
+  @doc "Takes a user out of a team, from your own server code. Runs the `:remove_team_member` hooks."
+  @spec remove_team_member(module(), term(), term()) :: {:ok, struct()} | {:error, Error.t()}
+  def remove_team_member(auth, team_id, user_id) do
+    with_team(auth, team_id, &Teams.remove_user(&1, &2, user_id))
+  end
+
+  # A context for calls from server code: no request, and the configured
+  # base URL (when it's static) for links in invitations.
+  defp server_ctx(auth) do
+    config = auth.config()
+
+    base_url =
+      case BaseURL.resolve(config, nil) do
+        {:ok, base_url} -> base_url
+        _dynamic -> nil
+      end
+
+    %{Context.new(config) | base_url: base_url}
+    |> Context.put_private(:organization_plugin, __MODULE__)
+  end
+
+  defp with_organization(auth, organization_id, fun) do
+    ctx = server_ctx(auth)
+
+    with {:ok, organization} <- Access.fetch_organization(ctx, organization_id) do
+      fun.(ctx, organization)
+    end
+  end
+
+  defp with_member(auth, organization_id, user_id, fun) do
+    ctx = server_ctx(auth)
+
+    with {:ok, organization} <- Access.fetch_organization(ctx, organization_id),
+         {:ok, user} <- fetch_user(ctx, user_id) do
+      fun.(ctx, organization, user)
+    end
+  end
+
+  defp with_team(auth, team_id, fun) do
+    ctx = server_ctx(auth)
+
+    with :ok <- teams_enabled(ctx),
+         {:ok, team} <- Teams.fetch(ctx, team_id) do
+      fun.(ctx, team)
+    end
+  end
+
+  defp teams_enabled(ctx) do
+    if Context.plugin_opts(ctx, __MODULE__)[:teams][:enabled],
+      do: :ok,
+      else: {:error, Error.new(:feature_disabled)}
+  end
+
+  defp fetch_user(_ctx, nil), do: {:error, user_not_found()}
+
+  defp fetch_user(ctx, id) do
+    case Store.get_by(ctx, :user, id: id) do
+      nil -> {:error, user_not_found()}
+      user -> {:ok, user}
+    end
+  rescue
+    Ecto.Query.CastError -> {:error, user_not_found()}
+  end
+
+  defp user_not_found, do: Error.custom(:user_not_found, 404, "User not found")
+
+  # The fields of `model` a client may set, from `attrs` with atom or string keys.
+  defp input(ctx, model, attrs), do: Input.attrs(%{ctx | raw_params: string_keys(attrs)}, model)
+
+  defp string_keys(attrs), do: Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
 
   defp post(name, path, handler, params), do: endpoint(name, :post, path, handler, params)
   defp get(name, path, handler, params), do: endpoint(name, :get, path, handler, params)

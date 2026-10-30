@@ -113,6 +113,8 @@ defmodule Authmk.Plugins.Organization.Access do
   end
 
   @doc "An organization by id."
+  def fetch_organization(_ctx, nil), do: {:error, Errors.error(:organization_not_found)}
+
   def fetch_organization(ctx, id) do
     case Store.get_by(ctx, :organization, id: id) do
       nil -> {:error, Errors.error(:organization_not_found)}

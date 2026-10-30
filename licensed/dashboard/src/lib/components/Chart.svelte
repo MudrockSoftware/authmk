@@ -17,7 +17,7 @@
 
   Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip, Legend, DoughnutController, ArcElement);
 
-  type Series = { label: string; data: number[]; colour: "primary" | "secondary" | "accent" };
+  type Series = { label: string; data: number[]; colour: "primary" | "secondary" | "accent" | "error" | "info" };
 
   let {
     kind,

@@ -16,7 +16,7 @@ defmodule Authmk.Background do
   without the request itself (`ctx.conn` is `nil`).
   """
 
-  alias Authmk.{Context, Crypto}
+  alias Authmk.{Context, Crypto, Deliveries}
 
   @purpose "background-job"
 
@@ -55,14 +55,26 @@ defmodule Authmk.Background do
   end
 
   @doc false
+  # Emails and text messages are remembered for the dashboard's health
+  # checks (Authmk.Deliveries). A crash still crashes, for Oban to retry.
   @spec perform(Context.t(), job()) :: term()
-  def perform(%Context{config: config} = ctx, {:callback, callback, data}),
+  def perform(ctx, job) do
+    result = execute(ctx, job)
+    :ok = Deliveries.record(ctx, job, result)
+    result
+  rescue
+    exception ->
+      :ok = Deliveries.record(ctx, job, exception)
+      reraise exception, __STACKTRACE__
+  end
+
+  defp execute(%Context{config: config} = ctx, {:callback, callback, data}),
     do: apply(config.auth, callback, [data, ctx])
 
-  def perform(ctx, {:plugin, plugin, key, data}),
+  defp execute(ctx, {:plugin, plugin, key, data}),
     do: Context.plugin_opts(ctx, plugin)[key].(data, ctx)
 
-  def perform(ctx, {:call, module, function, args}), do: apply(module, function, [ctx | args])
+  defp execute(ctx, {:call, module, function, args}), do: apply(module, function, [ctx | args])
 
   defp enqueue(%Context{config: config} = ctx, job, opts) do
     args = %{

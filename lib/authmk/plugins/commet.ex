@@ -30,6 +30,12 @@ defmodule Authmk.Plugins.Commet do
   authmk uses it only to know which subscription changed, and reads that
   subscription from Commet.
 
+  `Authmk.Payments.change_plan/4` asks Commet to change the plan: it
+  applies upgrades now and schedules downgrades for renewal. A change the
+  customer must pay for at a checkout is refused with
+  `plan_change_needs_payment`: they make it in the billing portal.
+  `Authmk.Payments.resume/2` reverts a scheduled cancellation.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Payments.Options.schema(Authmk.Plugins.Commet.Options.own()))}
@@ -39,7 +45,7 @@ defmodule Authmk.Plugins.Commet do
 
   @behaviour Authmk.Payments.Provider
 
-  alias Authmk.{Background, Context, Error}
+  alias Authmk.{Background, Context, Error, Log}
   alias Authmk.Payments.{Client, Endpoints, Options, Reference, Schema, Store, Webhook}
   alias Authmk.Plugins.Commet.Options, as: CommetOptions
 
@@ -122,11 +128,46 @@ defmodule Authmk.Plugins.Commet do
 
   @impl Authmk.Payments.Provider
   def cancel(ctx, subscription, at_period_end, opts) do
-    path = "/subscriptions/#{URI.encode(subscription.provider_subscription_id)}/cancel"
+    path = subscription_path(subscription) <> "/cancel"
 
     with {:ok, object} <- request(ctx, :post, path, %{immediate: not at_period_end}, opts),
          do: {:ok, normalize(object)}
   end
+
+  # Commet applies upgrades now and schedules downgrades for renewal; a
+  # change the customer must pay for at a checkout can't be made here.
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, plan_id, opts) do
+    path = subscription_path(subscription)
+
+    case request(ctx, :post, path <> "/change-plan", %{newPlanId: plan_id}, opts) do
+      {:ok, %{"outcome" => "requires_checkout"}} ->
+        Log.warning("authmk Commet plan change needs the customer's checkout")
+
+        {:error,
+         Error.custom(
+           :plan_change_needs_payment,
+           402,
+           "The customer must pay for this change: they can change plans in the billing portal"
+         )}
+
+      {:ok, _completed_or_scheduled} ->
+        with {:ok, object} <- request(ctx, :get, path, nil, opts), do: {:ok, normalize(object)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    with {:ok, object} <-
+           request(ctx, :post, subscription_path(subscription) <> "/uncancel", %{}, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp subscription_path(subscription),
+    do: "/subscriptions/" <> URI.encode(subscription.provider_subscription_id)
 
   @impl Authmk.Payments.Provider
   def webhook(ctx, body, headers, opts) do

@@ -13,13 +13,8 @@ defmodule Authmk.Plugins.Organization.Organizations do
 
     with :ok <- check(opts[:allow_user_to_create_organization], :organization_creation_disabled),
          :ok <- under_organization_limit(ctx, user, opts),
-         :ok <- slug_free(ctx, params.slug),
-         attrs = organization_attrs(ctx),
-         {:ok, attrs} <- Hooks.before_event(ctx, :create_organization, attrs),
-         {:ok, organization, member} <- insert_with_owner(ctx, attrs, user, opts[:creator_role]),
+         {:ok, organization, member} <- insert(ctx, organization_attrs(ctx), user),
          {:ok, ctx} <- maybe_activate(ctx, organization, params.keep_current_active_organization) do
-      :ok = Hooks.after_event(ctx, :create_organization, organization)
-
       body =
         Map.put(serialize(ctx, organization), :members, [Serializer.record(ctx, :member, member)])
 
@@ -34,11 +29,7 @@ defmodule Authmk.Plugins.Organization.Organizations do
   def update(%Context{params: params} = ctx) do
     with {:ok, id} <- Access.organization_id(ctx, params.organization_id),
          {:ok, organization, _member} <- Access.authorize(ctx, id, organization: [:update]),
-         attrs = Input.attrs(%{ctx | raw_params: params.data}, :organization),
-         :ok <- slug_free(ctx, attrs["slug"], organization),
-         {:ok, attrs} <- Hooks.before_event(ctx, :update_organization, attrs),
-         {:ok, organization} <- Store.update(ctx, :organization, organization, attrs) do
-      :ok = Hooks.after_event(ctx, :update_organization, organization)
+         {:ok, organization} <- change(ctx, organization, params.data) do
       {:ok, serialize(ctx, organization), ctx}
     end
   end
@@ -46,11 +37,51 @@ defmodule Authmk.Plugins.Organization.Organizations do
   def delete(%Context{params: params} = ctx) do
     with {:ok, organization, _member} <-
            Access.authorize(ctx, params.organization_id, organization: [:delete]),
-         {:ok, organization} <- Hooks.before_event(ctx, :delete_organization, organization),
-         {:ok, _deleted} <- Store.delete(ctx, :organization, organization),
+         {:ok, organization} <- remove(ctx, organization),
          {:ok, ctx} <- deactivate_if_active(ctx, organization) do
-      :ok = Hooks.after_event(ctx, :delete_organization, organization)
       {:ok, %{status: true}, ctx}
+    end
+  end
+
+  @doc """
+  Creates an organization from `attrs` (string keys, already limited to
+  the fields a client may set) with `owner` in the creator role. Runs the
+  `:create_organization` and `:add_member` hooks.
+  """
+  def insert(ctx, attrs, owner) do
+    with :ok <- slug_free(ctx, attrs["slug"]),
+         {:ok, attrs} <- Hooks.before_event(ctx, :create_organization, attrs),
+         {:ok, organization, member} <-
+           insert_with_owner(ctx, attrs, owner, Config.opts(ctx)[:creator_role]) do
+      :ok = Hooks.after_event(ctx, :create_organization, organization)
+      {:ok, organization, member}
+    end
+  end
+
+  @doc """
+  Updates `organization` with the fields of `raw` (string keys) a client may
+  set. The slug must stay free. Runs the `:update_organization` hooks.
+  """
+  def change(ctx, organization, raw) do
+    attrs = Input.attrs(%{ctx | raw_params: raw}, :organization)
+
+    with :ok <- slug_free(ctx, attrs["slug"], organization),
+         {:ok, attrs} <- Hooks.before_event(ctx, :update_organization, attrs),
+         {:ok, organization} <- Store.update(ctx, :organization, organization, attrs) do
+      :ok = Hooks.after_event(ctx, :update_organization, organization)
+      {:ok, organization}
+    end
+  end
+
+  @doc """
+  Deletes `organization`; the database deletes its members, invitations and
+  teams with it. Runs the `:delete_organization` hooks.
+  """
+  def remove(ctx, organization) do
+    with {:ok, organization} <- Hooks.before_event(ctx, :delete_organization, organization),
+         {:ok, _deleted} <- Store.delete(ctx, :organization, organization) do
+      :ok = Hooks.after_event(ctx, :delete_organization, organization)
+      {:ok, organization}
     end
   end
 

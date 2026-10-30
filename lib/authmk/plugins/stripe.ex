@@ -23,6 +23,10 @@ defmodule Authmk.Plugins.Stripe do
   `checkout.session.completed` events, and put its signing secret in
   `webhook_secret`.
 
+  `Authmk.Payments.change_plan/4` gives the subscription's item the plan's
+  price (keeping its quantity, prorated by your account's default), and
+  `Authmk.Payments.resume/2` sets `cancel_at_period_end` back to false.
+
   Webhooks are checked against the `Stripe-Signature` header (HMAC-SHA256
   over the timestamp and the exact body, at most 5 minutes old). Then the
   subscription is read from Stripe again: webhooks can come out of order
@@ -135,7 +139,7 @@ defmodule Authmk.Plugins.Stripe do
 
   @impl Authmk.Payments.Provider
   def cancel(ctx, subscription, at_period_end, opts) do
-    path = "/subscriptions/" <> URI.encode_www_form(subscription.provider_subscription_id)
+    path = subscription_path(subscription)
 
     result =
       if at_period_end,
@@ -144,6 +148,41 @@ defmodule Authmk.Plugins.Stripe do
 
     with {:ok, object} <- result, do: {:ok, normalize(object)}
   end
+
+  # The subscription's item gets the new price, and keeps its quantity.
+  # Stripe prorates by the account's default.
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, price_id, opts) do
+    path = subscription_path(subscription)
+
+    with {:ok, object} <- request(ctx, :get, path, [], opts),
+         {:ok, item_id} <- item_id(object),
+         form = [{"items[0][id]", item_id}, {"items[0][price]", price_id}],
+         {:ok, updated} <- request(ctx, :post, path, form, opts),
+         do: {:ok, normalize(updated)}
+  end
+
+  defp item_id(object) do
+    case get_in(object, ["items", "data"]) do
+      [%{"id" => id} | _items] when is_binary(id) ->
+        {:ok, id}
+
+      _none ->
+        Log.warning("authmk Stripe subscription has no item to change")
+        {:error, Error.custom(:payment_provider_error, 502, "Stripe refused the request")}
+    end
+  end
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    form = [{"cancel_at_period_end", "false"}]
+
+    with {:ok, object} <- request(ctx, :post, subscription_path(subscription), form, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp subscription_path(subscription),
+    do: "/subscriptions/" <> URI.encode_www_form(subscription.provider_subscription_id)
 
   @impl Authmk.Payments.Provider
   def webhook(ctx, body, headers, opts) do

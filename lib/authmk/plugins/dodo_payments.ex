@@ -24,6 +24,11 @@ defmodule Authmk.Plugins.DodoPayments do
   (Standard Webhooks, at most 5 minutes old), then the subscription is
   read from Dodo again.
 
+  `Authmk.Payments.change_plan/4` moves the subscription to the plan's
+  product, prorated and charged now (`prorated_immediately`), and
+  `Authmk.Payments.resume/2` takes back a cancel set for the next billing
+  date.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Payments.Options.schema(Authmk.Plugins.DodoPayments.Options.own()))}
@@ -109,7 +114,7 @@ defmodule Authmk.Plugins.DodoPayments do
 
   @impl Authmk.Payments.Provider
   def cancel(ctx, subscription, at_period_end, opts) do
-    path = "/subscriptions/" <> URI.encode(subscription.provider_subscription_id)
+    path = subscription_path(subscription)
 
     body =
       if at_period_end,
@@ -120,6 +125,35 @@ defmodule Authmk.Plugins.DodoPayments do
          {:ok, object} <- request(ctx, :get, path, nil, opts),
          do: {:ok, normalize(object)}
   end
+
+  # Prorated, and charged now; the seats stay as they are.
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, product_id, opts) do
+    path = subscription_path(subscription)
+
+    body = %{
+      product_id: product_id,
+      quantity: subscription.seats || 1,
+      proration_billing_mode: "prorated_immediately"
+    }
+
+    with {:ok, _changed} <- request(ctx, :post, path <> "/change-plan", body, opts),
+         {:ok, object} <- request(ctx, :get, path, nil, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    path = subscription_path(subscription)
+
+    with {:ok, _updated} <-
+           request(ctx, :patch, path, %{cancel_at_next_billing_date: false}, opts),
+         {:ok, object} <- request(ctx, :get, path, nil, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp subscription_path(subscription),
+    do: "/subscriptions/" <> URI.encode(subscription.provider_subscription_id)
 
   @impl Authmk.Payments.Provider
   def webhook(ctx, body, headers, opts) do

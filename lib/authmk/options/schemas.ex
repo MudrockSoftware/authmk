@@ -109,6 +109,11 @@ defmodule Authmk.Options.Schemas do
                           type: :string,
                           doc:
                             "Where redirect flows send users on errors. Defaults to authmk's `/error` page."
+                        ],
+                        page: [
+                          type: {:tuple, [:atom, :atom]},
+                          doc:
+                            "Your own template for the `/error` page, as `{module, function}`. authmk calls `module.function(data, ctx)` and serves the HTML (a binary or iodata) it returns, with status 400 and the page's security headers. `data` is what authmk's page gets: `:code`, `:message`, `:app_name`, `:home`, `:logo_url`, `:primary_color` and `:primary_content_color` (see `Authmk.Branding`). Escape everything you put in the HTML: `:code` and `:message` come from the request. If it raises, authmk logs the error and serves its own page."
                         ]
                       ]
                     ],

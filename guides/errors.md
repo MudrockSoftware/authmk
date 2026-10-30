@@ -115,9 +115,13 @@ These come from `Authmk.Error.new/2`; `Authmk.Error.codes/0` lists them at runti
 | `already_subscribed` | 409 | Already subscribed: change plans in the billing portal |
 | `invalid_seats` | 422 | Seats must be 1 to 10000; with Commet, also: This plan isn't sold by the seat |
 | `no_billing_customer` | 404 | There's no billing account yet |
+| `not_scheduled_to_cancel` | 409 | The subscription isn't set to cancel |
+| `not_supported` | 400 | The payment provider doesn't support this; or: This subscription is billed by another provider |
 | `payment_provider_error` | 502 | "Stripe refused the request", "Chargebee refused the request" and so on, naming the provider |
 | `payment_provider_unavailable` | 502 | "Stripe can't be reached", "Chargebee can't be reached" and so on, naming the provider |
-| `plan_not_found` | 404 | No such plan |
+| `plan_change_needs_payment` | 402 | The customer must pay for this change: they can change plans in the billing portal (Commet) |
+| `plan_not_found` | 404 | No such plan; or: This plan has no annual price |
+| `subscription_canceled` | 409 | The subscription is canceled |
 | `subscription_not_found` | 404 | No such subscription |
 
 ## `Authmk.Plugins.Admin`

@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { page } from "$app/state";
+  import Download from "@lucide/svelte/icons/download";
   import Filter from "@lucide/svelte/icons/filter";
   import Empty from "#lib/components/Empty.svelte";
   import Failure from "#lib/components/Failure.svelte";
   import Loading from "#lib/components/Loading.svelte";
   import PageHeader from "#lib/components/PageHeader.svelte";
-  import { api, type AuditEvent } from "#lib/api.ts";
+  import { api, exportUrl, type AuditEvent } from "#lib/api.ts";
   import { device, formatDateTime } from "#lib/format.ts";
 
   let eventName = $state("");
-  let userId = $state("");
+  // A user's page links here with `?user_id=` after the route.
+  let userId = $state(new URLSearchParams(page.url.hash.split("?")[1] ?? "").get("user_id") ?? "");
   let events = $state<AuditEvent[]>([]);
   let total = $state(0);
   let loading = $state(true);
@@ -44,7 +47,13 @@
   }
 </script>
 
-<PageHeader title="Audit log" description="Who did what to which account, newest first." />
+<PageHeader title="Audit log" description="Who did what to which account, newest first.">
+  {#snippet actions()}
+    <a class="btn btn-sm" href={exportUrl("events", { event: eventName.trim(), user_id: userId.trim() })} download>
+      <Download class="size-4" aria-hidden="true" /> Export the last 30 days
+    </a>
+  {/snippet}
+</PageHeader>
 
 <div class="mb-4 flex flex-wrap gap-2">
   <label class="input">

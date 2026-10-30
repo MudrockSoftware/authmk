@@ -7,6 +7,11 @@ export type ErrorPage = {
   code: string;
   message: string;
   home: string;
+  // The app's branding (Authmk.Branding), or null. The logo is a URL this
+  // page may load (same origin); the colours are #rrggbb.
+  logo_url: string | null;
+  primary_color: string | null;
+  primary_content_color: string | null;
 };
 
 export type Page = ErrorPage;

@@ -55,4 +55,20 @@ defmodule Authmk.BackgroundTest do
 
     assert log =~ "doesn't implement send_reset_password/2, so no email was sent"
   end
+
+  @tag auth: Authmk.BackgroundTest.SilentAuth
+  test "deliveries are remembered for health checks: names and times, never contents", %{
+    browser: browser
+  } do
+    capture_log(fn ->
+      {_browser, _user} = sign_up(browser)
+      post(browser, "/request-password-reset", %{email: "ada@example.com"})
+    end)
+
+    assert [%{name: "send_reset_password", channel: :email, not_implemented: true} = delivery] =
+             Authmk.Deliveries.list(Authmk.BackgroundTest.SilentAuth)
+
+    assert delivery.last_failed_at
+    refute inspect(delivery) =~ "ada@example.com"
+  end
 end

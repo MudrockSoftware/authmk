@@ -2,6 +2,8 @@ defmodule PhoenixApp.Auth do
   use Authmk,
     otp_app: :phoenix_app,
     repo: PhoenixApp.Repo,
+    # A field of the app's own: shown and edited in the dashboard too.
+    schema: [user: [additional_fields: [company: [type: :string]]]],
     plugins: [
       # Reset links requested without redirect_to open this page.
       {Authmk.Plugins.EmailPassword, reset_password_page: "/reset-password"},
@@ -53,6 +55,9 @@ defmodule PhoenixApp.Auth do
       },
       # Who did what, when: the user's own history at /auth/audit-log/list.
       {Authmk.Plugins.AuditLog, can_view_all: &__MODULE__.admin?/1},
+      # The app's name, logo and colour, edited in the dashboard (/admin/auth)
+      # and used by authmk's pages and emails. Licensed with the dashboard.
+      Authmk.Dashboard.Branding,
       # Subscriptions with Stripe (Authmk.Payments): /auth/billing/*.
       {Authmk.Plugins.Stripe,
        api_key: &__MODULE__.stripe_key/0,
@@ -64,7 +69,11 @@ defmodule PhoenixApp.Auth do
            id: "price_pro_monthly",
            annual_id: "price_pro_yearly",
            trial_days: 14,
-           limits: %{projects: 50}
+           limits: %{projects: 50},
+           # What the dashboard counts as recurring revenue (in cents).
+           amount: 2_000,
+           annual_amount: 20_000,
+           currency: "usd"
          ]
        ]},
       # Sign-ups from Dub links become leads.

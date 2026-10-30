@@ -5,7 +5,9 @@ defmodule Authmk.DashboardLicenceTest do
 
   import ExUnit.CaptureLog
 
-  alias Authmk.Testing
+  alias Authmk.{Context, Testing}
+  alias Authmk.Dashboard.Branding
+  alias Authmk.Test.Browser
 
   defmodule Auth do
     use Authmk,
@@ -14,7 +16,7 @@ defmodule Authmk.DashboardLicenceTest do
       base_url: "http://localhost:4000",
       background: :inline,
       rate_limit: [enabled: false],
-      plugins: [Authmk.Plugins.EmailPassword, Authmk.Plugins.Admin]
+      plugins: [Authmk.Plugins.EmailPassword, Authmk.Plugins.Admin, Branding]
   end
 
   @moduletag auth: Auth
@@ -59,5 +61,40 @@ defmodule Authmk.DashboardLicenceTest do
 
     assert JSON.decode!(dashboard("/api/me", admin).resp_body)["user"]["email"] ==
              "admin@example.com"
+  end
+
+  test "branding needs the key too: without it, authmk's look", %{admin: admin, browser: browser} do
+    System.put_env("AUTHMK_LICENCE_KEY", "authmk_" <> String.duplicate("a1", 12))
+    ctx = Context.new(Auth.config())
+
+    png =
+      Base.decode64!(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+      )
+
+    :ok =
+      Branding.update(ctx, %{
+        "app_name" => "Acme",
+        "logo" => %{"type" => "image/png", "data" => Base.encode64(png)}
+      })
+
+    assert dashboard("/", admin).status == 200
+    {_browser, conn} = Browser.get(browser, "/error", %{error: "invalid_token"})
+    assert conn.resp_body =~ ~s("app_name":"Acme")
+
+    assert Browser.get(browser, "/branding/logo") |> elem(1) |> Map.get(:status) ==
+             200
+
+    System.delete_env("AUTHMK_LICENCE_KEY")
+    {_browser, conn} = Browser.get(browser, "/error", %{error: "invalid_token"})
+    refute conn.resp_body =~ "Acme"
+
+    log =
+      capture_log(fn ->
+        assert Browser.get(browser, "/branding/logo") |> elem(1) |> Map.get(:status) ==
+                 404
+      end)
+
+    assert log =~ "AUTHMK_LICENCE_KEY"
   end
 end

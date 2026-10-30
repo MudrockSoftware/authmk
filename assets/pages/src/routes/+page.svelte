@@ -6,13 +6,21 @@
 
   const page = readPage();
   const appName = page?.app_name && page.app_name !== "authmk" ? page.app_name : null;
+  let logoFailed = $state(false);
 </script>
 
 <svelte:head>
   <title>{appName ? `Sign-in problem · ${appName}` : "Sign-in problem"}</title>
 </svelte:head>
 
-<main class="flex min-h-screen flex-col items-center justify-center p-6">
+<main
+  class="flex min-h-screen flex-col items-center justify-center p-6"
+  style:--color-primary={page?.primary_color}
+  style:--color-primary-content={page?.primary_content_color}
+>
+  {#if page?.logo_url && !logoFailed}
+    <img class="mb-6 h-12 w-auto max-w-60 object-contain" src={page.logo_url} alt={appName ?? ""} onerror={() => (logoFailed = true)} />
+  {/if}
   <div class="card border-base-300 bg-base-100 w-full max-w-md border">
     <div class="card-body items-center gap-3 text-center">
       <span class="bg-error/10 text-error rounded-full p-3"><TriangleAlert class="size-7" aria-hidden="true" /></span>

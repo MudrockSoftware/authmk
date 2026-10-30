@@ -1,87 +1,103 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import Avatar from "#lib/components/Avatar.svelte";
-  import Empty from "#lib/components/Empty.svelte";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Card from "#lib/components/Card.svelte";
+  import Confirm from "#lib/components/Confirm.svelte";
   import Failure from "#lib/components/Failure.svelte";
   import Loading from "#lib/components/Loading.svelte";
+  import OutcomeAlert from "#lib/components/OutcomeAlert.svelte";
   import PageHeader from "#lib/components/PageHeader.svelte";
-  import { api } from "#lib/api.ts";
+  import SubscriptionsCard from "#lib/components/SubscriptionsCard.svelte";
+  import InvitationsCard from "#lib/components/organization/InvitationsCard.svelte";
+  import MembersCard from "#lib/components/organization/MembersCard.svelte";
+  import OrganizationProfileCard from "#lib/components/organization/OrganizationProfileCard.svelte";
+  import TeamsCard from "#lib/components/organization/TeamsCard.svelte";
+  import { api, type OrganizationDetail } from "#lib/api.ts";
   import { formatDate } from "#lib/format.ts";
+  import { Outcome } from "#lib/outcome.svelte.ts";
+  import { session } from "#lib/session.svelte.ts";
 
-  const detail = $derived(api.organization(page.params.id ?? ""));
+  const id = $derived(page.params.id ?? "");
+  const me = $derived(session.me!);
+  const editable = $derived(me.can.manage_organizations);
+
+  let detail = $state<OrganizationDetail | null>(null);
+  let failure = $state<unknown>(null);
+  const outcome = new Outcome(load);
+  let confirmDelete = $state<Confirm>();
+
+  async function load() {
+    try {
+      detail = await api.organization(id);
+      failure = null;
+    } catch (error) {
+      failure = error;
+    }
+  }
+
+  $effect(() => {
+    void id;
+    outcome.notice = null;
+    load();
+  });
+
+  async function remove() {
+    await api.deleteOrganization(id);
+    await goto("#/organizations");
+  }
 </script>
 
 <a href="#/organizations" class="link link-hover text-base-content/70 text-sm">← Organizations</a>
 
-{#await detail}
-  <Loading />
-{:then data}
-  <div class="mt-4"><PageHeader title={data.organization.name} description="{data.organization.slug} · since {formatDate(data.organization.created_at)}" /></div>
+{#if failure}<div class="mt-4"><Failure error={failure} /></div>{/if}
 
-  <div class="grid gap-6 xl:grid-cols-3">
-    <section class="card border-base-300 bg-base-100 border xl:col-span-2">
-      <div class="card-body">
-        <h2 class="card-title text-base">Members <span class="badge badge-ghost">{data.members.length}</span></h2>
-        {#if data.members.length === 0}
-          <Empty message="No members." />
-        {:else}
-          <ul class="divide-base-300 divide-y">
-            {#each data.members as member (member.user.id)}
-              <li>
-                <a href="#/users/{member.user.id}" class="hover:bg-base-200 rounded-field flex items-center gap-3 px-2 py-2.5">
-                  <Avatar name={member.user.name} email={member.user.email} />
-                  <div class="min-w-0 flex-1 text-sm">
-                    <div class="truncate font-medium">{member.user.name ?? member.user.email}</div>
-                    <div class="text-base-content/70 truncate text-xs">{member.user.email}</div>
-                  </div>
-                  <span class="badge {member.role.includes('owner') ? 'badge-primary' : 'badge-ghost'} badge-soft badge-sm">{member.role}</span>
-                </a>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-    </section>
+{#if detail}
+  {@const org = detail.organization}
+  <div class="mt-4">
+    <PageHeader title={org.name} description="{org.slug} · since {formatDate(org.created_at)}">
+      {#snippet actions()}
+        {#if editable}<button class="btn btn-sm btn-error btn-soft" onclick={() => confirmDelete?.open()}><Trash2 class="size-4" /> Delete</button>{/if}
+      {/snippet}
+    </PageHeader>
+  </div>
+
+  <OutcomeAlert {outcome} />
+
+  <div class="mt-4 grid gap-6 xl:grid-cols-3">
+    <div class="flex flex-col gap-6 xl:col-span-2">
+      <MembersCard {detail} {outcome} {editable} />
+      {#key detail}<OrganizationProfileCard {detail} {outcome} {editable} />{/key}
+    </div>
 
     <div class="flex flex-col gap-6">
-      <section class="card border-base-300 bg-base-100 border">
-        <div class="card-body">
-          <h2 class="card-title text-base">Teams</h2>
-          {#if data.teams.length === 0}<Empty message="No teams." />{:else}
-            <ul class="flex flex-wrap gap-2">{#each data.teams as team (team.id)}<li class="badge badge-outline">{team.name}</li>{/each}</ul>
-          {/if}
-        </div>
-      </section>
-      <section class="card border-base-300 bg-base-100 border">
-        <div class="card-body">
-          <h2 class="card-title text-base">Invitations</h2>
-          {#if data.invitations.length === 0}<Empty message="No invitations." />{:else}
-            <ul class="divide-base-300 divide-y text-sm">
-              {#each data.invitations as invitation (invitation.id)}
-                <li class="flex items-center justify-between py-2">
-                  <span class="truncate">{invitation.email}</span>
-                  <span class="badge badge-ghost badge-sm">{invitation.status}</span>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </div>
-      </section>
-      {#if data.sso_providers.length > 0 || data.scim_connections.length > 0}
-        <section class="card border-base-300 bg-base-100 border">
-          <div class="card-body text-sm">
-            <h2 class="card-title text-base">Single sign-on</h2>
-            {#each data.sso_providers as provider (provider.provider_id)}
+      {#if me.features.teams}<TeamsCard {detail} {outcome} {editable} />{/if}
+      <InvitationsCard {detail} {outcome} {editable} />
+      {#if detail.sso_providers.length > 0 || detail.scim_connections.length > 0}
+        <Card title="Single sign-on">
+          <div class="text-sm">
+            {#each detail.sso_providers as provider (provider.provider_id)}
               <div>{provider.provider_id} · {provider.domain ?? "no domain"} {provider.domain_verified ? "(verified)" : ""}</div>
             {/each}
-            {#each data.scim_connections as connection (connection.id)}
+            {#each detail.scim_connections as connection (connection.id)}
               <div>Directory sync: {connection.name ?? connection.id} · {connection.status}</div>
             {/each}
           </div>
-        </section>
+        </Card>
       {/if}
     </div>
   </div>
-{:catch error}
-  <div class="mt-4"><Failure {error} /></div>
-{/await}
+
+  {#if me.features.payments}<div class="mt-6"><SubscriptionsCard subscriptions={detail.subscriptions} /></div>{/if}
+
+  <Confirm
+    bind:this={confirmDelete}
+    title="Delete {org.name}?"
+    message="The organization, its members, teams and invitations are deleted. Its members' accounts stay. This can't be undone."
+    confirmLabel="Delete organization"
+    danger
+    run={remove}
+  />
+{:else if !failure}
+  <Loading />
+{/if}

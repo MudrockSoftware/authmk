@@ -29,6 +29,10 @@ defmodule Authmk.Plugins.Creem do
   uses it only to know which subscription changed, and reads that
   subscription from Creem.
 
+  `Authmk.Payments.change_plan/4` upgrades the subscription to the plan's
+  product (prorated and charged now, Creem's default), and
+  `Authmk.Payments.resume/2` takes back a scheduled cancel.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Payments.Options.schema(Authmk.Plugins.Creem.Options.own()))}
@@ -106,6 +110,27 @@ defmodule Authmk.Plugins.Creem do
 
     with {:ok, _canceled} <-
            request(ctx, :post, "/subscriptions/#{URI.encode(id)}/cancel", %{mode: mode}, opts),
+         {:ok, object} <- fetch(ctx, id, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  # Creem's default: prorated, and charged now.
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, product_id, opts) do
+    id = subscription.provider_subscription_id
+    path = "/subscriptions/#{URI.encode(id)}/upgrade"
+
+    with {:ok, _upgraded} <- request(ctx, :post, path, %{product_id: product_id}, opts),
+         {:ok, object} <- fetch(ctx, id, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    id = subscription.provider_subscription_id
+
+    with {:ok, _resumed} <-
+           request(ctx, :post, "/subscriptions/#{URI.encode(id)}/resume", %{}, opts),
          {:ok, object} <- fetch(ctx, id, opts),
          do: {:ok, normalize(object)}
   end

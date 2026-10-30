@@ -12,7 +12,9 @@ config :phoenix_app, PhoenixApp.Auth,
   # The mobile app's deep links (see Authmk.Plugins.OneTimeToken's deep_links).
   trusted_origins: ["phoenixapp://"],
   # Browser apps on trusted origins may read authmk's answers (CORS).
-  cors: [trusted_origins: true]
+  cors: [trusted_origins: true],
+  # Sign-in errors show the app's own page (authmk's is the default).
+  errors: [page: {PhoenixAppWeb.AuthErrorHTML, :page}]
 
 config :phoenix_app,
   ecto_repos: [PhoenixApp.Repo],

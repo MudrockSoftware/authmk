@@ -126,6 +126,25 @@ defmodule Authmk.Plugin do
   """
   @callback sessions_ended(user_id :: term(), sessions :: [struct()], Context.t()) :: :ok
 
+  @doc """
+  The app's branding for authmk's pages and emails, or `nil` to keep the
+  defaults:
+
+      %{app_name: "Acme", logo_url: "/images/logo.svg", primary_color: "#0b5fff"}
+
+  Any field may be `nil` or left out, and keeps the default then. The first
+  plugin that returns a map wins. authmk checks the values again and drops
+  invalid ones; see `Authmk.Branding`. Runs for every error page and email,
+  so keep it fast.
+  """
+  @callback branding(Context.t()) ::
+              %{
+                optional(:app_name) => String.t() | nil,
+                optional(:logo_url) => String.t() | nil,
+                optional(:primary_color) => String.t() | nil
+              }
+              | nil
+
   @optional_callbacks init: 1,
                       schema: 1,
                       endpoints: 1,
@@ -139,7 +158,8 @@ defmodule Authmk.Plugin do
                       authenticate_request: 1,
                       send_email_verification: 3,
                       database_hook: 4,
-                      sessions_ended: 3
+                      sessions_ended: 3,
+                      branding: 1
 
   defmacro __using__(_opts) do
     quote do

@@ -1,8 +1,10 @@
 defmodule Authmk.DashboardTest do
   use Authmk.EmulationCase, async: true
 
+  import Authmk.Test.DashboardHelpers
+
   alias Authmk.{Context, Store, Testing}
-  alias Authmk.Plugins.Organization
+  alias Authmk.Plugins.{Organization, SCIM}
 
   defmodule Auth do
     use Authmk,
@@ -15,7 +17,7 @@ defmodule Authmk.DashboardTest do
         Authmk.Plugins.EmailPassword,
         Authmk.Plugins.Admin,
         Authmk.Plugins.TwoFactor,
-        Authmk.Plugins.Organization,
+        {Authmk.Plugins.Organization, teams: [enabled: true]},
         Authmk.Plugins.AuditLog,
         Authmk.Plugins.SSO,
         Authmk.Plugins.SCIM,
@@ -26,35 +28,21 @@ defmodule Authmk.DashboardTest do
 
   @moduletag auth: Auth
 
-  # The app forwards /admin to the dashboard.
-  defp dashboard(method, path, user \\ nil, headers \\ []) do
-    conn = Plug.Test.conn(method, "/admin" <> path)
-    conn = Enum.reduce(headers, conn, fn {k, v}, conn -> Plug.Conn.put_req_header(conn, k, v) end)
-    conn = if user, do: Testing.sign_in(conn, Auth, user), else: conn
-    segments = conn.path_info |> tl()
-    Plug.forward(conn, segments, Authmk.Dashboard, Authmk.Dashboard.init(auth: Auth))
-  end
-
-  defp api(method, path, user, headers \\ []),
-    do: dashboard(method, "/api/" <> path, user, headers)
-
-  defp from_dashboard, do: [{"origin", "http://localhost:4000"}]
-
   setup do
     %{admin: Testing.create_user(Auth, email: "admin@example.com", name: "Admin", role: "admin")}
   end
 
   test "the app's page is for admins only", %{admin: admin} do
-    assert dashboard(:get, "/").status == 302
-    assert Plug.Conn.get_resp_header(dashboard(:get, "/"), "location") == ["/"]
+    assert dashboard(Auth, :get, "/").status == 302
+    assert Plug.Conn.get_resp_header(dashboard(Auth, :get, "/"), "location") == ["/"]
 
     user = Testing.create_user(Auth, email: "ada@example.com")
-    assert Plug.Conn.get_resp_header(dashboard(:get, "/", user), "location") == ["/"]
+    assert Plug.Conn.get_resp_header(dashboard(Auth, :get, "/", user), "location") == ["/"]
 
     # Relative links need the trailing slash.
-    assert Plug.Conn.get_resp_header(dashboard(:get, ""), "location") == ["/admin/"]
+    assert Plug.Conn.get_resp_header(dashboard(Auth, :get, ""), "location") == ["/admin/"]
 
-    conn = dashboard(:get, "/", admin)
+    conn = dashboard(Auth, :get, "/", admin)
     assert conn.status == 200
     assert conn.resp_body =~ ~s("./_app/immutable/entry/start.)
     refute conn.resp_body =~ ~s("/_app/)
@@ -63,112 +51,134 @@ defmodule Authmk.DashboardTest do
 
     # Its files, wherever it's mounted.
     [_, start] = Regex.run(~r{"\./(_app/immutable/entry/start\.[^"]+)"}, conn.resp_body)
-    asset = dashboard(:get, "/" <> start)
+    asset = dashboard(Auth, :get, "/" <> start)
     assert asset.status == 200
     assert asset.resp_body =~ "import"
-    assert dashboard(:get, "/_app/missing.js").status == 404
-    assert dashboard(:get, "/elsewhere").status == 404
+    assert dashboard(Auth, :get, "/_app/missing.js").status == 404
+    assert dashboard(Auth, :get, "/elsewhere").status == 404
   end
 
-  test "the API answers admins only", %{admin: admin} do
-    assert api(:get, "me", nil).status == 401
+  test "the API answers admins only, and says what they may do", %{admin: admin} do
+    assert api(Auth, :get, "me", nil).status == 401
     user = Testing.create_user(Auth, email: "ada@example.com")
-    assert api(:get, "me", user).status == 403
+    assert api(Auth, :get, "me", user).status == 403
 
-    me = JSON.decode!(api(:get, "me", admin).resp_body)
+    {200, me} = get_json(Auth, "me", admin)
     assert me["user"]["email"] == "admin@example.com"
+    assert me["roles"] == ["admin", "user"]
+    assert Enum.all?(Map.values(me["can"]))
 
-    assert me["can"] == %{
-             "ban" => true,
-             "revoke_sessions" => true,
-             "update_users" => true,
-             "manage_service_accounts" => true
-           }
+    assert %{"service_accounts" => true, "organizations" => true, "teams" => true} =
+             me["features"]
 
-    assert me["features"]["service_accounts"]
-    assert me["features"]["organizations"] and me["features"]["audit_log"]
+    assert %{"audit_log" => true, "payments" => false, "branding" => false} = me["features"]
   end
 
-  test "overview, users and their details", %{admin: admin} do
+  test "changes need the dashboard's Origin", %{admin: admin} do
+    ada = Testing.create_user(Auth, email: "ada@example.com")
+    conn = api(Auth, :post, "users/#{ada.id}/ban", admin, origin: false)
+    assert conn.status == 403
+    assert JSON.decode!(conn.resp_body)["error"]["code"] == "invalid_origin"
+    refute Testing.get_user_by(Auth, email: "ada@example.com").banned
+
+    # An unreadable body is refused.
+    conn =
+      Plug.Test.conn(:post, "/admin/api/users/#{ada.id}/ban", "{not json")
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+      |> Plug.Conn.put_req_header("origin", "http://localhost:4000")
+      |> Testing.sign_in(Auth, admin)
+
+    conn =
+      Plug.forward(conn, tl(conn.path_info), Authmk.Dashboard, Authmk.Dashboard.init(auth: Auth))
+
+    assert conn.status == 400
+  end
+
+  test "overview, users and what a user can see and do", %{admin: admin} do
     ada =
       Testing.create_user(Auth, email: "ada@example.com", name: "Ada", password: "correct horse")
 
     Testing.create_user(Auth, email: "grace@example.com", name: "Grace")
     %{session: session} = Testing.create_session(Auth, ada)
 
-    overview = JSON.decode!(api(:get, "overview", admin).resp_body)
+    {200, overview} = get_json(Auth, "overview", admin)
     assert overview["totals"]["users"] == 3
     assert length(overview["sign_ups"]) == 30
     assert List.last(overview["sign_ups"])["count"] == 3
     assert %{"provider" => "credential", "count" => 1} in overview["sign_in_methods"]
 
-    %{"users" => users, "has_more" => false} =
-      JSON.decode!(api(:get, "users?search=ADA", admin).resp_body)
-
+    {200, %{"users" => users, "has_more" => false}} = get_json(Auth, "users?search=ADA", admin)
     assert [%{"email" => "ada@example.com"}] = users
 
-    detail = JSON.decode!(api(:get, "users/#{ada.id}", admin).resp_body)
+    ctx = Context.new(Auth.config())
+    {:ok, acme} = Organization.create_organization(Auth, %{name: "Acme", slug: "acme"}, ada.id)
+    {:ok, team} = Organization.create_team(Auth, acme.id, %{name: "Platform"})
+    {:ok, _member} = Organization.add_team_member(Auth, team.id, ada.id)
+    {:ok, _key} = Store.insert(ctx, :api_key, %{name: "CI", key: "hashed", user_id: ada.id})
+
+    {200, detail} = get_json(Auth, "users/#{ada.id}", admin)
     assert [%{"id" => session_id}] = detail["sessions"]
     assert session_id == to_string(session.id)
     assert [%{"provider" => "credential"}] = detail["accounts"]
+    assert [%{"name" => "CI", "enabled" => true}] = detail["api_keys"]
+    refute Map.has_key?(hd(detail["api_keys"]), "key")
+    assert %{"enabled" => false, "authenticator_app" => false} = detail["two_factor"]
     assert Enum.any?(detail["events"], &(&1["event"] == "user.created"))
 
-    assert api(:get, "users/not-a-user", admin).status == 404
-  end
+    # Roles and where their permissions come from.
+    assert %{"roles" => [%{"name" => "user", "source" => "app role"}]} = detail["access"]["app"]
+    [acme_access] = detail["access"]["organizations"]
+    assert %{"name" => "Acme", "teams" => [%{"name" => "Platform"}]} = acme_access
 
-  test "actions, with the Origin and the permission checked", %{admin: admin} do
-    ada = Testing.create_user(Auth, email: "ada@example.com")
-    Testing.create_session(Auth, ada)
+    assert [%{"name" => "owner", "source" => "built-in role", "permissions" => grants}] =
+             acme_access["roles"]
+
+    assert "delete" in grants["organization"]
+
+    # Search by status, and by organization.
+    {200, %{"users" => [%{"email" => "ada@example.com"}]}} =
+      get_json(Auth, "users?organization_id=#{acme.id}", admin)
+
+    {200, %{"users" => []}} = get_json(Auth, "users?organization_id=nope", admin)
 
     {:ok, _ada} =
-      Store.update(Context.new(Auth.config()), :user, ada, %{two_factor_enabled: true})
+      Store.update(ctx, :user, ada, %{
+        banned: true,
+        two_factor_enabled: true,
+        email_verified: false
+      })
 
-    # Without the dashboard's Origin: refused (CSRF).
-    assert api(:post, "users/#{ada.id}/ban", admin).status == 403
+    {200, %{"users" => [%{"email" => "ada@example.com"}]}} =
+      get_json(Auth, "users?status=banned", admin)
 
-    assert api(:post, "users/#{ada.id}/disable-two-factor", admin, from_dashboard()).status == 200
-    refute Testing.get_user_by(Auth, email: "ada@example.com").two_factor_enabled
+    {200, %{"users" => [%{"email" => "ada@example.com"}]}} =
+      get_json(Auth, "users?status=two_factor", admin)
 
-    assert api(:post, "users/#{ada.id}/revoke-sessions", admin, from_dashboard()).status == 200
-    assert Testing.list_sessions(Auth, ada) == []
+    {200, %{"users" => [%{"email" => "ada@example.com"}]}} =
+      get_json(Auth, "users?status=unverified", admin)
 
-    %{session: session} = Testing.create_session(Auth, ada)
-
-    assert api(:post, "users/#{ada.id}/sessions/#{session.id}/revoke", admin, from_dashboard()).status ==
-             200
-
-    assert Testing.list_sessions(Auth, ada) == []
-
-    assert api(:post, "users/#{ada.id}/ban", admin, from_dashboard()).status == 200
-    assert Testing.get_user_by(Auth, email: "ada@example.com").banned
-    assert api(:post, "users/#{ada.id}/unban", admin, from_dashboard()).status == 200
-    refute Testing.get_user_by(Auth, email: "ada@example.com").banned
-
-    assert api(:post, "users/#{ada.id}/delete-everything", admin, from_dashboard()).status == 404
+    assert api(Auth, :get, "users/not-a-user", admin).status == 404
   end
 
-  test "organizations, SSO and the audit log", %{admin: admin} do
-    {:ok, organization} =
-      Store.insert(Context.new(Auth.config()), :organization, %{name: "Acme", slug: "acme"})
+  test "SSO, the audit log and service accounts", %{admin: admin} do
+    assert {200, %{"providers" => [], "connections" => []}} = get_json(Auth, "sso", admin)
 
-    {:ok, _member} = Organization.add_member(Auth, organization.id, admin.id, "owner")
+    # A directory that hasn't called yet is worth a look.
+    {:ok, acme} = Organization.create_organization(Auth, %{name: "Acme", slug: "acme"}, admin.id)
 
-    %{"organizations" => [listed]} = JSON.decode!(api(:get, "organizations", admin).resp_body)
-    assert %{"name" => "Acme", "members" => 1} = listed
+    {:ok, _connection} =
+      SCIM.create_connection(Auth,
+        organization_id: to_string(acme.id),
+        name: "Okta"
+      )
 
-    detail = JSON.decode!(api(:get, "organizations/#{organization.id}", admin).resp_body)
-    assert [%{"role" => "owner", "user" => %{"email" => "admin@example.com"}}] = detail["members"]
-    assert api(:get, "organizations/nope", admin).status == 404
+    {200, %{"checks" => checks}} = get_json(Auth, "health", admin)
 
-    assert %{"providers" => [], "connections" => []} =
-             JSON.decode!(api(:get, "sso", admin).resp_body)
+    assert %{"status" => "warning", "area" => "SCIM"} =
+             Enum.find(checks, &(&1["name"] == "SCIM: Okta"))
 
-    events = JSON.decode!(api(:get, "events?event=member.added", admin).resp_body)
-    assert [%{"event" => "member.added"}] = events["events"]
-    assert events["total"] == 1
-  end
+    assert {200, %{"connections" => [%{"name" => "Okta"}]}} = get_json(Auth, "sso", admin)
 
-  test "service accounts: counted apart from users, listed, disabled, deleted", %{admin: admin} do
     {:ok, account} =
       Store.insert(Context.new(Auth.config()), :service_account, %{
         name: "Nightly export",
@@ -176,23 +186,25 @@ defmodule Authmk.DashboardTest do
         last_used_at: DateTime.utc_now()
       })
 
-    totals = JSON.decode!(api(:get, "overview", admin).resp_body)["totals"]
-    assert totals["users"] == 1
-    assert totals["service_accounts"] == 1
-    assert totals["active_service_accounts"] == 1
+    {200, overview} = get_json(Auth, "overview", admin)
+    assert overview["totals"]["users"] == 1
+    assert overview["totals"]["service_accounts"] == 1
+    assert overview["totals"]["active_service_accounts"] == 1
 
-    %{"service_accounts" => [listed]} =
-      JSON.decode!(api(:get, "service-accounts", admin).resp_body)
-
+    {200, %{"service_accounts" => [listed]}} = get_json(Auth, "service-accounts", admin)
     assert %{"name" => "Nightly export", "disabled" => false, "oauth_client" => false} = listed
 
     path = "service-accounts/#{account.id}"
-    assert api(:post, path <> "/disable", admin).status == 403
-    assert api(:post, path <> "/disable", admin, from_dashboard()).status == 200
+    assert api(Auth, :post, path <> "/disable", admin, origin: false).status == 403
+    assert {200, _} = post_json(Auth, path <> "/disable", admin)
     assert Store.get_by(Context.new(Auth.config()), :service_account, id: account.id).disabled
 
-    assert api(:post, path <> "/delete", admin, from_dashboard()).status == 200
+    assert {200, _} = post_json(Auth, path <> "/delete", admin)
     assert Store.get_by(Context.new(Auth.config()), :service_account, id: account.id) == nil
-    assert api(:post, path <> "/enable", admin, from_dashboard()).status == 404
+    assert {404, _} = post_json(Auth, path <> "/enable", admin)
+
+    {200, events} = get_json(Auth, "events?event=dashboard.service_account.disabled", admin)
+    assert [%{"actor_id" => actor}] = events["events"]
+    assert actor == to_string(admin.id)
   end
 end

@@ -73,6 +73,35 @@ defmodule Authmk.Plugins.SSO.SAML.Certificates do
     _kind, _invalid -> :error
   end
 
+  Record.defrecordp(
+    :validity,
+    :Validity,
+    Record.extract(:Validity, from_lib: "public_key/include/public_key.hrl")
+  )
+
+  @doc "When a parsed certificate stops being valid, or `nil` when it can't be read."
+  def expires_at(%{der: der}) do
+    tbs = der |> :public_key.pkix_decode_cert(:otp) |> certificate(:tbsCertificate)
+    tbs |> tbs(:validity) |> validity(:notAfter) |> asn1_time()
+  rescue
+    _invalid -> nil
+  end
+
+  # UTCTime has a two-digit year (1950 to 2049); GeneralizedTime four.
+  defp asn1_time({:utcTime, time}) do
+    <<year::binary-size(2), rest::binary>> = to_string(time)
+    century = if String.to_integer(year) >= 50, do: "19", else: "20"
+    asn1_time({:generalTime, century <> year <> rest})
+  end
+
+  defp asn1_time({:generalTime, time}) do
+    <<y::binary-size(4), mo::binary-size(2), d::binary-size(2), h::binary-size(2),
+      mi::binary-size(2), s::binary-size(2), "Z">> = to_string(time)
+
+    {:ok, datetime, 0} = DateTime.from_iso8601("#{y}-#{mo}-#{d}T#{h}:#{mi}:#{s}Z")
+    datetime
+  end
+
   @doc "Whether `signature` (raw, as XML-DSig carries it) signs `data` with `certificate`'s key."
   def verify(data, hash, {:rsa, signature}, %{key: {:rsa, key}}),
     do: :public_key.verify(data, hash, signature, key)

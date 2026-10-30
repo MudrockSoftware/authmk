@@ -1,14 +1,18 @@
 <script lang="ts">
   import "../app.css";
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
   import { page } from "$app/state";
   import Bot from "@lucide/svelte/icons/bot";
   import Building2 from "@lucide/svelte/icons/building-2";
+  import ChartLine from "@lucide/svelte/icons/chart-line";
+  import CreditCard from "@lucide/svelte/icons/credit-card";
   import KeyRound from "@lucide/svelte/icons/key-round";
   import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
   import LogIn from "@lucide/svelte/icons/log-in";
   import Menu from "@lucide/svelte/icons/menu";
   import Moon from "@lucide/svelte/icons/moon";
+  import Palette from "@lucide/svelte/icons/palette";
+  import Plug from "@lucide/svelte/icons/plug";
   import ScrollText from "@lucide/svelte/icons/scroll-text";
   import ShieldAlert from "@lucide/svelte/icons/shield-alert";
   import Sun from "@lucide/svelte/icons/sun";
@@ -16,6 +20,7 @@
   import Avatar from "#lib/components/Avatar.svelte";
   import Loading from "#lib/components/Loading.svelte";
   import { ApiError } from "#lib/api.ts";
+  import { contentColour, isColour } from "#lib/colour.ts";
   import { session } from "#lib/session.svelte.ts";
   import { theme } from "#lib/theme.svelte.ts";
 
@@ -28,13 +33,41 @@
   const links = $derived(
     [
       { href: "#/", label: "Overview", icon: LayoutDashboard, show: true },
+      { href: "#/analytics", label: "Analytics", icon: ChartLine, show: true },
       { href: "#/users", label: "Users", icon: UsersIcon, show: true },
       { href: "#/organizations", label: "Organizations", icon: Building2, show: me?.features.organizations },
+      { href: "#/payments", label: "Payments", icon: CreditCard, show: me?.features.payments },
       { href: "#/sso", label: "SSO and SCIM", icon: KeyRound, show: me?.features.sso || me?.features.scim },
       { href: "#/service-accounts", label: "Service accounts", icon: Bot, show: me?.features.service_accounts },
-      { href: "#/events", label: "Audit log", icon: ScrollText, show: me?.features.audit_log }
+      { href: "#/events", label: "Audit log", icon: ScrollText, show: me?.features.audit_log },
+      { href: "#/integrations", label: "Integrations", icon: Plug, show: true },
+      { href: "#/branding", label: "Branding", icon: Palette, show: me?.features.branding }
     ].filter((link) => link.show)
   );
+
+  // The app's branding, over Mudrock's theme: its name, logo and colour.
+  const branding = $derived(me?.branding ?? null);
+  const appName = $derived(branding?.app_name ?? (me && me.app_name !== "authmk" ? me.app_name : null));
+  let logoFailed = $state(false);
+
+  $effect(() => {
+    void branding?.logo_url;
+    logoFailed = false;
+  });
+
+  $effect(() => {
+    const root = document.documentElement.style;
+    const colour = branding?.primary_color;
+    if (isColour(colour)) {
+      root.setProperty("--color-primary", colour);
+      root.setProperty("--color-primary-content", contentColour(colour));
+    } else {
+      root.removeProperty("--color-primary");
+      root.removeProperty("--color-primary-content");
+    }
+    // Charts read the colours when they draw.
+    untrack(() => theme.version++);
+  });
 
   function active(href: string): boolean {
     const path = href.slice(1);
@@ -43,6 +76,8 @@
 
   let drawer = $state(false);
 </script>
+
+<svelte:head><title>{appName ? `${appName} · authmk dashboard` : "authmk dashboard"}</title></svelte:head>
 
 {#if session.error}
   <main class="flex min-h-screen items-center justify-center p-6">
@@ -87,7 +122,7 @@
         </div>
       </header>
 
-      <main class="w-full max-w-7xl flex-1 p-6">
+      <main class="w-full min-w-0 flex-1 p-6">
         {@render children()}
       </main>
     </div>
@@ -96,10 +131,14 @@
       <label for="nav" aria-label="Close the menu" class="drawer-overlay"></label>
       <aside class="border-base-300 bg-base-200 flex min-h-full w-64 flex-col border-r">
         <div class="flex items-center gap-2 px-5 py-5">
-          <span class="bg-primary text-primary-content rounded-field grid size-8 place-items-center text-sm font-bold">a</span>
-          <div class="leading-tight">
-            <div class="font-semibold">authmk</div>
-            <div class="text-base-content/70 text-xs">{me.app_name === "authmk" ? "Admin dashboard" : me.app_name}</div>
+          {#if branding?.logo_url && !logoFailed}
+            <img src={branding.logo_url} alt="" class="rounded-field size-8 object-contain" onerror={() => (logoFailed = true)} />
+          {:else}
+            <span class="bg-primary text-primary-content rounded-field grid size-8 place-items-center text-sm font-bold">{appName ? appName.charAt(0).toUpperCase() : "a"}</span>
+          {/if}
+          <div class="min-w-0 leading-tight">
+            <div class="truncate font-semibold">{appName ?? "authmk"}</div>
+            <div class="text-base-content/70 text-xs">Admin dashboard</div>
           </div>
         </div>
         <ul class="menu w-full gap-1 px-3">

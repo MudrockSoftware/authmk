@@ -1,9 +1,8 @@
 defmodule Authmk.Dashboard do
   @moduledoc """
-  An admin dashboard for your users, sessions, organizations, SSO and
-  SCIM, audit log and sign-in analytics. Mount it in any Plug or Phoenix
-  router, outside pipelines that check CSRF tokens (it checks the Origin
-  itself):
+  An admin dashboard to run your app's auth. Mount it in any Plug or
+  Phoenix router, outside pipelines that check CSRF tokens (it checks the
+  Origin itself):
 
       # Phoenix
       forward "/admin/auth", Authmk.Dashboard, auth: MyApp.Auth
@@ -12,7 +11,38 @@ defmodule Authmk.Dashboard do
       forward "/admin/auth", to: Authmk.Dashboard, init_opts: [auth: MyApp.Auth]
 
   It's a single-page app, built with SvelteKit and shipped ready-made in
-  authmk's `priv/licensed/dashboard`, with a JSON API under `api/`.
+  authmk's `priv/licensed/dashboard`, with a JSON API under `api/`. Each
+  page shows only what your app has set up:
+
+    * **Analytics**: active users, sign-ins and sign-ups by method, failed
+      sign-ins, email verification and second-factor adoption, by date
+      range and organization, and CSV exports of users, audit events and
+      the daily figures. Sign-in history, methods and failures come from
+      `Authmk.Plugins.AuditLog`.
+    * **Users**: create, edit (with the fields your schema declares, editable
+      where `input: true` allows), verify emails, set passwords and roles,
+      ban, revoke sessions, unlink accounts, impersonate and delete
+      (`Authmk.Plugins.Admin`). Each user's page shows what they can see
+      and do, and where each permission comes from: their roles, in the app
+      and in each organization and team, their sessions, linked accounts,
+      API keys and second factors.
+    * **Organizations** (`Authmk.Plugins.Organization`): create, edit and
+      delete them, and manage members and their roles, teams and
+      invitations, without being a member.
+    * **Payments** (a payment plugin, see `Authmk.Payments`): recurring
+      revenue from your plans' prices, new and cancelled subscriptions by
+      plan and provider, and changing plans, cancelling and resuming
+      through the provider.
+    * **Integrations**: health checks of email and SMS senders, social and
+      SSO providers (discovery, client credentials, certificate and secret
+      expiry), SCIM, payment webhooks, secondary storage and background
+      jobs, with warnings on the home page.
+    * **Branding** (`Authmk.Dashboard.Branding`): the app's name, logo and
+      colour, for the dashboard, authmk's pages and its emails.
+
+  Every change made from the dashboard is written to the audit log as a
+  `dashboard.*` event, with the admin as the actor (add
+  `Authmk.Plugins.AuditLog`; the Integrations page warns without it).
 
   Options:
 
@@ -20,7 +50,11 @@ defmodule Authmk.Dashboard do
     * `:can_access` - `{module, function}` called with the user and the auth
       module, returning whether they may open it. Default:
       `Authmk.Plugins.Admin`'s admins (users who may list users). Each
-      action checks its own Admin permission too (ban, revoke sessions...).
+      action checks its own Admin permission too (ban, revoke sessions...;
+      `organization`, `subscription` and `branding` for those pages, see
+      `Authmk.Plugins.Admin.Permissions`), runs through the same rules as
+      the Admin and Organization plugins' endpoints, and changes no user
+      stronger than the admin (`Authmk.Plugins.Admin.can_manage?/3`).
 
   Signed-out users and others are sent to `/`.
 

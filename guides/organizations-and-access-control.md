@@ -72,6 +72,12 @@ It takes `search_value`, `search_field` (`email` or `name`),
 `offset`. `update-user` refuses `id`, `role` and the ban fields: those
 have their own endpoints.
 
+The admin dashboard (`Authmk.Dashboard`, licensed separately) does all of
+this from its Users page, through these same endpoints and checks. Its
+Organizations, Payments and Branding pages need three more statements,
+which the default `admin` role has: `organization: create, update,
+delete`, `subscription: update` and `branding: update`.
+
 ### Banning and impersonating
 
 `POST /auth/admin/ban-user` takes a `user_id`, and optionally a
@@ -220,9 +226,25 @@ defmodule MyApp.OrganizationHooks do
 end
 ```
 
-From your own code, `Authmk.Plugins.Organization` has
-`add_member(MyApp.Auth, organization_id, user_id, "member")`,
-`set_member_role/4`, `remove_member/3` and `list_for_user/2`.
+From your own code, such as a back office, `Authmk.Plugins.Organization`
+manages organizations without the caller being a member:
+
+```elixir
+alias Authmk.Plugins.Organization
+
+{:ok, org} = Organization.create_organization(MyApp.Auth, %{name: "Acme", slug: "acme"}, owner_id)
+{:ok, _member} = Organization.add_member(MyApp.Auth, org.id, user_id, "member")
+{:ok, _invitation} = Organization.invite_member(MyApp.Auth, org.id, "grace@example.com", "admin", owner_id)
+```
+
+The others are `update_organization/3`, `delete_organization/2`,
+`set_member_role/4`, `remove_member/3`, `cancel_invitation/2`,
+`list_for_user/2`, and with teams `create_team/3`, `update_team/3`,
+`remove_team/2`, `add_team_member/3` and `remove_team_member/3`. They make
+the endpoints' checks (slugs, roles, limits, the last owner, the last team)
+except the caller's own permissions, and run the hooks.
+`create_organization/3` skips `allow_user_to_create_organization` and
+`organization_limit`, which limit what users do themselves.
 
 ## API keys
 

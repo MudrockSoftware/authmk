@@ -49,6 +49,15 @@ defmodule Authmk.Payments.Store do
         provider_subscription_id: provider_subscription_id
       )
 
+  @doc "A subscription by its id in the database, whoever it bills; `nil` for none."
+  def get_by_id(_ctx, nil), do: nil
+
+  def get_by_id(ctx, id) do
+    Store.get_by(ctx, :subscription, id: id)
+  rescue
+    Ecto.Query.CastError -> nil
+  end
+
   def get_for_reference(ctx, %{type: type, id: reference_id}, id) do
     case Store.get_by(ctx, :subscription, id: id) do
       %{reference_type: ^type, reference_id: ^reference_id} = subscription -> subscription

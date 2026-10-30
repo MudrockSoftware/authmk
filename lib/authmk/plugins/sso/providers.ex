@@ -48,6 +48,21 @@ defmodule Authmk.Plugins.SSO.Providers do
 
   def for_organization(_ctx, _organization_id), do: nil
 
+  @doc "Every provider, config's first (at most `limit` from the database). For health checks."
+  def all(ctx, limit) do
+    records =
+      Store.list(
+        ctx,
+        :sso_provider,
+        from(p in Store.module(ctx, :sso_provider),
+          order_by: [desc: p.inserted_at],
+          limit: ^limit
+        )
+      )
+
+    defaults(ctx) ++ Enum.map(records, &from_record(&1, ctx))
+  end
+
   @doc "Providers the user registered, or their organizations' (with `can_manage`)."
   def list(%Context{user: user} = ctx, organization_id) do
     module = Store.module(ctx, :sso_provider)

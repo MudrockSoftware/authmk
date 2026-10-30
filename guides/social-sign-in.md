@@ -238,3 +238,25 @@ endpoints answer with `{"error": {"code": ...}}`.
 | `email_doesnt_match` | Linking: the provider's email isn't the user's |
 | `account_already_linked_to_different_user` | Linking: the identity belongs to someone else |
 | `forbidden` | A provider-started sign-in that isn't allowed |
+
+## The error page
+
+Without `error_callback_url` or `errors: [error_url: ...]`, errors end on
+authmk's own page, `GET /auth/error?error=<code>`. It shows the app's name,
+and its logo and primary colour when a plugin brands the app (see
+`Authmk.Branding`). The page loads images only from its own origin, so it
+shows a logo given as a path on your site (`"/images/logo.svg"`) and leaves
+out one hosted elsewhere.
+
+To use your own template instead, give a `{module, function}`:
+
+```elixir
+errors: [page: {MyAppWeb.AuthErrorPage, :render}]
+```
+
+authmk calls `MyAppWeb.AuthErrorPage.render(data, ctx)`, with the data its
+own page gets (`:code`, `:message`, `:app_name`, `:home`, `:logo_url`,
+`:primary_color`, `:primary_content_color`), and serves the HTML it returns
+(a binary or iodata) with status 400. `:code` and `:message` come from the
+query string: escape them, like everything else you put in the HTML. If the
+template raises, authmk logs the error and serves its own page.

@@ -4,6 +4,86 @@ authmk follows [Semantic Versioning](https://semver.org). See the
 [stability guide](guides/stability.md) for what a version number promises,
 and how to upgrade.
 
+## 1.1.0 (unreleased)
+
+The admin dashboard grows from a browser into a place to run your app's
+auth. Every page shows only what the app has set up, and every change made
+from the dashboard is written to the audit log (`dashboard.*` events, with
+the admin as the actor). Run `mix authmk.gen.migration` after upgrading if
+you add `Authmk.Dashboard.Branding` or new fields.
+
+### Dashboard (licensed, see `licensed/LICENSE.md`)
+
+- **Analytics**: active users, sign-ins and sign-ups per day and by method,
+  failed sign-ins and why, email verification and second-factor adoption,
+  for a date range (up to a year) and an organization's members. CSV
+  exports of users, audit events and the daily figures, with spreadsheet
+  formulas neutralised, capped at 50,000 rows and audited.
+- **Users**: create, edit (name, email, picture and the fields your schema
+  declares, by their types, where `input: true` allows), verify emails, set
+  passwords and roles, ban with a reason and duration, revoke sessions,
+  unlink accounts (never the last one), impersonate and delete. A new email
+  set by an admin isn't verified until someone verifies it. Changes run
+  through `Authmk.Plugins.Admin`'s endpoints, so its rules hold.
+- **What a user can see and do**: their roles and permissions in the app and
+  in each organization (built-in or the organization's own) and team,
+  where each comes from, and their sessions, linked accounts, API keys and
+  second factors.
+- **Organizations**: create, edit, delete, members and their roles, teams
+  and invitations, as an app admin who isn't a member.
+- **Payments**: recurring revenue from the plans' prices, by plan and
+  provider and per currency; new and cancelled subscriptions; subscriptions
+  per user and organization; changing plans, cancelling and resuming
+  through the provider.
+- **Integrations**: health checks of email and SMS senders, social and SSO
+  providers (discovery, client credentials, certificate and client-secret
+  expiry), SCIM connections, payment webhooks, secondary storage, background
+  jobs and the audit log, with warnings on the home page.
+- **Branding**: `Authmk.Dashboard.Branding`, a plugin that keeps the app's
+  name, logo and colour, edited in the dashboard and used by the dashboard,
+  authmk's pages and `Authmk.Emails`. The logo is served from your app at
+  `<base URL>/branding/logo`, so that nothing in it runs. Without a licence
+  key outside development, pages and emails keep authmk's look.
+- New Admin permissions for the dashboard: `organization: create, update,
+  delete`, `subscription: update` and `branding: update`, granted to the
+  default `admin` role. Custom access control that includes
+  `Authmk.Plugins.Admin.Permissions.statements()` gets them too.
+
+### Library
+
+- **Branding hook**: plugins may implement the new optional
+  `c:Authmk.Plugin.branding/1` (app name, logo URL, primary colour).
+  `Authmk.Branding.get/1` merges it over the config, drops invalid values
+  and works out a readable text colour; the error page and `Authmk.Emails`
+  use it. A branding plugin that fails falls back to the defaults.
+- **Your own error page**: `errors: [page: {module, function}]` renders the
+  app's template at `/auth/error`, with the error and the branding. If it
+  raises, authmk's page is shown instead.
+- **Payments**: plans take optional prices (`amount`, `annual_amount`,
+  `currency`, in minor units, checked at startup).
+  `Authmk.Payments.change_plan/4`, `cancel/3` and `resume/2` manage
+  subscriptions from server code through the provider (Stripe, Polar,
+  Chargebee, Creem, Dodo Payments and Commet), saved as webhooks save them,
+  so lifecycle hooks fire. `monthly_amount/2`, `active?/1`, `provider/1` and
+  `supports?/2` are new, and so are the optional `change_plan/4` and
+  `resume/3` callbacks of `Authmk.Payments.Provider`. New error codes:
+  `subscription_canceled`, `not_scheduled_to_cancel`, `not_supported` and
+  `plan_change_needs_payment`.
+- **Organizations from server code**: `Authmk.Plugins.Organization` gains
+  `create_organization/3`, `update_organization/3`, `delete_organization/2`,
+  `invite_member/6`, `cancel_invitation/2`, and with teams `create_team/3`,
+  `update_team/3`, `remove_team/2`, `add_team_member/3` and
+  `remove_team_member/3`. They make the endpoints' checks, minus the
+  caller's own permissions, and run the hooks. Invalid ids now give
+  not-found errors instead of raising, in `add_member/4`,
+  `set_member_role/4` and `remove_member/3` too.
+- **Audit log**: sign-ins and sign-ups record how (`metadata.method`:
+  `"email"`, a provider's id, `"passkey"`, `"sso"`, `"two-factor"`...), and
+  failed sign-ins are recorded as `sign_in.failed`, with the method and the
+  error code, never the email tried.
+- `Authmk.Plugins.LastSignInMethod` now also records Apple's form-post
+  social callbacks.
+
 ## 1.0.0
 
 The first stable release. Its public API, plugin API, endpoints and error

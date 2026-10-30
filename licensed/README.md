@@ -1,10 +1,17 @@
 # Licensed features
 
-The admin dashboard (`Authmk.Dashboard`) and its analytics live here,
-separate from the MIT-licensed library in `lib/`. See `LICENSE.md`.
+The admin dashboard (`Authmk.Dashboard`), its analytics and the branding
+plugin (`Authmk.Dashboard.Branding`) live here, separate from the
+MIT-licensed library in `lib/`. See `LICENSE.md`.
 
 - `lib/`: the Elixir side, a Plug that serves the app and its JSON API
-  (`Authmk.Dashboard.API`). Tests: `test/` (run with `mix test` like the rest).
+  (`Authmk.Dashboard.API`, one module per area under `api/`), its reads
+  (`Authmk.Dashboard.Data` and `data/`), health checks
+  (`Authmk.Dashboard.Health`) and the branding plugin. Changes go through
+  the plugins' own server-side functions and endpoints
+  (`Authmk.Router.run_endpoint/3`), so their rules hold, and are written
+  to the audit log (`Authmk.Dashboard.Audit`). Tests: `test/` (run with
+  `mix test` like the rest).
 - `dashboard/`: the app, in SvelteKit (Svelte 5, Tailwind 4, daisyUI 5 with
   Mudrock's themes, Lucide icons, Chart.js). `mix compile` builds it
   with bun into `../priv/licensed/dashboard/` (not in git). The Hex package

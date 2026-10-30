@@ -236,6 +236,7 @@ defmodule Authmk do
   @doc false
   def missing_callback(auth, callback) do
     Authmk.Log.warning("#{inspect(auth)} doesn't implement #{callback}/2, so no email was sent")
+    :ok = Authmk.Deliveries.not_implemented(auth, callback)
     :ok
   end
 end

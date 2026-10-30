@@ -8,31 +8,16 @@ defmodule Authmk.Plugins.Organization.Invitations do
   alias Authmk.Plugins.Organization.{Access, Config, Errors, Hooks, Members, Organizations}
 
   def invite(%Context{params: params, user: inviter} = ctx) do
-    opts = Config.opts(ctx)
-    email = Email.normalize(params.email)
-    role = params.role |> AccessControl.parse_roles() |> Enum.join(",")
+    invite = new_invite(params.email, params.role, team_id: params.team_id, resend: params.resend)
 
-    with :ok <- sender(opts),
-         :ok <- check(Email.valid?(email), Error.new(:invalid_email)),
+    with :ok <- sender(ctx),
+         :ok <- valid_email(invite.email),
          {:ok, id} <- Access.organization_id(ctx, params.organization_id),
          {:ok, organization, actor} <- Access.authorize(ctx, id, invitation: [:create]),
-         :ok <- check(Access.valid_role?(ctx, organization, role), Errors.error(:invalid_role)),
-         :ok <- Access.check_owner_change(ctx, actor, role),
-         :ok <- Access.check_within_reach(ctx, organization, actor, role),
-         :ok <- not_a_member(ctx, organization, email),
-         :ok <- valid_team(ctx, organization, params.team_id),
-         {:ok, previous} <- previous_invitation(ctx, organization, email, params.resend, opts),
-         :ok <- under_limit(ctx, organization, opts),
-         {:ok, invitation} <-
-           write(ctx, previous, invitation_attrs(ctx, organization, email, role, opts)) do
-      Background.plugin_callback(ctx, Config.plugin(ctx), :send_invitation_email, %{
-        id: invitation.id,
-        email: email,
-        role: role,
-        organization: organization,
-        inviter: inviter
-      })
-
+         :ok <- valid_role(ctx, organization, invite.role),
+         :ok <- Access.check_owner_change(ctx, actor, invite.role),
+         :ok <- Access.check_within_reach(ctx, organization, actor, invite.role),
+         {:ok, invitation} <- deliver(ctx, organization, inviter, invite) do
       {:ok, Serializer.record(ctx, :invitation, invitation), ctx}
     end
   end
@@ -45,6 +30,65 @@ defmodule Authmk.Plugins.Organization.Invitations do
       {:ok, Serializer.record(ctx, :invitation, invitation), ctx}
     end
   end
+
+  @doc """
+  Invites `email` to `organization` with `role` from `inviter`, for server
+  code: the endpoint's checks, minus the inviter's own permissions.
+  `opts`: `team_id` and `resend`.
+  """
+  def invite_from_server(ctx, organization, inviter, email, role, opts) do
+    invite = new_invite(email, role, opts)
+
+    with :ok <- sender(ctx),
+         :ok <- valid_email(invite.email),
+         :ok <- valid_role(ctx, organization, invite.role) do
+      deliver(ctx, organization, inviter, invite)
+    end
+  end
+
+  @doc "Cancels a pending invitation, for server code."
+  def cancel_from_server(ctx, invitation_id) do
+    with {:ok, invitation} <- pending(ctx, invitation_id) do
+      set_status(ctx, invitation, "canceled", :cancel_invitation)
+    end
+  end
+
+  defp new_invite(email, role, opts) do
+    %{
+      email: Email.normalize(email),
+      role: role |> AccessControl.parse_roles() |> Enum.join(","),
+      team_id: opts[:team_id],
+      resend: opts[:resend] == true
+    }
+  end
+
+  # Writes the invitation (or refreshes the pending one) and sends it.
+  defp deliver(ctx, organization, inviter, invite) do
+    opts = Config.opts(ctx)
+
+    with :ok <- not_a_member(ctx, organization, invite.email),
+         :ok <- valid_team(ctx, organization, invite.team_id),
+         {:ok, previous} <-
+           previous_invitation(ctx, organization, invite.email, invite.resend, opts),
+         :ok <- under_limit(ctx, organization, opts),
+         {:ok, invitation} <-
+           write(ctx, previous, invitation_attrs(organization, inviter, invite, opts)) do
+      Background.plugin_callback(ctx, Config.plugin(ctx), :send_invitation_email, %{
+        id: invitation.id,
+        email: invite.email,
+        role: invite.role,
+        organization: organization,
+        inviter: inviter
+      })
+
+      {:ok, invitation}
+    end
+  end
+
+  defp valid_email(email), do: check(Email.valid?(email), Error.new(:invalid_email))
+
+  defp valid_role(ctx, organization, role),
+    do: check(Access.valid_role?(ctx, organization, role), Errors.error(:invalid_role))
 
   # The invitee joins with the invitation's role (and team), and the
   # organization becomes active.
@@ -149,6 +193,8 @@ defmodule Authmk.Plugins.Organization.Invitations do
     end
   end
 
+  defp safe_get(_ctx, nil), do: nil
+
   defp safe_get(ctx, id) do
     Store.get_by(ctx, :invitation, id: id)
   rescue
@@ -214,14 +260,14 @@ defmodule Authmk.Plugins.Organization.Invitations do
   defp write(ctx, previous, attrs),
     do: Store.update(ctx, :invitation, previous, Map.take(attrs, [:role, :expires_at, :team_id]))
 
-  defp invitation_attrs(%Context{user: inviter, params: params}, organization, email, role, opts) do
+  defp invitation_attrs(organization, inviter, invite, opts) do
     %{
       organization_id: organization.id,
-      email: email,
-      role: role,
+      email: invite.email,
+      role: invite.role,
       status: "pending",
       inviter_id: inviter.id,
-      team_id: params.team_id,
+      team_id: invite.team_id,
       expires_at: DateTime.add(DateTime.utc_now(), opts[:invitation_expires_in])
     }
   end
@@ -284,8 +330,10 @@ defmodule Authmk.Plugins.Organization.Invitations do
     end
   end
 
-  defp sender(opts) do
-    if opts[:send_invitation_email], do: :ok, else: {:error, Error.new(:feature_disabled)}
+  defp sender(ctx) do
+    if Config.opts(ctx)[:send_invitation_email],
+      do: :ok,
+      else: {:error, Error.new(:feature_disabled)}
   end
 
   defp check(true, _error), do: :ok

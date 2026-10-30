@@ -4,7 +4,7 @@ defmodule Authmk.Payments.Endpoints do
   # Authmk.Payments.Provider) talks to its provider.
 
   alias Authmk.{Context, Endpoint, Error, Log, Origin, Serializer}
-  alias Authmk.Payments.{Options, Reference, Store}
+  alias Authmk.Payments.{Options, Plans, Reference, Store}
   alias Authmk.Plug.RawBody
 
   @doc "The shared endpoints, for `endpoints/1` of a payment plugin."
@@ -77,13 +77,13 @@ defmodule Authmk.Payments.Endpoints do
          trial_allowed = not Store.had_trial?(ctx, reference),
          {:ok, success_url} <- absolute(ctx, params.success_url),
          {:ok, cancel_url} <- absolute(ctx, params.cancel_url || params.success_url),
-         {:ok, plan} <- plan(opts, params.plan),
+         {:ok, plan} <- Plans.by_name(opts[:plans], params.plan),
          :ok <- seats(params.seats),
          :ok <- not_subscribed(ctx, reference),
          {:ok, customer_id} <- ensure_customer(ctx, plugin, reference, opts) do
       checkout = %{
         customer_id: customer_id,
-        price_id: price_id(plan, params.annual, trial_allowed),
+        price_id: Plans.price_id(plan, params.annual, trial_allowed),
         success_url: success_url,
         cancel_url: cancel_url,
         seats: params.seats,
@@ -181,7 +181,7 @@ defmodule Authmk.Payments.Endpoints do
         attrs
         |> Map.drop([:reference_id, :reference_type])
         |> Map.merge(reference || %{})
-        |> Map.put(:plan, plan_name(opts, attrs[:price_id]))
+        |> Map.put(:plan, Plans.name_for(opts[:plans], attrs[:price_id]))
 
       save(ctx, provider, attrs, opts)
     else
@@ -257,16 +257,6 @@ defmodule Authmk.Payments.Endpoints do
     end
   end
 
-  # Providers with trials on the product take another product without one,
-  # once the reference had its trial.
-  defp price_id(plan, annual, trial_allowed) do
-    cond do
-      not trial_allowed and plan[:no_trial_id] -> plan[:no_trial_id]
-      annual and plan[:annual_id] -> plan[:annual_id]
-      true -> plan[:id]
-    end
-  end
-
   # One subscription at a time, so nobody pays twice: plans are changed,
   # and failed payments fixed, in the provider's portal instead.
   defp not_subscribed(ctx, reference) do
@@ -284,21 +274,6 @@ defmodule Authmk.Payments.Endpoints do
   defp seats(nil), do: :ok
   defp seats(seats) when seats in 1..10_000, do: :ok
   defp seats(_seats), do: {:error, Error.custom(:invalid_seats, 422, "Seats must be 1 to 10000")}
-
-  defp plan(opts, name) do
-    case Enum.find(opts[:plans], &(to_string(&1[:name]) == name)) do
-      nil -> {:error, Error.custom(:plan_not_found, 404, "No such plan")}
-      plan -> {:ok, plan}
-    end
-  end
-
-  defp plan_name(opts, price_id) when is_binary(price_id) do
-    Enum.find_value(opts[:plans], fn plan ->
-      price_id in [plan[:id], plan[:annual_id], plan[:no_trial_id]] and to_string(plan[:name])
-    end)
-  end
-
-  defp plan_name(_opts, _price_id), do: nil
 
   # Providers need absolute URLs; ours must be safe redirects first.
   defp absolute(ctx, url) do

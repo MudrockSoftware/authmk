@@ -352,6 +352,43 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "branding": {
+      "columns": {
+        "app_name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "logo": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "logo_hash": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "logo_type": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "primary_color": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {},
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "device_codes": {
       "columns": {
         "client_id": {
@@ -1832,6 +1869,12 @@
           "type": "boolean"
         },
         "canonical_email": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "company": {
           "default": null,
           "null": true,
           "references": null,

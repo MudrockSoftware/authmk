@@ -6,7 +6,12 @@ if Code.ensure_loaded?(Swoosh.Email) do
     takes the map the callback gets plus `opts`:
 
       * `:from` - `{"Acme", "no-reply@acme.example"}` or an address (required)
-      * `:app_name` - shown in subjects and bodies (default: the config's)
+      * `:app_name` - shown in subjects and bodies (default: the branded
+        name, see below, or the config's)
+
+    They carry the app's branding (`Authmk.Branding`): its name, its logo
+    (as an absolute URL; a logo path needs the context's `base_url`) and its
+    primary colour on the button.
 
     Send them with your mailer:
 
@@ -23,7 +28,7 @@ if Code.ensure_loaded?(Swoosh.Email) do
 
     import Swoosh.Email
 
-    alias Authmk.Context
+    alias Authmk.{Branding, Context}
 
     @doc "For `c:Authmk.send_verification_email/2`."
     @spec verification(map(), Context.t(), keyword()) :: Swoosh.Email.t()
@@ -102,17 +107,19 @@ if Code.ensure_loaded?(Swoosh.Email) do
     @spec otp(map(), Context.t(), keyword()) :: Swoosh.Email.t()
     def otp(%{otp: code} = data, ctx, opts) do
       to = data[:email] || data.user.email
-      app = app_name(ctx, opts)
-      text = "Your #{app} code is #{code}. It expires soon; don't share it with anyone."
+      brand = brand(ctx, opts)
+
+      text =
+        "Your #{brand.app_name} code is #{code}. It expires soon; don't share it with anyone."
 
       html =
-        layout(app, """
+        layout(brand, """
         <p>Your code:</p>
         <p style="font-size:28px;font-weight:bold;letter-spacing:4px">#{escape(code)}</p>
         <p>It expires soon. Don't share it with anyone.</p>
         """)
 
-      build(to, opts, "Your #{app} code", text, html)
+      build(to, opts, "Your #{brand.app_name} code", text, html)
     end
 
     @doc "For `Authmk.Plugins.Organization`'s `send_invitation_email`."
@@ -120,7 +127,8 @@ if Code.ensure_loaded?(Swoosh.Email) do
     def invitation(%{email: email, organization: organization} = data, ctx, opts) do
       inviter = data[:inviter] && (Map.get(data.inviter, :name) || Map.get(data.inviter, :email))
       by = if inviter, do: " by #{inviter}", else: ""
-      intro = "You're invited#{by} to join #{organization.name} on #{app_name(ctx, opts)}."
+      brand = brand(ctx, opts)
+      intro = "You're invited#{by} to join #{organization.name} on #{brand.app_name}."
 
       case data[:url] || opts[:accept_url] do
         nil ->
@@ -129,10 +137,7 @@ if Code.ensure_loaded?(Swoosh.Email) do
             opts,
             "Join #{organization.name}",
             intro <> " Your invitation id is #{data.id}.",
-            layout(
-              app_name(ctx, opts),
-              "<p>#{escape(intro)}</p><p>Invitation: #{escape(data.id)}</p>"
-            )
+            layout(brand, "<p>#{escape(intro)}</p><p>Invitation: #{escape(data.id)}</p>")
           )
 
         url ->
@@ -149,13 +154,14 @@ if Code.ensure_loaded?(Swoosh.Email) do
     end
 
     defp link_email(to, ctx, opts, subject, intro, action, url) do
-      app = app_name(ctx, opts)
+      brand = brand(ctx, opts)
       text = "#{intro}\n\n#{action}: #{url}\n"
+      button = "background:#{brand.button_color};color:#{brand.button_text_color}"
 
       html =
-        layout(app, """
+        layout(brand, """
         <p>#{escape(intro)}</p>
-        <p><a href="#{escape(url)}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;border-radius:6px;text-decoration:none">#{escape(action)}</a></p>
+        <p><a href="#{escape(url)}" style="display:inline-block;padding:10px 16px;#{escape(button)};border-radius:6px;text-decoration:none">#{escape(action)}</a></p>
         <p style="color:#666;font-size:12px">Or open: #{escape(url)}</p>
         """)
 
@@ -171,17 +177,33 @@ if Code.ensure_loaded?(Swoosh.Email) do
       |> html_body(html)
     end
 
-    defp layout(app, content) do
+    defp layout(brand, content) do
       """
       <!doctype html>
       <html><body style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:24px;color:#111">
-      <h2 style="font-size:18px">#{escape(app)}</h2>
+      #{logo(brand)}<h2 style="font-size:18px">#{escape(brand.app_name)}</h2>
       #{content}
       </body></html>
       """
     end
 
-    defp app_name(%Context{config: config}, opts), do: opts[:app_name] || config.app_name
+    defp logo(%{logo_url: nil}), do: ""
+
+    defp logo(brand),
+      do:
+        ~s(<img src="#{escape(brand.logo_url)}" alt="#{escape(brand.app_name)}" height="48" style="display:block;height:48px;width:auto;border:0">\n)
+
+    # The app's branding (`Authmk.Branding`); an explicit `:app_name` wins.
+    defp brand(ctx, opts) do
+      branding = Branding.get(ctx)
+
+      %{
+        app_name: opts[:app_name] || branding.app_name,
+        logo_url: Branding.email_logo_url(branding, ctx),
+        button_color: branding.primary_color || "#111",
+        button_text_color: branding.primary_content_color || "#fff"
+      }
+    end
 
     defp escape(value), do: value |> to_string() |> Plug.HTML.html_escape()
   end

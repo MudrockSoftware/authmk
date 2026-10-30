@@ -110,4 +110,30 @@ defmodule Authmk.AuditLogTest do
     assert Repo.aggregate(from(e in "audit_events", where: e.event == "user.created"), :count) ==
              0
   end
+
+  test "sign-ins and sign-ups say how; failed sign-ins say how and why", %{browser: browser} do
+    {_browser, _user} = sign_up(browser)
+
+    for password <- ["wrong horse", "correct horse"] do
+      post(Browser.new(Auth), "/sign-in/email", %{email: "ada@example.com", password: password})
+    end
+
+    # Not a sign-in: no failure recorded for it.
+    post(Browser.new(Auth), "/change-password", %{current_password: "x", new_password: "y"})
+
+    %{events: events} = AuditLog.list_events(Auth, limit: 100)
+
+    methods =
+      for %{event: "session.created", metadata: metadata} <- events, do: metadata["method"]
+
+    assert methods == ["email", "email"]
+
+    assert [%{metadata: %{"method" => "email"}}] =
+             Enum.filter(events, &(&1.event == "user.created"))
+
+    assert [%{metadata: metadata, user_id: nil}] =
+             Enum.filter(events, &(&1.event == "sign_in.failed"))
+
+    assert metadata == %{"method" => "email", "code" => "invalid_credentials"}
+  end
 end

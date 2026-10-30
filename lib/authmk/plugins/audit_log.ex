@@ -5,13 +5,16 @@ defmodule Authmk.Plugins.AuditLog do
       use Authmk, plugins: [Authmk.Plugins.EmailPassword, {Authmk.Plugins.AuditLog, can_view_all: &MyApp.Auth.admin?/1}], ...
 
   Events are recorded as authmk writes: users created, updated and deleted;
-  sessions started and ended; accounts linked, changed (like a new
+  sessions started and ended; failed sign-ins (`sign_in.failed`, with the
+  method and the error code); accounts linked, changed (like a new
   password) and unlinked; verifications issued (by purpose); and with
   `Authmk.Plugins.Organization`, organizations, members and invitations.
   Each has the user it's about, the signed-in user who caused it (`actor`),
   the organization, IP address and user agent, and a few safe details
   (`metadata`): ids, roles, providers, purposes. Never tokens, codes or
-  passwords.
+  passwords. Sign-ins and sign-ups (`session.created`, `user.created`)
+  say how in `metadata.method`: `"email"`, a social provider's id,
+  `"passkey"`, `"sso"`, `"two-factor"`, or the endpoint's name.
 
   | Method | Path | Session |
   |---|---|---|
@@ -41,7 +44,7 @@ defmodule Authmk.Plugins.AuditLog do
 
   import Ecto.Query
 
-  alias Authmk.{Background, Context, Endpoint, Error, Log, Request, Store}
+  alias Authmk.{Background, Context, Endpoint, Error, Log, Request, SignInMethod, Store}
   alias Authmk.Storage.ETS
 
   @models [:user, :session, :account, :verification, :organization, :member, :invitation]
@@ -112,11 +115,40 @@ defmodule Authmk.Plugins.AuditLog do
   def database_hook(event, model, record, ctx)
       when model in @models and is_map_key(@actions, event) do
     name = event_name(model, @actions[event], record)
-    if name, do: record(ctx, name, details(model, record))
+    if name, do: record(ctx, name, with_method(details(model, record), name, ctx))
     {:ok, record}
   end
 
   def database_hook(_event, _model, data, _ctx), do: {:ok, data}
+
+  # A sign-in that failed: wrong password, code, signature... Who it was
+  # for isn't known (or isn't said), only how and why.
+  @impl true
+  def after_endpoint(endpoint, ctx, {:error, %Error{} = error} = result),
+    do: failed_sign_in(endpoint, ctx, error, result)
+
+  def after_endpoint(endpoint, ctx, {:error, %Error{} = error, _ctx} = result),
+    do: failed_sign_in(endpoint, ctx, error, result)
+
+  def after_endpoint(_endpoint, _ctx, result), do: result
+
+  defp failed_sign_in(endpoint, ctx, error, result) do
+    if SignInMethod.attempt?(endpoint) do
+      method = SignInMethod.describe(endpoint, ctx) || to_string(endpoint)
+      record(ctx, "sign_in.failed", %{metadata: %{method: method, code: error.code}})
+    end
+
+    result
+  end
+
+  # Sign-ins and sign-ups say how: "email", "github", "passkey"...
+  defp with_method(details, name, %Context{endpoint: %{name: endpoint}} = ctx)
+       when name in ["session.created", "user.created"] do
+    method = SignInMethod.describe(endpoint, ctx) || to_string(endpoint)
+    Map.update(details, :metadata, %{method: method}, &Map.put(&1, :method, method))
+  end
+
+  defp with_method(details, _name, _ctx), do: details
 
   # Sign-outs and revocations end sessions without a delete of each row.
   @impl true

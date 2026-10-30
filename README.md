@@ -183,15 +183,27 @@ payments guide.
 
 An admin dashboard (licensed separately: see License below) mounts in any
 Plug or Phoenix router with one line,
-`forward "/admin/auth", Authmk.Dashboard, auth: MyApp.Auth`: users,
-sessions, two-factor, bans, organizations, SSO and SCIM, the audit log and
-sign-in analytics, in Mudrock's light and dark themes.
+`forward "/admin/auth", Authmk.Dashboard, auth: MyApp.Auth`, to run your
+app's auth: analytics by date range and organization (active users,
+sign-ins and sign-ups by method, failed sign-ins, verification and
+two-factor adoption) with CSV exports; managing users (create, edit with
+your own fields, verify, set passwords and roles, ban, revoke sessions,
+unlink accounts, impersonate) and organizations (members, roles, teams,
+invitations); what each user can see and do, and why; earnings and
+subscriptions with a payment plugin; health checks of your senders,
+providers, certificates, storage and jobs; and your branding. Every change
+made there goes to the audit log. In Mudrock's light and dark themes.
+
+With `Authmk.Dashboard.Branding`, the app's name, logo and colour are
+edited in the dashboard and used by authmk's pages and emails.
 
 When a social, SSO or One Tap sign-in, or an OAuth authorization, fails
 with nowhere to send the user, authmk shows its own error page at
-`/auth/error` (themed, light and dark, with the error code and a way back).
-Pass `error_callback_url` (or set `errors: [error_url: ...]`) to send users
-to your own page instead.
+`/auth/error` (themed, light and dark, with the error code and a way back,
+and your branding). Render your own template there with
+`errors: [page: {MyAppWeb.AuthErrorHTML, :page}]`, or pass
+`error_callback_url` (or set `errors: [error_url: ...]`) to send users to
+your own page instead.
 
 `Authmk.Emails` has ready-made Swoosh emails for every callback, and
 `Authmk.SMS` is the behaviour for sending phone codes.
@@ -356,11 +368,12 @@ Authmk is an independent project and is not affiliated with Better Auth.
 
 MIT © Mudrock Software LTD. See [LICENSE](https://github.com/MudrockSoftware/authmk/blob/main/LICENSE).
 
-The admin dashboard and its analytics, in `licensed/`, aren't MIT licensed:
+The admin dashboard, its analytics and branding, in `licensed/`, aren't MIT licensed:
 they're source available, under [licensed/LICENSE.md](https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md).
 You may read and change them, and use them free in development and tests;
 changes you send back to Mudrock become Mudrock's. They ship in the Hex
 package and in every build of authmk; that needs no key as long as you
 don't mount `Authmk.Dashboard`. Running the dashboard in production needs a licence key
 (https://license.mudrock.dev). Without a valid key in `AUTHMK_LICENCE_KEY`,
-the dashboard refuses every request outside development and tests.
+the dashboard refuses every request outside development and tests, and
+`Authmk.Dashboard.Branding` leaves pages and emails with authmk's look.

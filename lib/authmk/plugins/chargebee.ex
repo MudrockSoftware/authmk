@@ -22,6 +22,12 @@ defmodule Authmk.Plugins.Chargebee do
   `webhook_secret`. Since nothing signs the content, authmk uses a webhook
   only to know which subscription changed, and reads it from Chargebee.
 
+  `Authmk.Payments.change_plan/4` replaces the subscription's plan item
+  price (`update_for_items`), and `Authmk.Payments.resume/2` removes a
+  scheduled cancellation. Changing plans expects multi-plan subscriptions
+  to be off, as they are by default: with them on, Chargebee would add the
+  new plan next to the old one.
+
   ## Options
 
   #{NimbleOptions.docs(Authmk.Payments.Options.schema(Authmk.Plugins.Chargebee.Options.own()))}
@@ -122,12 +128,41 @@ defmodule Authmk.Plugins.Chargebee do
   @impl Authmk.Payments.Provider
   def cancel(ctx, subscription, at_period_end, opts) do
     option = if at_period_end, do: "end_of_term", else: "immediately"
-    path = "/subscriptions/#{URI.encode(subscription.provider_subscription_id)}/cancel_for_items"
+    path = subscription_path(subscription, "/cancel_for_items")
 
     with {:ok, %{"subscription" => object}} <-
            request(ctx, :post, path, [{"cancel_option", option}], opts),
          do: {:ok, normalize(object)}
   end
+
+  # Chargebee replaces the plan item price, unless the site has
+  # multi-plan subscriptions on. Quantity only for more than one seat:
+  # flat-fee prices take none.
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, item_price_id, opts) do
+    form = [
+      {"subscription_items[item_price_id][0]", item_price_id},
+      {"subscription_items[quantity][0]", quantity(subscription.seats)}
+    ]
+
+    with {:ok, %{"subscription" => object}} <-
+           request(ctx, :post, subscription_path(subscription, "/update_for_items"), form, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp quantity(seats) when is_integer(seats) and seats > 1, do: to_string(seats)
+  defp quantity(_seats), do: nil
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    path = subscription_path(subscription, "/remove_scheduled_cancellation")
+
+    with {:ok, %{"subscription" => object}} <- request(ctx, :post, path, [], opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp subscription_path(subscription, action),
+    do: "/subscriptions/#{URI.encode(subscription.provider_subscription_id)}#{action}"
 
   @impl Authmk.Payments.Provider
   def webhook(ctx, body, headers, opts) do

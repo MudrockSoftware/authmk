@@ -228,15 +228,46 @@ defmodule Authmk.Router do
          :ok <- Origin.check_request(ctx),
          :ok <- RateLimit.check(ctx),
          {:ok, params} <- Params.cast(ctx.endpoint.params, ctx.raw_params),
-         {:ok, ctx} <- load_session(%{ctx | params: params}),
-         {:cont, ctx} <- run_middleware(ctx),
+         {:ok, ctx} <- load_session(%{ctx | params: params}) do
+      handle(ctx)
+    else
+      {:halt, %Error{} = error} -> {ctx, {:error, error}}
+      {:error, %Error{} = error} -> {ctx, {:error, error}}
+    end
+  end
+
+  # The endpoint itself, its params cast and its session loaded.
+  defp handle(ctx) do
+    with {:cont, ctx} <- run_middleware(ctx),
          {:cont, ctx} <- Hooks.before_endpoint(ctx) do
       {module, function} = ctx.endpoint.handler
       finish(ctx, apply(module, function, [ctx]))
     else
       {:respond, result, hook_ctx} -> finish(hook_ctx, result)
       {:halt, %Error{} = error} -> {ctx, {:error, error}}
-      {:error, %Error{} = error} -> {ctx, {:error, error}}
+    end
+  end
+
+  @doc false
+  # Runs the endpoint named `name` for a request whose session `ctx`
+  # already holds, with `raw_params` (string keys, as from a request): its
+  # params, middleware and hooks as usual. For authmk's own server code,
+  # like the dashboard; the caller checks the Origin. `{:error, :not_found}`
+  # when the app doesn't have that endpoint (or disabled its path).
+  @spec run_endpoint(Context.t(), atom(), map()) ::
+          {Context.t(), Authmk.Plugin.result()} | {:error, :not_found}
+  def run_endpoint(%Context{config: config} = ctx, name, raw_params) do
+    case Enum.find(config.endpoints, &(&1.name == name)) do
+      nil ->
+        {:error, :not_found}
+
+      endpoint ->
+        ctx = %{ctx | endpoint: endpoint, raw_params: raw_params}
+
+        case Params.cast(endpoint.params, raw_params) do
+          {:ok, params} -> handle(%{ctx | params: params})
+          {:error, %Error{} = error} -> {ctx, {:error, error}}
+        end
     end
   end
 

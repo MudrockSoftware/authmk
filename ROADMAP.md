@@ -18,30 +18,30 @@ change made from the dashboard is written to the audit log.
 
 ### Dashboards
 
-- [ ] More detailed analytics: active users over time, sign-ins and sign-ups by method, failed sign-ins, verification and 2FA adoption
-- [ ] Filters by date range and organization, and exports
+- [x] More detailed analytics: active users over time, sign-ins and sign-ups by method, failed sign-ins, verification and 2FA adoption
+- [x] Filters by date range and organization, and exports
 
 ### Users and organizations
 
-- [ ] Manage users: create, edit, verify email, ban, set a password, revoke sessions, unlink accounts, impersonate (with the Admin plugin)
-- [ ] Manage organizations (with the Organization plugin): create, edit, delete, members and their roles, teams, invitations
-- [ ] Custom fields: show, and edit where `input: true` allows it, the fields the app declares on users and organizations, by their types
-- [ ] What a user can see and do: clicking a user shows their roles and permissions, per organization and team, with where each comes from, plus their sessions, linked accounts, API keys and 2FA methods
+- [x] Manage users: create, edit, verify email, ban, set a password, revoke sessions, unlink accounts, impersonate (with the Admin plugin)
+- [x] Manage organizations (with the Organization plugin): create, edit, delete, members and their roles, teams, invitations
+- [x] Custom fields: show, and edit where `input: true` allows it, the fields the app declares on users and organizations, by their types
+- [x] What a user can see and do: clicking a user shows their roles and permissions, per organization and team, with where each comes from, plus their sessions, linked accounts, API keys and 2FA methods
 
 ### Payments (with a payment plugin)
 
-- [ ] Earnings: revenue, recurring revenue, new and cancelled subscriptions, by plan and provider
-- [ ] Subscriptions: list them per user and organization, change plans, cancel and resume, through the configured provider
+- [x] Earnings: revenue, recurring revenue, new and cancelled subscriptions, by plan and provider
+- [x] Subscriptions: list them per user and organization, change plans, cancel and resume, through the configured provider
 
 ### Integrations
 
-- [ ] Health checks: email and SMS senders, social and SSO providers (discovery, credentials, certificate expiry), SCIM, webhooks, payment providers, secondary storage and background jobs
-- [ ] Warnings on the home page when a check fails or a certificate or secret is about to expire
+- [x] Health checks: email and SMS senders, social and SSO providers (discovery, credentials, certificate expiry), SCIM, webhooks, payment providers, secondary storage and background jobs
+- [x] Warnings on the home page when a check fails or a certificate or secret is about to expire
 
 ### Branding and pages
 
-- [ ] Custom branding: app name, logo and colours, used by the dashboard, authmk's pages and the email templates
-- [ ] Customizable error pages: the app's own template, or authmk's page with its branding
+- [x] Custom branding: app name, logo and colours, used by the dashboard, authmk's pages and the email templates
+- [x] Customizable error pages: the app's own template, or authmk's page with its branding
 
 ---
 

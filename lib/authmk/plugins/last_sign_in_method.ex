@@ -36,23 +36,10 @@ defmodule Authmk.Plugins.LastSignInMethod do
 
   use Authmk.Plugin
 
-  alias Authmk.{BaseURL, Context, Cookies, Crypto, Log, SessionStore, Store, Token}
+  alias Authmk.{BaseURL, Context, Cookies, Crypto, Log, SessionStore, SignInMethod, Store, Token}
 
   @pending_max_age 600
   @method_format ~r/\A[a-zA-Z0-9_-]{1,64}\z/
-
-  @methods %{
-    sign_in_email: "email",
-    sign_up_email: "email",
-    sign_in_username: "username",
-    sign_in_phone_number: "phone-number",
-    sign_in_email_otp: "email-otp",
-    magic_link_verify: "magic-link",
-    passkey_verify_authentication: "passkey",
-    siwe_verify: "siwe",
-    one_tap_callback: "google",
-    one_tap_redirect: "google"
-  }
 
   @impl true
   def init(opts) do
@@ -157,14 +144,8 @@ defmodule Authmk.Plugins.LastSignInMethod do
 
   defp resolve(endpoint, ctx) do
     custom = opts(ctx)[:resolve_method]
-    valid_method((custom && custom.(endpoint, ctx)) || built_in(endpoint, ctx))
+    valid_method((custom && custom.(endpoint, ctx)) || SignInMethod.of(endpoint, ctx))
   end
-
-  defp built_in(endpoint, %Context{params: params})
-       when endpoint in [:callback, :sign_in_social],
-       do: params[:provider]
-
-  defp built_in(endpoint, _ctx), do: @methods[endpoint]
 
   # The session this response started, if any: a session cookie with a
   # token the request didn't already have.

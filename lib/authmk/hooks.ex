@@ -139,6 +139,14 @@ defmodule Authmk.Hooks do
     |> Enum.each(fn module -> :ok = module.sessions_ended(user_id, sessions, ctx) end)
   end
 
+  @doc "Runs `branding/1` hooks. The first that isn't `nil` wins. See `Authmk.Branding`."
+  @spec branding(Context.t()) :: map() | nil
+  def branding(%Context{} = ctx) do
+    ctx
+    |> hook_modules(:branding, 1)
+    |> Enum.find_value(fn module -> module.branding(ctx) end)
+  end
+
   defp hook_modules(%Context{config: config}, function, arity) do
     Enum.filter(config.hook_modules, &function_exported?(&1, function, arity))
   end

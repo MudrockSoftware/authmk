@@ -9,17 +9,19 @@
   import Chart from "#lib/components/Chart.svelte";
   import Empty from "#lib/components/Empty.svelte";
   import Failure from "#lib/components/Failure.svelte";
+  import HealthWarnings from "#lib/components/HealthWarnings.svelte";
   import Loading from "#lib/components/Loading.svelte";
   import PageHeader from "#lib/components/PageHeader.svelte";
   import StatCard from "#lib/components/StatCard.svelte";
   import { api } from "#lib/api.ts";
-  import { count, formatDate, percent, timeAgo } from "#lib/format.ts";
+  import { count, formatDate, percent, shortDay, timeAgo } from "#lib/format.ts";
 
   const overview = api.overview();
-  const shortDay = (day: string) => new Date(day).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 </script>
 
 <PageHeader title="Overview" description="Your users and how they sign in, over the last 30 days." />
+
+<HealthWarnings />
 
 {#await overview}
   <Loading />

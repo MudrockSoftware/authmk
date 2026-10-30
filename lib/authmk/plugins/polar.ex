@@ -25,6 +25,11 @@ defmodule Authmk.Plugins.Polar do
   Polar's September 2026 change both work), then the subscription is read
   from Polar again.
 
+  `Authmk.Payments.change_plan/4` moves the subscription to the plan's
+  product (prorated by your organization's default; Polar may apply it at
+  the period's end), and `Authmk.Payments.resume/2` takes back a cancel
+  set for the period's end.
+
   Usage, from your code:
 
       Authmk.Plugins.Polar.track(MyApp.Auth, user.id, "ai_tokens", %{tokens: 1200})
@@ -114,7 +119,7 @@ defmodule Authmk.Plugins.Polar do
 
   @impl Authmk.Payments.Provider
   def cancel(ctx, subscription, at_period_end, opts) do
-    path = "/subscriptions/" <> URI.encode(subscription.provider_subscription_id)
+    path = subscription_path(subscription)
 
     result =
       if at_period_end,
@@ -123,6 +128,26 @@ defmodule Authmk.Plugins.Polar do
 
     with {:ok, object} <- result, do: {:ok, normalize(object)}
   end
+
+  # Polar prorates by the organization's default, and may keep the change
+  # pending until the period ends (its webhook says when it's done).
+  @impl Authmk.Payments.Provider
+  def change_plan(ctx, subscription, product_id, opts) do
+    with {:ok, object} <-
+           request(ctx, :patch, subscription_path(subscription), %{product_id: product_id}, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  @impl Authmk.Payments.Provider
+  def resume(ctx, subscription, opts) do
+    body = %{cancel_at_period_end: false}
+
+    with {:ok, object} <- request(ctx, :patch, subscription_path(subscription), body, opts),
+         do: {:ok, normalize(object)}
+  end
+
+  defp subscription_path(subscription),
+    do: "/subscriptions/" <> URI.encode(subscription.provider_subscription_id)
 
   @impl Authmk.Payments.Provider
   def webhook(ctx, body, headers, opts) do
