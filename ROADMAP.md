@@ -481,14 +481,14 @@ Legend: `[ ]` planned, `[x]` done
 
 ## Payments and integrations (plugins)
 
-- [ ] Stripe: customers, subscriptions, checkout, customer portal, webhooks, trials, lifecycle hooks, organization subscriptions, tax collection
-- [ ] Polar: checkout, customer portal, usage events and meters, webhooks
-- [ ] Chargebee: customers, subscriptions, hosted pages, webhooks, trials
-- [ ] Creem: checkout, customer portal, access checks, webhooks, trial-abuse prevention
-- [ ] Dodo Payments: checkout, customer portal, webhooks
-- [ ] Autumn: pricing and billing logic
-- [ ] Commet: customer portal, subscriptions, feature access, usage, seats, webhooks
-- [ ] Dub: lead tracking and OAuth linking
+- [x] Stripe: customers, subscriptions, checkout, customer portal, webhooks, trials, lifecycle hooks, organization subscriptions, tax collection
+- [x] Polar: checkout, customer portal, usage events and meters, webhooks
+- [x] Chargebee: customers, subscriptions, hosted pages, webhooks, trials
+- [x] Creem: checkout, customer portal, access checks, webhooks, trial-abuse prevention
+- [x] Dodo Payments: checkout, customer portal, webhooks
+- [x] Autumn: pricing and billing logic
+- [x] Commet: customer portal, subscriptions, feature access, usage, seats, webhooks
+- [x] Dub: lead tracking and OAuth linking
 
 ---
 

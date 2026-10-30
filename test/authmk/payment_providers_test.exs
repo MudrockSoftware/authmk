@@ -33,7 +33,13 @@ defmodule Authmk.PaymentProvidersTest do
              api_key: "provider-key",
              webhook_secret: "whsec_" <> Base.encode64("provider webhook key"),
              plans: [
-               [name: "pro", id: "prod_pro", no_trial_id: "prod_pro_no_trial", trial_days: 7],
+               [
+                 name: "pro",
+                 id: "prod_pro",
+                 no_trial_id: "prod_pro_no_trial",
+                 trial_days: 7,
+                 limits: %{projects: 20}
+               ],
                [name: "basic", id: "prod_basic"]
              ]
            ] ++ own}
@@ -360,6 +366,8 @@ defmodule Authmk.PaymentProvidersTest do
 
       assert creem_webhook(body).status == 200
       assert [%{"status" => "trialing"}] = subscriptions(browser)
+      assert Payments.allowed?(Creem, user_id, :projects, 20)
+      refute Payments.allowed?(Creem, user_id, :projects, 21)
 
       # Forged: refused.
       assert creem_webhook(body, "another secret").status == 400
@@ -380,6 +388,7 @@ defmodule Authmk.PaymentProvidersTest do
                        %{"product_id" => "prod_pro_no_trial"}, _h}
 
       refute Payments.active_subscription(Creem, user_id)
+      refute Payments.allowed?(Creem, user_id, :projects, 1)
 
       # Cancelled through the endpoint, scheduled: still active until it ends.
       FakeBilling.put(state, "sub_1", %{FakeBilling.get(state, "sub_1") | "status" => "active"})
@@ -495,6 +504,9 @@ defmodule Authmk.PaymentProvidersTest do
           "GET", "/api/v1/subscriptions/" <> id, _p, state ->
             {200, FakeBilling.get(state, id)}
 
+          "POST", "/api/v1/portal/sessions", _p, _s ->
+            {201, %{"portalUrl" => "https://commet.co/portal/1"}}
+
           "GET", "/api/v1/feature-access/api_calls", _p, _s ->
             {200, %{"code" => "api_calls", "allowed" => true}}
 
@@ -587,6 +599,9 @@ defmodule Authmk.PaymentProvidersTest do
 
       assert_received {:billing_request, "PUT", "/api/v1/seats",
                        %{"count" => 12, "customerId" => "cus_1"}, _h}
+
+      {browser, conn} = post(browser, "/billing/portal", %{return_url: "/account"})
+      assert json(conn)["url"] == "https://commet.co/portal/1"
 
       [%{"id" => id}] = subscriptions(browser)
       {browser, conn} = post(browser, "/billing/cancel", %{subscription_id: id})
