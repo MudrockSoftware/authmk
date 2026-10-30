@@ -13,27 +13,24 @@ defmodule Authmk.Plug.FetchSession do
 
   @behaviour Plug
 
-  alias Authmk.{BaseURL, Config, Context, Router, Sessions}
+  alias Authmk.{ConnContext, Router, Sessions}
 
   @impl true
   def init(opts), do: Keyword.fetch!(opts, :auth)
 
   @impl true
   def call(conn, auth) do
-    conn = Plug.Conn.fetch_cookies(conn)
-    config = Config.fetch!(auth)
+    case ConnContext.new(conn, auth) do
+      {:ok, ctx} ->
+        ctx = Sessions.load(ctx, cache: true)
 
-    case BaseURL.resolve(config, conn) do
-      {:ok, base_url} ->
-        ctx = Sessions.load(%Context{config: config, conn: conn, base_url: base_url}, cache: true)
-
-        conn
+        ctx.conn
         |> Router.put_resp_cookies(ctx)
         |> assign_session(ctx.user, ctx.session)
         |> Plug.Conn.assign(:current_principal, ctx.private[:principal] || ctx.user)
 
       # A host outside base_url's allow list never gets a session.
-      {:error, _invalid_host} ->
+      :invalid_host ->
         conn |> assign_session(nil, nil) |> Plug.Conn.assign(:current_principal, nil)
     end
   end

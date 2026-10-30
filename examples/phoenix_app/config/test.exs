@@ -31,7 +31,7 @@ config :phoenix_app, :oauth_proxy,
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
 config :phoenix_app, PhoenixApp.Auth,
-  trusted_origins: ["http://localhost:4100"],
+  trusted_origins: ["http://localhost:4100", "phoenixapp://"],
   secret: "gQ4n9fvOWNIrCTcEva1RdFmyIWL0wrF9knYFdm4IX9c",
   background: :inline,
   rate_limit: [enabled: false],

@@ -14,6 +14,6 @@ defmodule PhoenixAppWeb.APIKeyTest do
     assert html_response(conn, 200) =~ "Ada"
 
     conn = build_conn() |> put_req_header("x-api-key", "wrong") |> get(~p"/account")
-    assert redirected_to(conn) == "/"
+    assert redirected_to(conn) == "/sign-in"
   end
 end

@@ -12,9 +12,8 @@ defmodule Authmk.Plug.RequireAuthenticated do
 
   @behaviour Plug
 
-  import Plug.Conn
-
   alias Authmk.Error
+  alias Authmk.Plug.Refusal
 
   @impl true
   def init(opts),
@@ -34,16 +33,5 @@ defmodule Authmk.Plug.RequireAuthenticated do
   def call(conn, redirect_to) when is_binary(redirect_to) or is_nil(redirect_to),
     do: call(conn, {redirect_to, false})
 
-  defp refuse(conn, nil) do
-    error = Error.new(:unauthorized)
-
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(error.status, JSON.encode!(Error.to_map(error)))
-    |> halt()
-  end
-
-  defp refuse(conn, redirect_to) do
-    conn |> put_resp_header("location", redirect_to) |> send_resp(302, "") |> halt()
-  end
+  defp refuse(conn, redirect_to), do: Refusal.refuse(conn, Error.new(:unauthorized), redirect_to)
 end

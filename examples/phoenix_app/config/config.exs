@@ -7,7 +7,12 @@
 # General application configuration
 import Config
 
-config :phoenix_app, PhoenixApp.Auth, base_url: "http://localhost:4000"
+config :phoenix_app, PhoenixApp.Auth,
+  base_url: "http://localhost:4000",
+  # The mobile app's deep links (see Authmk.Plugins.OneTimeToken's deep_links).
+  trusted_origins: ["phoenixapp://"],
+  # Browser apps on trusted origins may read authmk's answers (CORS).
+  cors: [trusted_origins: true]
 
 config :phoenix_app,
   ecto_repos: [PhoenixApp.Repo],

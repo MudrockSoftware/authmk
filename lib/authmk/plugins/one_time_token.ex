@@ -14,12 +14,29 @@ defmodule Authmk.Plugins.OneTimeToken do
   as a `token` in the answer (for `Authorization: Bearer` with
   `Authmk.Plugins.Bearer`).
 
+  ## Mobile apps: deep links
+
+  A mobile app signs in with social or SSO sign-in in the system browser
+  (`ASWebAuthenticationSession`, Custom Tabs), which keeps its own cookies.
+  With `deep_links: ["myapp://"]`, a sign-in that ends in a redirect to a
+  matching URL (`callback_url: "myapp://signed-in"`) gets `?token=<one-time
+  token>` added; the app trades it at `/one-time-token/verify` for a session
+  of its own (with `disable_set_session_cookie: true`, a bearer token).
+  Patterns are trusted-origin entries (`"myapp://"`, `"myapp://callback"`,
+  `"https://links.example.com"`), and must be in `trusted_origins` too, or
+  the redirect isn't allowed at all.
+
+  Another app can register the same custom scheme, so the token is short
+  lived and works once; prefer verified app links (`https://`) on hosts
+  used only for them where you can.
+
   ## Options
 
     * `:expires_in` - seconds (default 180)
     * `:generate_token` - makes tokens; must be unguessable
     * `:disable_client_request` - only `generate/2` makes tokens: no endpoint
     * `:disable_set_session_cookie` - answer with the session token instead
+    * `:deep_links` - URL patterns that get a token after sign-in (default none)
   """
 
   use Authmk.Plugin
@@ -29,10 +46,12 @@ defmodule Authmk.Plugins.OneTimeToken do
     Cookies,
     Endpoint,
     Error,
+    Origin,
     Serializer,
     Sessions,
     Store,
     Token,
+    URL,
     Verification
   }
 
@@ -44,7 +63,8 @@ defmodule Authmk.Plugins.OneTimeToken do
       expires_in: [type: :pos_integer, default: 180],
       generate_token: [type: {:fun, 0}],
       disable_client_request: [type: :boolean, default: false],
-      disable_set_session_cookie: [type: :boolean, default: false]
+      disable_set_session_cookie: [type: :boolean, default: false],
+      deep_links: [type: {:list, :string}, default: []]
     )
   end
 
@@ -99,6 +119,28 @@ defmodule Authmk.Plugins.OneTimeToken do
     else
       _invalid -> {:error, Error.new(:invalid_token)}
     end
+  end
+
+  @impl true
+  # A sign-in that just set the session cookie, going to the app's deep link.
+  def after_endpoint(_endpoint, _ctx, {:redirect, url, %Context{} = ctx} = result) do
+    with [_ | _] = patterns <- opts(ctx)[:deep_links],
+         true <- Enum.any?(patterns, &Origin.matches?(url, &1)),
+         %{id: user_id} <- signed_in_now(ctx),
+         {:ok, token} <- create(ctx, user_id) do
+      {:redirect, URL.append_query(url, token: token), ctx}
+    else
+      _no -> result
+    end
+  end
+
+  def after_endpoint(_endpoint, _ctx, result), do: result
+
+  defp signed_in_now(%Context{user: user} = ctx) do
+    name = Cookies.name(ctx, :session_token)
+
+    if Enum.any?(ctx.resp_cookies, &match?({^name, value, _opts} when is_binary(value), &1)),
+      do: user
   end
 
   defp create(ctx, user_id) do

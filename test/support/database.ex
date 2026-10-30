@@ -25,8 +25,8 @@ defmodule Authmk.Test.Database do
   end
 
   @doc "Child spec of a repo instance on `database`."
-  def repo_child_spec(database) do
-    Supervisor.child_spec({Repo, name: nil, database: database}, id: {Repo, database})
+  def repo_child_spec(database, name \\ nil) do
+    Supervisor.child_spec({Repo, name: name, database: database}, id: {Repo, database})
   end
 
   @doc "Runs the generated migration for `auth` on the repo instance `pid`."

@@ -425,6 +425,16 @@ defmodule Authmk.Plugins.Organization do
   end
 
   @doc """
+  The organizations `user` is a member of, oldest first: for an
+  organization switcher (`Authmk.Components.Account.organization_switcher/1`).
+  """
+  @spec list_for_user(module(), struct()) :: [struct()]
+  def list_for_user(auth, user) do
+    ctx = auth.config() |> Context.new() |> Context.put_private(:organization_plugin, __MODULE__)
+    Organizations.user_organizations(ctx, user)
+  end
+
+  @doc """
   Sets a member's role, from your own server code (for example when a
   directory changes someone's groups). The last owner can't be demoted.
   """

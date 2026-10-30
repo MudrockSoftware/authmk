@@ -24,6 +24,7 @@ defmodule Authmk.Config do
     :plugins,
     :endpoints,
     :trusted_origins,
+    :cors,
     :hook_modules,
     :secrets,
     :secondary_storage,

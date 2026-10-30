@@ -1,5 +1,6 @@
 defmodule PhoenixAppWeb.Router do
   use PhoenixAppWeb, :router
+  import Authmk.Phoenix.Router
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -12,7 +13,11 @@ defmodule PhoenixAppWeb.Router do
   end
 
   pipeline :require_authenticated do
-    plug Authmk.Plug.RequireAuthenticated, redirect_to: "/"
+    plug Authmk.Plug.RequireUser, redirect_to: "/sign-in"
+  end
+
+  pipeline :require_admin do
+    plug Authmk.Plug.RequireRole, roles: ["admin"], redirect_to: "/"
   end
 
   pipeline :api do
@@ -23,7 +28,7 @@ defmodule PhoenixAppWeb.Router do
   end
 
   scope "/" do
-    forward "/auth", PhoenixApp.Auth
+    authmk_routes("/auth", PhoenixApp.Auth)
 
     # authmk's admin dashboard, for users Authmk.Plugins.Admin calls admins.
     # Licensed separately: in production it needs AUTHMK_LICENCE_KEY.
@@ -34,6 +39,24 @@ defmodule PhoenixAppWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    authmk_live_session :signed_out, PhoenixApp.Auth,
+      require: :signed_out,
+      redirect_to: "/settings" do
+      live "/sign-in", SignInLive
+      live "/forgot-password", PasswordLive
+      live "/reset-password", PasswordLive
+    end
+
+    authmk_live_session :signed_in, PhoenixApp.Auth, require: :user, redirect_to: "/sign-in" do
+      live "/settings", SettingsLive
+    end
+  end
+
+  scope "/", PhoenixAppWeb do
+    pipe_through [:browser, :require_admin]
+
+    get "/admin", PageController, :admin
   end
 
   scope "/", PhoenixAppWeb do

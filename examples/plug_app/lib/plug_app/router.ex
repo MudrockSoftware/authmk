@@ -29,22 +29,60 @@ defmodule PlugApp.Router do
     |> send_resp(200, JSON.encode!(%{last_used: last_used}))
   end
 
-  # Only for signed-in users.
+  # A sign-in page without JavaScript: the form posts straight to authmk,
+  # which redirects back (authmk_redirect, and ?error= when it fails).
+  get "/sign-in-form" do
+    code = fetch_query_params(conn).query_params["error"]
+    error = code && (Authmk.Error.message_for(code) || "Something went wrong.")
+
+    html = """
+    <!doctype html>
+    <form method="post" action="/auth/sign-in/email">
+      <input type="hidden" name="authmk_redirect" value="/me">
+      #{if error, do: "<p role=\"alert\">#{Plug.HTML.html_escape(error)}</p>"}
+      <input type="email" name="email" required>
+      <input type="password" name="password" required>
+      <button>Sign in</button>
+    </form>
+    """
+
+    conn |> put_resp_content_type("text/html") |> send_resp(200, html)
+  end
+
+  # Only for signed-in users (not service accounts).
   get "/me" do
-    conn =
-      conn
-      |> Authmk.Plug.FetchSession.call(PlugApp.Auth)
-      |> Authmk.Plug.RequireAuthenticated.call(Authmk.Plug.RequireAuthenticated.init([]))
+    conn = guard(conn, Authmk.Plug.RequireUser, [])
 
     if conn.halted do
       conn
     else
-      user = conn.assigns.current_user
+      user = Authmk.Phoenix.Controller.current_user(conn)
 
       conn
       |> put_resp_content_type("application/json")
       |> send_resp(200, JSON.encode!(%{email: user.email, name: user.name}))
     end
+  end
+
+  # Only for admins (Authmk.Plugins.Admin's role).
+  get "/admin" do
+    conn = guard(conn, Authmk.Plug.RequireRole, roles: ["admin"])
+    if conn.halted, do: conn, else: send_resp(conn, 200, "admins only")
+  end
+
+  # Signs out from the app's own code.
+  post "/sign-out" do
+    conn
+    |> Authmk.Plug.FetchSession.call(PlugApp.Auth)
+    |> Authmk.Phoenix.Controller.sign_out(PlugApp.Auth)
+    |> put_resp_header("location", "/")
+    |> send_resp(303, "")
+  end
+
+  defp guard(conn, plug, opts) do
+    conn
+    |> Authmk.Plug.FetchSession.call(PlugApp.Auth)
+    |> plug.call(plug.init(opts))
   end
 
   # For programs too: a service account's API key gets in.

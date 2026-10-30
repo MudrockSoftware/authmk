@@ -20,7 +20,8 @@ defmodule PhoenixApp.Auth do
       Authmk.Plugins.Bearer,
       Authmk.Plugins.JWT,
       Authmk.Plugins.MultiSession,
-      Authmk.Plugins.OneTimeToken,
+      # Sign-ins that end at the mobile app (phoenixapp://...) bring it a token.
+      {Authmk.Plugins.OneTimeToken, deep_links: ["phoenixapp://"]},
       Authmk.Plugins.DeviceAuthorization,
       Authmk.Plugins.HaveIBeenPwned,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},

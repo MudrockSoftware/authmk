@@ -20,9 +20,9 @@ defmodule PhoenixAppWeb.AuthTest do
     assert html_response(conn, 200) =~ "Ada"
   end
 
-  test "the account page sends anonymous visitors home", %{conn: conn} do
+  test "the account page sends anonymous visitors to sign in", %{conn: conn} do
     conn = get(conn, ~p"/account")
-    assert redirected_to(conn) == "/"
+    assert redirected_to(conn) == "/sign-in"
   end
 
   test "sign out ends the session", %{conn: conn} do
@@ -31,7 +31,7 @@ defmodule PhoenixAppWeb.AuthTest do
     assert json_response(conn, 200) == %{"success" => true}
 
     conn = conn |> recycle() |> get(~p"/account")
-    assert redirected_to(conn) == "/"
+    assert redirected_to(conn) == "/sign-in"
   end
 
   test "requests from other sites are rejected", %{conn: conn} do

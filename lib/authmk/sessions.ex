@@ -139,6 +139,22 @@ defmodule Authmk.Sessions do
     if Cookies.session_data(ctx), do: Cookies.delete(ctx, :session_data), else: ctx
   end
 
+  @doc """
+  The live session with this token hash (its `user` loaded), or `nil` when
+  it's gone or expired: for clients that keep the hash, not the cookie,
+  like `Authmk.LiveView`. Every call reads the store, so revoked sessions
+  stop working at once.
+  """
+  @spec fetch_by_token_hash(Context.t(), String.t()) :: struct() | nil
+  def fetch_by_token_hash(ctx, token_hash) when is_binary(token_hash) do
+    case SessionStore.fetch(ctx, token_hash) do
+      nil -> nil
+      session -> if expired?(session), do: nil, else: session
+    end
+  end
+
+  def fetch_by_token_hash(_ctx, _token_hash), do: nil
+
   @doc "Whether the context's session was created within `session[:fresh_age]` seconds."
   @spec fresh?(Context.t()) :: boolean()
   def fresh?(%Context{session: session, config: config}) do

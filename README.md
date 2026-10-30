@@ -67,8 +67,17 @@ model to Phoenix and Ecto.
 
    ```elixir
    plug Authmk.Plug.FetchSession, auth: MyApp.Auth   # assigns :current_user, :current_session
-   plug Authmk.Plug.RequireAuthenticated, redirect_to: "/sign-in"
+   plug Authmk.Plug.RequireUser, redirect_to: "/sign-in"
    ```
+
+In Phoenix, `Authmk.Phoenix.Router` mounts authmk and LiveView sessions
+(`authmk_live_session`, with `Authmk.LiveView`'s hooks), and
+`Authmk.Components` gives sign-in, sign-up, password reset, two-factor,
+passkey and account-settings components that work without JavaScript. See
+the [Phoenix and LiveView guide](guides/phoenix-and-liveview.md); SPAs,
+desktop and mobile apps are in [this guide](guides/api-clients.md), and
+moving from `phx.gen.auth`, Pow or Ash Authentication in the migration
+guides.
 
 Clients then call `POST /auth/sign-up/email`, `POST /auth/sign-in/email`,
 `GET /auth/get-session` and so on. See `Authmk.Endpoints` and

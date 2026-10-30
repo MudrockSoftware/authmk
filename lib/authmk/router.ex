@@ -19,6 +19,8 @@ defmodule Authmk.Router do
 
   import Plug.Conn
 
+  alias Authmk.Router.Form
+
   alias Authmk.{
     BaseURL,
     Config,
@@ -88,14 +90,23 @@ defmodule Authmk.Router do
     end
   end
 
+  # The passkey buttons' script (Authmk.Components).
+  @scripts Plug.Static.init(at: "/", from: {:authmk, "priv/js"}, only: ["passkey.js"])
+
+  defp page_file(%Plug.Conn{method: "GET", path_info: ["passkey.js"]} = conn),
+    do: {:page_file, conn |> Plug.Static.call(@scripts) |> halt()}
+
   defp page_file(_conn), do: :not_page_file
 
-  # CORS preflight, for endpoints that allow it. They never use cookies, so
-  # any origin may call them, without credentials.
+  # CORS preflight. Endpoints marked `cors` never use cookies, so any origin
+  # may call them, without credentials. With `cors: [trusted_origins: true]`,
+  # trusted origins may call any endpoint, with credentials.
   defp preflight(%Plug.Conn{method: "OPTIONS"} = conn, config) do
+    trusted_origin = trusted_cors_origin(conn, config)
+
     methods =
       for endpoint <- config.endpoints,
-          endpoint.cors,
+          endpoint.cors or trusted_origin != nil,
           Endpoint.path_matches?(endpoint, conn.path_info),
           do: endpoint.method |> Atom.to_string() |> String.upcase()
 
@@ -104,9 +115,12 @@ defmodule Authmk.Router do
     else
       conn =
         conn
-        |> cors_headers()
+        |> cors_headers(trusted_origin)
         |> put_resp_header("access-control-allow-methods", Enum.join(["OPTIONS" | methods], ", "))
-        |> put_resp_header("access-control-allow-headers", "authorization, content-type, dpop")
+        |> put_resp_header(
+          "access-control-allow-headers",
+          "authorization, content-type, dpop, x-api-key"
+        )
         |> put_resp_header("access-control-max-age", "600")
         |> send_resp(204, "")
 
@@ -116,10 +130,40 @@ defmodule Authmk.Router do
 
   defp preflight(_conn, _config), do: :not_preflight
 
-  defp cors_headers(conn) do
+  # The request's Origin, when credentialed CORS is on and it's trusted.
+  defp trusted_cors_origin(conn, config) do
+    with true <- config.cors[:trusted_origins] == true,
+         [origin] <- get_req_header(conn, "origin"),
+         true <- Origin.trusted?(%Context{config: config, conn: conn}, origin) do
+      origin
+    else
+      _no -> nil
+    end
+  end
+
+  defp cors_headers(conn, nil) do
     conn
     |> put_resp_header("access-control-allow-origin", "*")
     |> put_resp_header("access-control-expose-headers", "www-authenticate, dpop-nonce")
+  end
+
+  # Only ever the trusted origin itself: credentials never go to `*`.
+  defp cors_headers(conn, trusted_origin) do
+    conn
+    |> put_resp_header("access-control-allow-origin", trusted_origin)
+    |> put_resp_header("access-control-allow-credentials", "true")
+    |> put_resp_header(
+      "access-control-expose-headers",
+      "set-auth-token, www-authenticate, dpop-nonce"
+    )
+    |> put_resp_header("vary", "origin")
+  end
+
+  defp response_cors(conn, %Context{config: config} = ctx) do
+    case trusted_cors_origin(conn, config) do
+      nil -> if ctx.endpoint && ctx.endpoint.cors, do: cors_headers(conn, nil), else: conn
+      origin -> cors_headers(conn, origin)
+    end
   end
 
   @doc "Applies the context's cookie changes to the conn."
@@ -133,17 +177,26 @@ defmodule Authmk.Router do
 
   defp serve(conn, %Context{config: config} = ctx, endpoint, path_params) do
     raw_params = conn.query_params |> Map.merge(conn.body_params) |> Map.merge(path_params)
+    {form, raw_params} = Form.read(conn, raw_params)
     ctx = %{ctx | endpoint: endpoint, raw_params: raw_params}
     metadata = %{auth: config.auth, endpoint: endpoint.name}
+    form_check = Form.check(ctx, form)
 
     {ctx, result} =
       :telemetry.span([:authmk, :endpoint], metadata, fn ->
-        {ctx, result} = run_safely(ctx)
+        {ctx, result} =
+          case form_check do
+            :ok -> run_safely(ctx)
+            {:error, error} -> {ctx, {:error, error}}
+          end
+
         {{ctx, result}, Map.put(metadata, :result, elem(result, 0))}
       end)
 
     report_error(ctx, result)
-    respond(conn, ctx, result)
+    # A form whose targets were refused is answered as JSON: nowhere is safe.
+    form = if form_check == :ok, do: form
+    respond(conn, ctx, Form.result(result, form, ctx))
   end
 
   defp run_safely(%Context{config: config} = ctx) do
@@ -194,6 +247,7 @@ defmodule Authmk.Router do
 
   defp result_ctx({:ok, _body, ctx}, _ctx), do: ctx
   defp result_ctx({:redirect, _url, ctx}, _ctx), do: ctx
+  defp result_ctx({:see_other, _url, ctx}, _ctx), do: ctx
   defp result_ctx({:html, _status, _html, ctx}, _ctx), do: ctx
   defp result_ctx({:json, _status, _body, ctx}, _ctx), do: ctx
   defp result_ctx({:error, _error, ctx}, _ctx), do: ctx
@@ -225,7 +279,7 @@ defmodule Authmk.Router do
       conn
       |> put_resp_cookies(ctx)
       |> merge_resp_headers(ctx.resp_headers)
-      |> then(&if(ctx.endpoint && ctx.endpoint.cors, do: cors_headers(&1), else: &1))
+      |> response_cors(ctx)
       |> register_before_send(&Hooks.on_response(&1, ctx))
 
     case result do
@@ -234,6 +288,10 @@ defmodule Authmk.Router do
 
       {:redirect, url, _ctx} ->
         conn |> put_resp_header("location", url) |> send_resp(302, "")
+
+      # After a form post: the browser follows with a GET.
+      {:see_other, url, _ctx} ->
+        conn |> put_resp_header("location", url) |> send_resp(303, "")
 
       # HTML, or another type the handler set (like SAML's XML metadata).
       {:html, status, html, _ctx} ->

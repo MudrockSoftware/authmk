@@ -81,6 +81,20 @@ defmodule Authmk.Error do
   end
 
   @doc """
+  The message for a built-in error code given as a string (like one from
+  `?error=` in a URL), or `nil` for codes authmk doesn't know. Never makes
+  atoms from its input.
+  """
+  @spec message_for(String.t()) :: String.t() | nil
+  def message_for(code) when is_binary(code) do
+    Enum.find_value(@errors, fn {known, {_status, message}} ->
+      Atom.to_string(known) == code and message
+    end)
+  end
+
+  def message_for(_code), do: nil
+
+  @doc """
   An error with a code of your own, for plugins:
 
       Authmk.Error.custom(:organization_full, 422, "This organization has no free seats")

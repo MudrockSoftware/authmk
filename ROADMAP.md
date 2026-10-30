@@ -42,7 +42,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Extra fields on core models (`additional_fields`)
 - [x] Rename fields and columns
 - [x] Table naming: `:plural` / `:singular`, `table_prefix`, per-model `table:` override
-- [ ] Map onto existing tables, such as `users` from `phx.gen.auth` (tested end to end)
+- [x] Map onto existing tables, such as `users` from `phx.gen.auth` (tested end to end)
 - [x] ID generation: UUIDs (default), time-ordered UUIDv7, integer IDs
 - [x] Custom string ID generator function
 - [x] Mixed ID types (for example, integer user IDs with UUID plugin tables)
@@ -467,15 +467,15 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.9 Framework integration
 
 - [x] Plug: `Authmk.Plug.FetchSession`, `Authmk.Plug.RequireAuthenticated`
-- [ ] Plug: `RequireRole`, `RequireUser` (rejects service accounts)
-- [ ] Phoenix router macro and controller helpers
-- [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` / `current_principal` assigns; signing in LiveView tests
-- [ ] LiveView function components: sign-in, sign-up, password reset, 2FA, passkeys, account settings, organization switcher
-- [ ] JSON API usable by SPAs, mobile apps and desktop apps
-- [ ] Deep-link and custom-scheme redirects for mobile apps
-- [ ] Browser extension guide
-- [ ] Performance guide (cookie cache, secondary storage, indexes)
-- [ ] Migration guides from `phx.gen.auth`, Pow and Ash Authentication
+- [x] Plug: `RequireRole`, `RequireUser` (rejects service accounts)
+- [x] Phoenix router macro and controller helpers
+- [x] LiveView: `on_mount` hooks, `current_user` / `current_session` / `current_principal` assigns; signing in LiveView tests
+- [x] LiveView function components: sign-in, sign-up, password reset, 2FA, passkeys, account settings, organization switcher
+- [x] JSON API usable by SPAs, mobile apps and desktop apps (CORS with credentials for trusted origins, bearer tokens)
+- [x] Deep-link and custom-scheme redirects for mobile apps
+- [x] Browser extension guide
+- [x] Performance guide (cookie cache, secondary storage, indexes)
+- [x] Migration guides from `phx.gen.auth`, Pow and Ash Authentication
 
 ---
 

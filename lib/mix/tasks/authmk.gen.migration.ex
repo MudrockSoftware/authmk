@@ -16,6 +16,10 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     * `--auth MyApp.Auth` - the auth module. Needed when the app has several.
     * `--baseline` - record the current schema as already migrated, without
       writing a migration. Use it when adopting authmk on existing tables.
+    * `--existing users,...` - treat these tables as already there, with
+      authmk's columns (your own migration adds what's missing): the
+      migration creates the rest. For moving from `phx.gen.auth`, Pow or Ash
+      Authentication; see the migration guides.
     * `--check` - write nothing; exit with an error if a migration is missing.
       Use it in CI.
     * `--allow-destructive` - allow migrations that drop tables or columns,
@@ -36,6 +40,7 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
   @switches [
     auth: :string,
     baseline: :boolean,
+    existing: :string,
     check: :boolean,
     allow_destructive: :boolean,
     name: :string,
@@ -63,7 +68,7 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     auth = Mix.Authmk.auth_module(opts[:auth])
     repo = auth.__authmk__(:compile_options)[:repo]
     snapshot_path = opts[:snapshot_path] || Mix.Authmk.snapshot_path(repo, auth)
-    snapshot = Snapshot.read(snapshot_path)
+    snapshot = snapshot_path |> Snapshot.read() |> adopt(auth, opts[:existing])
     ops = Migration.changes(auth, snapshot)
 
     cond do
@@ -73,6 +78,11 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
       true -> generate(auth, repo, snapshot, snapshot_path, confirm_renames(auth, snapshot), opts)
     end
   end
+
+  defp adopt(snapshot, _auth, nil), do: snapshot
+
+  defp adopt(snapshot, auth, tables),
+    do: Migration.adopt(snapshot, auth, String.split(tables, ",", trim: true))
 
   # Asks about likely table renames, then column renames given those.
   defp confirm_renames(auth, snapshot) do

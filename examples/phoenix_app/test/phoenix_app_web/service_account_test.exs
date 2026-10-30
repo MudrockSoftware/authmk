@@ -25,7 +25,7 @@ defmodule PhoenixAppWeb.ServiceAccountTest do
     assert json_response(conn, 200) == %{"type" => "service_account", "name" => "Nightly export"}
 
     conn = build_conn() |> put_req_header("x-api-key", key) |> get(~p"/account")
-    assert redirected_to(conn) == "/"
+    assert redirected_to(conn) == "/sign-in"
 
     conn = build_conn() |> get("/api/whoami")
     assert json_response(conn, 401)["error"]["code"] == "unauthorized"

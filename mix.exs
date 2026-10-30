@@ -82,6 +82,13 @@ defmodule Authmk.MixProject do
         extras: [
           "README.md",
           "guides/social-sign-in.md",
+          "guides/phoenix-and-liveview.md",
+          "guides/api-clients.md",
+          "guides/browser-extensions.md",
+          "guides/performance.md",
+          "guides/migrating-from-phx-gen-auth.md",
+          "guides/migrating-from-pow.md",
+          "guides/migrating-from-ash-authentication.md",
           "guides/writing-plugins.md",
           "guides/deployment.md",
           "guides/cookies-and-domains.md",
@@ -139,6 +146,8 @@ defmodule Authmk.MixProject do
       {:ex_keccak, "~> 0.7", optional: true},
       # Ready-made emails (Authmk.Emails).
       {:swoosh, "~> 1.17", optional: true},
+      # LiveView hooks and components (Authmk.LiveView, Authmk.Components).
+      {:phoenix_live_view, "~> 1.2", optional: true},
       {:opentelemetry_api, "~> 1.4", optional: true},
       {:opentelemetry_telemetry, "~> 1.1", optional: true},
       {:opentelemetry, "~> 1.5", only: :test},
@@ -150,7 +159,9 @@ defmodule Authmk.MixProject do
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:stream_data, "~> 1.4", only: [:dev, :test]}
+      {:stream_data, "~> 1.4", only: [:dev, :test]},
+      # Phoenix.LiveViewTest, for the LiveView integration's tests.
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 
@@ -208,7 +219,7 @@ defmodule Authmk.MixProject do
       licenses: ["MIT", "LicenseRef-Mudrock-Commercial"],
       links: %{"Website" => @homepage_url, "GitHub" => @source_url},
       files:
-        ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed guides .formatter.exs
+        ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed priv/js guides .formatter.exs
            mix.exs README.md ROADMAP.md SECURITY.md LICENSE)
     ]
   end

@@ -2,7 +2,7 @@ defmodule Authmk.Endpoints.Session do
   @moduledoc false
   # Session endpoints. See `Authmk.Endpoints`.
 
-  alias Authmk.{CookieCache, Cookies, Input, Serializer, Sessions, SessionStore}
+  alias Authmk.{CookieCache, Cookies, Error, Input, Serializer, Sessions, SessionStore}
 
   def get_session(%{session: nil} = ctx), do: {:ok, nil, ctx}
 
@@ -31,10 +31,17 @@ defmodule Authmk.Endpoints.Session do
     {:ok, Enum.map(sessions, &Serializer.session(ctx, &1)), ctx}
   end
 
-  def revoke_session(ctx) do
-    Sessions.revoke(ctx, ctx.user.id, ctx.params.id)
-    ctx = if ctx.params.id == to_string(ctx.session.id), do: Cookies.clear_session(ctx), else: ctx
-    {:ok, %{status: true}, ctx}
+  # `session_id` is for HTML forms, where an input named `id` shadows the form's.
+  def revoke_session(%{params: params} = ctx) do
+    case params.id || params.session_id do
+      nil ->
+        {:error, Error.custom(:invalid_request, 400, "Give the session's id")}
+
+      id ->
+        Sessions.revoke(ctx, ctx.user.id, id)
+        ctx = if id == to_string(ctx.session.id), do: Cookies.clear_session(ctx), else: ctx
+        {:ok, %{status: true}, ctx}
+    end
   end
 
   def revoke_sessions(ctx) do

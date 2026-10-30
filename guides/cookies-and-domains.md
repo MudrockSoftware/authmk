@@ -49,10 +49,11 @@ this when you control all of them.
 
 ## Mobile apps and API clients
 
-Clients that aren't browsers can't use `HttpOnly` cookies the same way. Until
-bearer tokens arrive (see the roadmap), send the session cookie back as a
-`Cookie` header from your app. Requests without cookies or an `Origin` header
-skip the browser CSRF check, since they can't be forged by a website.
+Clients that aren't browsers can't use `HttpOnly` cookies the same way: use
+bearer tokens (`Authmk.Plugins.Bearer`). Requests without cookies or an
+`Origin` header skip the browser CSRF check, since they can't be forged by a
+website. See [SPAs, desktop and mobile apps](api-clients.md), which also
+covers CORS for browser apps on other origins.
 
 ## Per-cookie settings
 

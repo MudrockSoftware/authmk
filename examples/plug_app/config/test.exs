@@ -31,7 +31,7 @@ config :plug_app, :oauth_proxy,
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
 config :plug_app, PlugApp.Auth,
-  trusted_origins: ["http://localhost:4100"],
+  trusted_origins: ["http://localhost:4100", "plugapp://"],
   secret: "RkLUU1T_IwR_HoOrGRjMeoeZ2uoM7GqfbuVOVBLtkPo",
   background: :inline,
   rate_limit: [enabled: false],

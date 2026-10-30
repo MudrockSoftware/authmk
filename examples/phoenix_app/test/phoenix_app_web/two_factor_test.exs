@@ -42,7 +42,7 @@ defmodule PhoenixAppWeb.TwoFactorTest do
       |> post("/auth/sign-in/email", Map.take(@user, [:email, :password]))
 
     assert json_response(conn, 200)["two_factor_redirect"] == true
-    assert conn |> recycle() |> get(~p"/account") |> redirected_to() == "/"
+    assert conn |> recycle() |> get(~p"/account") |> redirected_to() == "/sign-in"
 
     conn = conn |> recycle() |> from_browser() |> post("/auth/two-factor/send-otp")
     assert json_response(conn, 200)["status"] == true

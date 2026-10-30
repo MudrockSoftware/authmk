@@ -35,6 +35,15 @@ if config_env() == :test do
 
   config :authmk, Authmk.Test.Repo, [log: false] ++ connection
 
+  # A Phoenix app for the LiveView and component tests (test/support/phoenix.ex).
+  config :phoenix, :json_library, JSON
+
+  config :authmk, Authmk.Test.Phoenix.Endpoint,
+    url: [host: "localhost", port: 4000],
+    secret_key_base: String.duplicate("test-only secret key base ", 4),
+    live_view: [signing_salt: "authmk-test"],
+    server: false
+
   # Spans are sent to a test process by the OpenTelemetry tests.
   config :opentelemetry, traces_exporter: :none, processors: [{:otel_simple_processor, %{}}]
 end

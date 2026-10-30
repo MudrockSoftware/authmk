@@ -157,7 +157,8 @@ defmodule Authmk.Plugins.Organization.Organizations do
     end
   end
 
-  defp user_organizations(ctx, user) do
+  @doc "The organizations `user` is a member of, oldest first."
+  def user_organizations(ctx, user) do
     module = Store.module(ctx, :organization)
     member = Store.module(ctx, :member)
 

@@ -17,11 +17,15 @@ defmodule Authmk.EmulationCase do
     end
   end
 
-  setup %{auth: auth} do
+  # With `@moduletag global_repo: true` (in `async: false` modules, which run
+  # after the async ones), the repo takes its default name, so processes the
+  # test didn't start, like LiveViews, use it too.
+  setup %{auth: auth} = tags do
     database = Database.create!()
     on_exit(fn -> Database.delete!(database) end)
 
-    repo = start_supervised!(Database.repo_child_spec(database))
+    name = if tags[:global_repo], do: Repo
+    repo = start_supervised!(Database.repo_child_spec(database, name))
     Repo.put_dynamic_repo(repo)
     Database.migrate!(auth, repo)
     start_supervised!(auth)

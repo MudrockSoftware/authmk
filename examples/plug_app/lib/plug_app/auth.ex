@@ -20,7 +20,8 @@ defmodule PlugApp.Auth do
       Authmk.Plugins.Bearer,
       Authmk.Plugins.JWT,
       Authmk.Plugins.MultiSession,
-      Authmk.Plugins.OneTimeToken,
+      # Sign-ins that end at the mobile app (plugapp://...) bring it a token.
+      {Authmk.Plugins.OneTimeToken, deep_links: ["plugapp://"]},
       Authmk.Plugins.DeviceAuthorization,
       Authmk.Plugins.HaveIBeenPwned,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},

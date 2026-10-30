@@ -129,6 +129,15 @@ defmodule Authmk.Options.Schemas do
                       default: [],
                       doc: "Extra origins allowed to send requests and receive redirects."
                     ],
+                    cors: [
+                      type: :keyword_list,
+                      default: [],
+                      doc:
+                        "CORS for browser apps on other origins (SPAs, Tauri, Capacitor). With `trusted_origins: true`, requests from origins in `trusted_origins` get CORS headers with credentials (cookies), so the app can read authmk's answers. Other origins never do.",
+                      keys: [
+                        trusted_origins: [type: :boolean, default: false]
+                      ]
+                    ],
                     disabled_paths: [
                       type: {:list, :string},
                       default: [],

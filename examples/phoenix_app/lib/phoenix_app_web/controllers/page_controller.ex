@@ -13,6 +13,8 @@ defmodule PhoenixAppWeb.PageController do
     render(conn, :consent, client: client, scope: scope)
   end
 
+  def admin(conn, _params), do: text(conn, "Admins only")
+
   def account(conn, _params) do
     render(conn, :account, user: conn.assigns.current_user)
   end

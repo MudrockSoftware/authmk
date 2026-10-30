@@ -92,6 +92,34 @@ defmodule Authmk.UntrustedInputFuzzTest do
     end
   end
 
+  property "HTML forms only ever send the browser to safe places", %{browser: browser} do
+    check all(
+            success <- callback_url(),
+            failure <- one_of([constant(nil), callback_url()]),
+            referer <- one_of([constant(nil), callback_url()])
+          ) do
+      params = %{"authmk_redirect" => success, "email" => "nobody@example.com", "password" => "x"}
+      params = if failure, do: Map.put(params, "authmk_error_redirect", failure), else: params
+
+      browser =
+        if referer,
+          do: %{browser | headers: [{"referer", referer}]},
+          else: %{browser | headers: []}
+
+      {_browser, conn} = Browser.post_form(browser, "/sign-in/email", params)
+
+      case conn.status do
+        303 ->
+          [location] = Plug.Conn.get_resp_header(conn, "location")
+          assert safe_location?(location), "sent to #{inspect(location)}"
+
+        # Not a form, or targets refused: JSON, and no redirect at all.
+        _status ->
+          assert Plug.Conn.get_resp_header(conn, "location") == []
+      end
+    end
+  end
+
   property "any path and method gets a JSON answer, never a crash", %{browser: browser} do
     check all(
             segments <- list_of(string(:printable, max_length: 20), max_length: 4),

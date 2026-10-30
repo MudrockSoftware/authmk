@@ -59,7 +59,7 @@ defmodule Authmk.Endpoints do
       new(:list_sessions, :get, "/list-sessions", {Session, :list_sessions}, session: :required),
       new(:revoke_session, :post, "/revoke-session", {Session, :revoke_session},
         session: :required,
-        params: [id: [type: :string, required: true]]
+        params: [id: [type: :string], session_id: [type: :string]]
       ),
       new(:revoke_sessions, :post, "/revoke-sessions", {Session, :revoke_sessions},
         session: :required

@@ -41,6 +41,23 @@ defmodule Authmk.Migration do
     Render.migration(module_name, up, down, adapter(repo))
   end
 
+  @doc """
+  `snapshot`, with `tables` recorded as they are in the current schema: for
+  adopting tables the app already has (like `users`), which it brings to
+  authmk's columns itself. Raises for tables the schema doesn't have.
+  """
+  @spec adopt(Snapshot.t(), module(), [String.t()]) :: Snapshot.t()
+  def adopt(snapshot, auth, tables) do
+    current = current_snapshot(auth)
+
+    Enum.reduce(tables, snapshot, fn table, snapshot ->
+      case current["tables"][table] do
+        nil -> raise ArgumentError, "the authmk schema has no table #{table}"
+        definition -> put_in(snapshot, ["tables", table], definition)
+      end
+    end)
+  end
+
   @doc "Operations from `snapshot` to the current schema, with confirmed `renames` applied."
   @spec changes(module(), Snapshot.t(), [Renames.rename()]) :: [tuple()]
   def changes(auth, snapshot, renames \\ []) do
