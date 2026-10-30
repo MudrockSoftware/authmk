@@ -26,6 +26,24 @@ jobs:
       - run: mix coverage
       - run: mix fuzz
 
+  assets:
+    name: Pages and dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Elixir, Erlang and bun from mise.toml.
+      - uses: jdx/mise-action@v5
+      - name: Check the pages
+        working-directory: assets/pages
+        run: bun install --frozen-lockfile && bun run check
+      - name: Check the dashboard
+        working-directory: licensed/dashboard
+        run: bun install --frozen-lockfile && bun run check
+      - run: mix deps.get
+      # Builds both into priv/, as the Hex package ships them.
+      - run: mix build
+      - run: test -f priv/pages/index.html && test -f priv/licensed/dashboard/index.html
+
   test:
     name: Tests on ${{ matrix.database }}
     runs-on: ubuntu-latest

@@ -47,6 +47,8 @@ completed.
 ## Commands
 
 - First time: `mix setup` (fetches deps and enables the `.githooks/pre-commit` hook)
+- Build: `mix build` rebuilds the pages and the dashboard into `priv/` with bun,
+  stale or not, then compiles. `mix compile` rebuilds them only when their sources changed.
 - Library tests: `mix test`; single file or line: `mix test test/path_test.exs:42`
 - On a development machine, test with SQLite only (`mix test`) unless told
   otherwise. Running every database takes a lot of time for a simple schema

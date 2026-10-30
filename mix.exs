@@ -28,6 +28,9 @@ defmodule Mix.Tasks.Compile.AuthmkPages do
 
   defp mtime(path), do: File.stat!(path, time: :posix).mtime
 
+  # `mix build`: rebuilds both, stale or not.
+  def build_all, do: for({source, _output} <- @apps, File.dir?(source), do: build(source))
+
   defp build(source) do
     bun =
       System.find_executable("bun") ||
@@ -46,6 +49,8 @@ end
 
 defmodule Authmk.MixProject do
   use Mix.Project
+
+  alias Mix.Tasks.Compile.AuthmkPages
 
   @source_url "https://github.com/MudrockSoftware/authmk"
   @homepage_url "https://authmk.com"
@@ -181,6 +186,8 @@ defmodule Authmk.MixProject do
     [
       # Fetches deps and enables the git pre-commit hook (lint + Dialyzer).
       setup: ["deps.get", &install_git_hooks/1],
+      # Rebuilds the pages and the dashboard with bun, then compiles.
+      build: [fn _args -> AuthmkPages.build_all() end, "compile"],
       # The package ships the built pages and dashboard: build them first.
       "hex.build": ["compile", "hex.build"],
       "hex.publish": ["compile", "hex.publish"],
