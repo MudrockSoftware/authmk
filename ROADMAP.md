@@ -365,66 +365,66 @@ Legend: `[ ]` planned, `[x]` done
 - [x] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
 - [x] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
 - [x] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
-- [ ] **OpenAPI**: generate an OpenAPI spec for all enabled endpoints, plus a reference UI
-- [ ] **Test helpers**: ExUnit factories, database helpers, sign-in helpers for `Plug.Test` / LiveView tests, captured OTPs and emails
+- [x] **OpenAPI**: generate an OpenAPI spec for all enabled endpoints, plus a reference UI
+- [x] **Test helpers**: ExUnit factories, database helpers, sign-in helpers for `Plug.Test` / `Phoenix.ConnTest`, captured OTPs and emails
 
 ---
 
 ## 0.7 Identity provider and enterprise
 
 ### OAuth 2.1 / OpenID Connect provider
-- [ ] Authorize, token, consent, continue, introspect, revoke, user-info and end-session endpoints
-- [ ] Discovery metadata (`/.well-known/openid-configuration`, OAuth authorization-server metadata) with customizable advertised values
-- [ ] Grant types: authorization code with PKCE, refresh token, client credentials, device code, JWT bearer
-- [ ] Dynamic client registration, including unauthenticated registration with provider policy
-- [ ] Client create, read, update and delete, with privilege rules
-- [ ] Consent screen and redirect screens
-- [ ] Scopes, claims (custom claims can't override protocol claims), resources and protected resources
-- [ ] Client authentication: `client_secret_basic`, `client_secret_post`, `private_key_jwt`, tied to the grant
-- [ ] DPoP (sender-constrained tokens)
-- [ ] Pushed authorization requests (PAR)
-- [ ] Pairwise subject identifiers
-- [ ] Refresh-token rotation that tolerates retries
-- [ ] `max_age` enforcement
-- [ ] Back-channel logout; logout started from the app, with browser confirmation
-- [ ] Cached trusted clients; custom redirect-URI validation
-- [ ] Organization-aware clients and tokens
-- [ ] Standard OAuth error responses everywhere
-- [ ] Token verification helpers for resource servers
+- [x] Authorize, token, consent, continue, introspect, revoke, user-info and end-session endpoints
+- [x] Discovery metadata (`/.well-known/openid-configuration`, OAuth authorization-server metadata) with customizable advertised values
+- [x] Grant types: authorization code with PKCE, refresh token, client credentials, device code, JWT bearer
+- [x] Dynamic client registration, including unauthenticated registration with provider policy
+- [x] Client create, read, update and delete, with privilege rules
+- [x] Consent screen and redirect screens
+- [x] Scopes, claims (custom claims can't override protocol claims), resources and protected resources
+- [x] Client authentication: `client_secret_basic`, `client_secret_post`, `private_key_jwt`, tied to the grant
+- [x] DPoP (sender-constrained tokens)
+- [x] Pushed authorization requests (PAR)
+- [x] Pairwise subject identifiers
+- [x] Refresh-token rotation that tolerates retries
+- [x] `max_age` enforcement
+- [x] Back-channel logout; logout started from the app, with browser confirmation
+- [x] Cached trusted clients; custom redirect-URI validation
+- [x] Organization-aware clients and tokens
+- [x] Standard OAuth error responses everywhere
+- [x] Token verification helpers for resource servers
 
 ### MCP authorization
-- [ ] Act as the OAuth provider for MCP clients
-- [ ] Protected resource metadata
-- [ ] Plug for protecting MCP routes
-- [ ] Device authorization for your own CLI tools
-- [ ] Optional fallback to dynamic client registration
+- [x] Act as the OAuth provider for MCP clients
+- [x] Protected resource metadata
+- [x] Plug for protecting MCP routes
+- [x] Device authorization for your own CLI tools
+- [x] Optional fallback to dynamic client registration
 
 ### Client ID metadata documents
-- [ ] Discover OAuth clients from HTTPS metadata documents
-- [ ] Draft-02 validation, persistence and refresh, clear security boundaries
+- [x] Discover OAuth clients from HTTPS metadata documents
+- [x] Draft-02 validation, persistence and refresh, clear security boundaries
 
 ### Single sign-on
-- [ ] Register OIDC providers, with discovery
+- [x] Register OIDC providers, with discovery
 - [ ] Register SAML 2.0 providers
 - [ ] Sign-in started from the service provider and from the identity provider
 - [ ] Service provider metadata endpoint
 - [ ] Signed SAML authentication requests; rotating signing certificates
 - [ ] SAML attribute mapping
 - [ ] SAML protections: request/response matching, replay protection, timestamp checks, algorithm allow-list, size limits
-- [ ] Default SSO provider; shared redirect URI
-- [ ] Domain verification (DNS TXT record)
-- [ ] User and organization provisioning on sign-in
-- [ ] Resolve which SSO user to sign in
+- [x] Default SSO provider; shared redirect URI
+- [x] Domain verification (DNS TXT record)
+- [x] User and organization provisioning on sign-in
+- [x] Resolve which SSO user to sign in
 
 ### SCIM provisioning
-- [ ] SCIM 2.0 users and groups endpoints
-- [ ] Filtering, pagination, PATCH and discovery endpoints
-- [ ] Compatibility with Microsoft Entra ID groups
-- [ ] Bearer credentials per connection: verification and rotation
-- [ ] Map groups to custom roles and reconcile changes
-- [ ] Link provisioned users to existing users; callbacks to resolve and reconcile users
-- [ ] Handle deactivation and deletion; decommission connections
-- [ ] Sign provisioned users in through SSO
+- [x] SCIM 2.0 users and groups endpoints
+- [x] Filtering, pagination, PATCH and discovery endpoints
+- [x] Compatibility with Microsoft Entra ID groups
+- [x] Bearer credentials per connection: verification and rotation
+- [x] Map groups to custom roles and reconcile changes
+- [x] Link provisioned users to existing users; callbacks to resolve and reconcile users
+- [x] Handle deactivation and deletion; decommission connections
+- [x] Sign provisioned users in through SSO
 
 ---
 
@@ -467,7 +467,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Plug: `Authmk.Plug.FetchSession`, `Authmk.Plug.RequireAuthenticated`
 - [ ] Plug: `RequireRole`, `RequireUser` (rejects service accounts)
 - [ ] Phoenix router macro and controller helpers
-- [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` / `current_principal` assigns
+- [ ] LiveView: `on_mount` hooks, `current_user` / `current_session` / `current_principal` assigns; signing in LiveView tests
 - [ ] LiveView function components: sign-in, sign-up, password reset, 2FA, passkeys, account settings, organization switcher
 - [ ] JSON API usable by SPAs, mobile apps and desktop apps
 - [ ] Deep-link and custom-scheme redirects for mobile apps

@@ -51,5 +51,22 @@ defmodule PhoenixAppWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug :well_known
   plug PhoenixAppWeb.Router
+
+  # Discovery for OAuth and MCP clients, at the root where they look.
+  defp well_known(conn, _opts) do
+    resources = [
+      [
+        resource: PhoenixApp.Auth.mcp_url(),
+        scopes: ["openid", "profile"],
+        name: "PhoenixApp tools"
+      ]
+    ]
+
+    Authmk.Plug.WellKnown.call(
+      conn,
+      Authmk.Plug.WellKnown.init(auth: PhoenixApp.Auth, protected_resources: resources)
+    )
+  end
 end

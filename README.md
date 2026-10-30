@@ -113,6 +113,18 @@ More sign-in methods, each a plugin:
 | `Authmk.Plugins.OneTap` | Google One Tap, popup and redirect modes |
 | `Authmk.Plugins.SIWE` | Sign-In with Ethereum; needs `{:ex_secp256k1, "~> 0.8"}` and `{:ex_keccak, "~> 0.7"}` |
 
+Your app as an identity provider: `Authmk.Plugins.OAuthProvider` makes it an
+OAuth 2.1 authorization server and OpenID Connect provider, with PKCE,
+consent, refresh-token rotation, resource indicators, DPoP, pushed
+authorization requests, `private_key_jwt`, dynamic client registration and
+logout. `Authmk.Plug.RequireAccessToken` protects your APIs with its tokens.
+
+For business customers, `Authmk.Plugins.SSO` signs organizations in with
+their own OpenID Connect identity providers, with DNS domain verification
+and automatic provisioning, and `Authmk.Plugins.SCIM` lets their directories
+(Okta, Entra ID, Google Workspace) provision and deprovision people and
+groups over SCIM 2.0.
+
 Authorization: `Authmk.AccessControl` defines roles and permissions, checked
 without a database call. `Authmk.Plugins.Admin` manages users (roles, bans,
 sessions, impersonation) with them, `Authmk.Plugins.Organization` adds
@@ -135,8 +147,11 @@ Sessions and security, also plugins:
 | `Authmk.Plugins.HaveIBeenPwned` | Refuses passwords from known data breaches |
 | `Authmk.Plugins.LastSignInMethod` | Remembers how a user last signed in, for "Last used" hints |
 | `Authmk.Plugins.OAuthProxy` | Social sign-in on previews and localhost through production's callback URL |
+| `Authmk.Plugins.OpenAPI` | An OpenAPI 3.1 description of every enabled endpoint, and a reference page |
 
-To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
+In your app's tests, `Authmk.Testing` creates users and sessions and signs
+test conns in, and `Authmk.Testing.Inbox` catches the codes and links authmk
+sends. To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
 and `Authmk.Testing.FakeWallet` play the authenticator and the wallet.
 
 ## Design

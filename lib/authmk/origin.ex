@@ -44,6 +44,14 @@ defmodule Authmk.Origin do
     end
   end
 
+  @doc """
+  Whether the request comes from a trusted origin (or isn't from a browser),
+  even on endpoints that skip the check: for those that serve any origin
+  but must not trust its cookies.
+  """
+  @spec trusted_request?(Context.t()) :: boolean()
+  def trusted_request?(%Context{} = ctx), do: check_request(%{ctx | endpoint: nil}) == :ok
+
   @doc "Whether `url` is a safe redirect target. `nil` counts as safe (no redirect)."
   @spec safe_redirect?(Context.t(), String.t() | nil) :: boolean()
   def safe_redirect?(_ctx, nil), do: true

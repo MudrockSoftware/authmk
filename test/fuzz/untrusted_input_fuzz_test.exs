@@ -13,6 +13,13 @@ defmodule Authmk.Fuzz.Auth do
       Authmk.Plugins.JWT,
       Authmk.Plugins.DeviceAuthorization,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
+      Authmk.Plugins.SCIM,
+      # Client ID metadata documents on, with no DNS: URLs get checked, never fetched.
+      {Authmk.Plugins.OAuthProvider,
+       login_page: "/sign-in",
+       consent_page: "/consent",
+       client_id_metadata_documents: true,
+       resolve_host: &__MODULE__.no_dns/1},
       # This server plays production for the OAuth proxy.
       {Authmk.Plugins.OAuthProxy,
        production_url: "http://localhost:4000", secret: "the fuzz proxy secret, 32+ bytes long"}
@@ -24,13 +31,14 @@ defmodule Authmk.Fuzz.Auth do
     advanced: [ip_address_headers: ["x-forwarded-for"]]
 
   def send_sms(_message, _ctx), do: :ok
+  def no_dns(_host), do: :error
 end
 
 defmodule Authmk.UntrustedInputFuzzTest do
   use Authmk.EmulationCase, async: true
   use ExUnitProperties
 
-  alias Authmk.Plugins.{JWT, LastSignInMethod}
+  alias Authmk.Plugins.{JWT, LastSignInMethod, OAuthProvider, SCIM}
   alias Authmk.Test.Browser
   alias Authmk.Testing.{FakeAuthenticator, FakeWallet}
 
@@ -272,6 +280,199 @@ defmodule Authmk.UntrustedInputFuzzTest do
       {_browser, conn} = get(browser, "/callback/github", %{code: "c", state: state})
       location = redirected_to(conn)
       assert safe_location?(location), "redirected to #{inspect(location)}"
+    end
+  end
+
+  property "garbage at the token endpoint never gets tokens", %{browser: _browser} do
+    {:ok, client} =
+      OAuthProvider.create_client(Authmk.Fuzz.Auth, %{
+        "redirect_uris" => ["https://client.example/cb"],
+        "grant_types" => ["authorization_code", "refresh_token", "client_credentials"],
+        "scope" => "openid"
+      })
+
+    check all(
+            grant <-
+              one_of([
+                member_of(~w(authorization_code refresh_token client_credentials)),
+                string(:printable, max_length: 20)
+              ]),
+            code <- string(:printable, max_length: 60),
+            verifier <- string(:printable, max_length: 130),
+            authorization <-
+              one_of([
+                constant("Basic " <> Base.encode64(client.client_id <> ":wrong")),
+                map(string(:printable, max_length: 60), &("Basic " <> &1)),
+                map(binary(max_length: 40), &("Basic " <> Base.encode64(&1)))
+              ])
+          ) do
+      server = %{
+        Browser.new(Authmk.Fuzz.Auth)
+        | headers: [{"authorization", authorization}],
+          origin: nil
+      }
+
+      {_server, conn} =
+        post(server, "/oauth2/token", %{
+          grant_type: grant,
+          code: code,
+          refresh_token: code,
+          code_verifier: verifier,
+          redirect_uri: "https://client.example/cb"
+        })
+
+      assert conn.status in [400, 401]
+      refute Map.has_key?(json(conn), "access_token")
+    end
+  end
+
+  property "authorization requests only redirect to registered URIs or this site", %{
+    browser: browser
+  } do
+    {:ok, client} =
+      OAuthProvider.create_client(Authmk.Fuzz.Auth, %{
+        "redirect_uris" => ["https://client.example/cb"],
+        "scope" => "openid"
+      })
+
+    check all(
+            client_id <-
+              one_of([
+                constant(client.client_id),
+                string(:printable, max_length: 30),
+                map(string(:printable, max_length: 40), &("https://" <> &1))
+              ]),
+            redirect_uri <- one_of([constant("https://client.example/cb"), callback_url()]),
+            scope <- string(:printable, max_length: 30),
+            challenge <- string(:printable, max_length: 64)
+          ) do
+      {_browser, conn} =
+        get(browser, "/oauth2/authorize", %{
+          response_type: "code",
+          client_id: client_id,
+          redirect_uri: redirect_uri,
+          scope: scope,
+          code_challenge: challenge,
+          code_challenge_method: "S256"
+        })
+
+      location = redirected_to(conn)
+
+      assert String.starts_with?(location, "https://client.example/cb?") or
+               String.starts_with?(location, "http://localhost:4000/"),
+             "redirected to #{inspect(location)}"
+    end
+  end
+
+  property "made-up client assertions and DPoP proofs never get tokens", %{browser: _browser} do
+    {:ok, client} =
+      OAuthProvider.create_client(Authmk.Fuzz.Auth, %{
+        "grant_types" => ["client_credentials"],
+        "token_endpoint_auth_method" => "private_key_jwt",
+        "jwks" => %{
+          "keys" => [
+            %{
+              "kty" => "EC",
+              "crv" => "P-256",
+              "x" => "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
+              "y" => "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"
+            }
+          ]
+        }
+      })
+
+    jwt_like =
+      one_of([
+        string(:printable, max_length: 200),
+        map(list_of(string(:alphanumeric, max_length: 60), length: 3), &Enum.join(&1, ".")),
+        map(
+          fixed_map(%{
+            header:
+              map_of(string(:alphanumeric, max_length: 5), string(:printable, max_length: 10),
+                max_length: 3
+              ),
+            body: string(:printable, max_length: 40)
+          }),
+          &(Base.url_encode64(
+              JSON.encode!(Map.merge(&1.header, %{"alg" => "ES256", "typ" => "dpop+jwt"})),
+              padding: false
+            ) <> "." <> Base.url_encode64(&1.body, padding: false) <> ".sig")
+        )
+      ])
+
+    check all(assertion <- jwt_like, proof <- jwt_like) do
+      {_client, conn} =
+        post(
+          %{Browser.new(Authmk.Fuzz.Auth) | origin: nil, headers: [{"dpop", proof}]},
+          "/oauth2/token",
+          %{
+            grant_type: "client_credentials",
+            client_id: client.client_id,
+            client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            client_assertion: assertion
+          }
+        )
+
+      assert conn.status in [400, 401]
+      refute Map.has_key?(json(conn), "access_token")
+    end
+  end
+
+  property "SCIM filters never crash, and bad ones are invalidFilter", %{browser: _browser} do
+    {:ok, connection} =
+      SCIM.create_connection(Authmk.Fuzz.Auth, organization_id: "org")
+
+    directory = %{
+      Browser.new(Authmk.Fuzz.Auth)
+      | origin: nil,
+        headers: [{"authorization", "Bearer " <> connection.token}]
+    }
+
+    attribute =
+      member_of(
+        ~w(userName externalId active emails.value name.familyName displayName password meta.created)
+      )
+
+    operator = member_of(~w(eq ne co sw ew pr gt EQ Co))
+
+    value =
+      one_of([
+        map(string(:printable, max_length: 12), &inspect/1),
+        member_of(~w(true false null 42 "a\\" "%" "_!"))
+      ])
+
+    comparison = map({attribute, operator, value}, fn {a, o, v} -> Enum.join([a, o, v], " ") end)
+
+    grammar =
+      map(
+        list_of({comparison, member_of([" and ", " or ", " AND "]), boolean()},
+          min_length: 1,
+          max_length: 6
+        ),
+        fn parts ->
+          Enum.map_join(parts, "", fn {term, joiner, wrap} ->
+            if(wrap, do: "(" <> term <> ")", else: term) <> joiner
+          end)
+          |> String.replace_suffix(" and ", "")
+        end
+      )
+
+    check all(filter <- one_of([string(:printable, max_length: 300), grammar])) do
+      {_directory, conn} = Browser.request(directory, :get, "/scim/v2/Users", %{filter: filter})
+
+      case conn.status do
+        200 -> assert is_integer(json(conn)["totalResults"])
+        400 -> assert json(conn)["scimType"] == "invalidFilter"
+      end
+    end
+  end
+
+  property "forged OAuth requests never continue", %{browser: browser} do
+    {browser, _user} = sign_up(browser)
+
+    check all(oauth_query <- string(:printable, max_length: 200)) do
+      {_browser, conn} = post(browser, "/oauth2/continue", %{oauth_query: oauth_query})
+      assert json(conn)["error"]["code"] in ["invalid_oauth_query", "validation_failed"]
     end
   end
 

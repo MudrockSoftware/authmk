@@ -107,8 +107,13 @@ defmodule Authmk.SessionStore do
   # Cached sessions are filtered with `cached?`; database rows with the
   # `database` condition, in one query, so no listing limit applies.
   defp end_sessions(ctx, user_id, cached?, database) do
+    # Listed first, only when someone listens: the rows are about to go.
+    ending =
+      if Hooks.sessions_ended?(ctx), do: ctx |> list(user_id) |> Enum.filter(cached?), else: []
+
     :ok = end_cached(ctx, mode(ctx), user_id, cached?)
     :ok = end_stored(ctx, mode(ctx), user_id, database)
+    Hooks.sessions_ended(ctx, user_id, ending)
   end
 
   defp end_cached(_ctx, :database, _user_id, _cached?), do: :ok

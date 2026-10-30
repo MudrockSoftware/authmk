@@ -125,6 +125,20 @@ defmodule Authmk.Hooks do
     :ok
   end
 
+  @doc "Whether any module listens for ended sessions."
+  @spec sessions_ended?(Context.t()) :: boolean()
+  def sessions_ended?(ctx), do: hook_modules(ctx, :sessions_ended, 3) != []
+
+  @doc "Runs `sessions_ended/3` hooks."
+  @spec sessions_ended(Context.t(), term(), [struct()]) :: :ok
+  def sessions_ended(_ctx, _user_id, []), do: :ok
+
+  def sessions_ended(ctx, user_id, sessions) do
+    ctx
+    |> hook_modules(:sessions_ended, 3)
+    |> Enum.each(fn module -> :ok = module.sessions_ended(user_id, sessions, ctx) end)
+  end
+
   defp hook_modules(%Context{config: config}, function, arity) do
     Enum.filter(config.hook_modules, &function_exported?(&1, function, arity))
   end

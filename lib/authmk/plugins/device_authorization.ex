@@ -134,10 +134,31 @@ defmodule Authmk.Plugins.DeviceAuthorization do
          %{} = device <-
            Store.get_by(ctx, :device_code, device_code: Token.hash(params.device_code)),
          :ok <- check(device.client_id == params.client_id, "invalid_grant") do
-      poll(ctx, device)
+      poll(ctx, device, &grant/2)
     else
       {:oauth_error, code} -> oauth_error(ctx, code)
       nil -> oauth_error(ctx, "invalid_grant")
+    end
+  end
+
+  @doc false
+  # For Authmk.Plugins.OAuthProvider's token endpoint, which authenticates
+  # the client itself: the same polling, with `issue.(ctx, user, scope)`
+  # making the tokens once the user approved.
+  def redeem(ctx, device_code, client_id, issue) do
+    with true <- is_binary(device_code),
+         %{} = device <- Store.get_by(ctx, :device_code, device_code: Token.hash(device_code)),
+         true <- device.client_id == client_id do
+      poll(ctx, device, &issue_approved(&1, &2, issue))
+    else
+      _unknown -> oauth_error(ctx, "invalid_grant")
+    end
+  end
+
+  defp issue_approved(ctx, device, issue) do
+    case take_approved(ctx, device) do
+      {:ok, user} -> issue.(ctx, user, device.scope)
+      :error -> oauth_error(ctx, "invalid_grant")
     end
   end
 
@@ -174,13 +195,13 @@ defmodule Authmk.Plugins.DeviceAuthorization do
   defp bound_to(%{user_id: id}, %{id: id}), do: :ok
   defp bound_to(_device, _user), do: {:error, Error.new(:forbidden)}
 
-  defp poll(ctx, device) do
+  defp poll(ctx, device, approved) do
     now = DateTime.utc_now()
 
     cond do
       DateTime.before?(device.expires_at, now) -> oauth_error(ctx, "expired_token")
       device.status == "denied" -> oauth_error(ctx, "access_denied")
-      device.status == "approved" -> grant(ctx, device)
+      device.status == "approved" -> approved.(ctx, device)
       too_fast?(device, now) -> slow_down(ctx, device, now)
       true -> pending_poll(ctx, device, now)
     end
@@ -203,9 +224,17 @@ defmodule Authmk.Plugins.DeviceAuthorization do
   end
 
   # Used up first, so two polls can't both get a token.
-  defp grant(ctx, device) do
+  defp take_approved(ctx, device) do
     with 1 <- Store.delete_all(ctx, :device_code, id: device.id),
-         %{} = user <- Store.get_by(ctx, :user, id: device.user_id),
+         %{} = user <- Store.get_by(ctx, :user, id: device.user_id) do
+      {:ok, user}
+    else
+      _gone -> :error
+    end
+  end
+
+  defp grant(ctx, device) do
+    with {:ok, user} <- take_approved(ctx, device),
          {:ok, signed_in} <- Sessions.create(ctx, user, false),
          {:ok, access_token} <- access_token(signed_in) do
       body = %{

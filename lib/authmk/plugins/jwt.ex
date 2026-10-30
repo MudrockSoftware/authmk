@@ -84,7 +84,8 @@ defmodule Authmk.Plugins.JWT do
         name: :jwks,
         method: :get,
         path: opts[:jwks_path] || "/jwks",
-        handler: {__MODULE__, :jwks}
+        handler: {__MODULE__, :jwks},
+        cors: true
       )
 
     if opts[:remote_jwks_url], do: [token], else: [token, jwks]
@@ -128,17 +129,51 @@ defmodule Authmk.Plugins.JWT do
     ctx = %{Context.new(config) | base_url: server_base_url(config)}
     opts = opts(ctx)
 
-    with {:ok, kid} <- kid(token),
-         {:ok, jwk} <- verification_key(ctx, opts, kid),
-         {true, %JOSE.JWT{fields: claims}, _jws} <-
-           JOSE.JWT.verify_strict(jwk, [opts[:algorithm]], token),
+    with {:ok, claims} <- verified_claims(ctx, token),
          :ok <- check_claims(ctx, opts, claims) do
       {:ok, claims}
     else
       _invalid -> {:error, Error.custom(:invalid_jwt, 401, "The token isn't valid")}
     end
+  end
+
+  @doc false
+  # The claims of a token signed by one of this app's keys, with no check
+  # of what they say: for plugins with their own rules (the OAuth provider).
+  @spec verified_claims(Context.t(), String.t()) :: {:ok, map()} | :error
+  def verified_claims(ctx, token) when is_binary(token) do
+    opts = opts(ctx)
+
+    with {:ok, kid} <- kid(token),
+         {:ok, jwk} <- verification_key(ctx, opts, kid),
+         {true, %JOSE.JWT{fields: claims}, _jws} <-
+           JOSE.JWT.verify_strict(jwk, [opts[:algorithm]], token) do
+      {:ok, claims}
+    else
+      _invalid -> :error
+    end
   rescue
-    _malformed -> {:error, Error.custom(:invalid_jwt, 401, "The token isn't valid")}
+    _malformed -> :error
+  end
+
+  def verified_claims(_ctx, _token), do: :error
+
+  @doc false
+  # Signs `claims` as they are, with this app's current key.
+  # `header` adds JOSE header fields, like `typ`.
+  @spec sign_claims(Context.t(), map(), map()) :: {:ok, String.t()} | {:error, Error.t()}
+  def sign_claims(ctx, claims, header \\ %{}), do: sign(ctx, opts(ctx), claims, header)
+
+  @doc false
+  # The signing algorithm and where the public keys are, for metadata.
+  @spec algorithm(Context.t()) :: String.t()
+  def algorithm(ctx), do: opts(ctx)[:algorithm]
+
+  @doc false
+  @spec jwks_url(Context.t()) :: String.t()
+  def jwks_url(ctx) do
+    opts = opts(ctx)
+    opts[:remote_jwks_url] || Authmk.URL.endpoint(ctx, opts[:jwks_path] || "/jwks")
   end
 
   @doc false
@@ -173,15 +208,16 @@ defmodule Authmk.Plugins.JWT do
       else: ctx |> Serializer.user(subject.user) |> JSON.encode!() |> JSON.decode!()
   end
 
-  defp sign(ctx, opts, claims) do
+  defp sign(ctx, opts, claims, header \\ %{}) do
     case opts[:sign] do
       nil ->
         with {:ok, key} <- Keys.current(ctx, opts) do
           jwk = Keys.private_jwk(ctx, key, opts)
+          header = Map.merge(header, %{"alg" => opts[:algorithm], "kid" => key.id})
 
           {_alg, token} =
             jwk
-            |> JOSE.JWT.sign(%{"alg" => opts[:algorithm], "kid" => key.id}, claims)
+            |> JOSE.JWT.sign(header, claims)
             |> JOSE.JWS.compact()
 
           {:ok, token}

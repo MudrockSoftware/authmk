@@ -5,6 +5,7 @@ defmodule PlugApp.Router do
 
   use Plug.Router
 
+  plug :well_known
   plug :match
   plug Plug.Parsers, parsers: [:urlencoded, :json], json_decoder: JSON
   plug :dispatch
@@ -67,7 +68,59 @@ defmodule PlugApp.Router do
     end
   end
 
+  # An API for other apps, with access tokens from the OAuth provider.
+  get "/api/profile" do
+    conn =
+      Authmk.Plug.RequireAccessToken.call(
+        conn,
+        Authmk.Plug.RequireAccessToken.init(auth: PlugApp.Auth, scopes: ["profile"])
+      )
+
+    if conn.halted do
+      conn
+    else
+      body = JSON.encode!(%{name: conn.assigns.current_user.name})
+      conn |> put_resp_content_type("application/json") |> send_resp(200, body)
+    end
+  end
+
+  # The MCP server: tools for MCP clients holding a token for it.
+  get "/mcp" do
+    opts =
+      Authmk.Plug.RequireAccessToken.init(
+        auth: PlugApp.Auth,
+        resource: PlugApp.Auth.mcp_url(),
+        resource_metadata: resource_metadata_url()
+      )
+
+    conn = Authmk.Plug.RequireAccessToken.call(conn, opts)
+
+    if conn.halted do
+      conn
+    else
+      body = JSON.encode!(%{tools: [], user: conn.assigns.current_user.email})
+      conn |> put_resp_content_type("application/json") |> send_resp(200, body)
+    end
+  end
+
   match _ do
     send_resp(conn, 404, "not found")
+  end
+
+  # Discovery for OAuth and MCP clients, at the root where they look.
+  defp well_known(conn, _opts) do
+    resources = [
+      [resource: PlugApp.Auth.mcp_url(), scopes: ["openid", "profile"], name: "PlugApp tools"]
+    ]
+
+    Authmk.Plug.WellKnown.call(
+      conn,
+      Authmk.Plug.WellKnown.init(auth: PlugApp.Auth, protected_resources: resources)
+    )
+  end
+
+  defp resource_metadata_url do
+    Application.fetch_env!(:plug_app, PlugApp.Auth)[:base_url] <>
+      "/.well-known/oauth-protected-resource/mcp"
   end
 end

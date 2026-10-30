@@ -7,6 +7,12 @@ defmodule PhoenixAppWeb.PageController do
     render(conn, :home, providers: providers, last_used: last_used)
   end
 
+  # Shows which app asks for what; the page posts the answer to authmk.
+  def consent(conn, %{"client_id" => client_id, "scope" => scope}) do
+    client = Authmk.Plugins.OAuthProvider.public_client(PhoenixApp.Auth, client_id) || %{}
+    render(conn, :consent, client: client, scope: scope)
+  end
+
   def account(conn, _params) do
     render(conn, :account, user: conn.assigns.current_user)
   end

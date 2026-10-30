@@ -449,6 +449,490 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "oauth_access_tokens": {
+      "columns": {
+        "dpop_jkt": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "oauth_client_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "oauth_clients",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "reference_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "refresh_token_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "resource": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "scopes": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "session_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "token": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "oauth_access_tokens_oauth_client_id_index": {
+          "columns": ["oauth_client_id"],
+          "unique": false
+        },
+        "oauth_access_tokens_refresh_token_id_index": {
+          "columns": ["refresh_token_id"],
+          "unique": false
+        },
+        "oauth_access_tokens_session_id_index": {
+          "columns": ["session_id"],
+          "unique": false
+        },
+        "oauth_access_tokens_token_index": {
+          "columns": ["token"],
+          "unique": true
+        },
+        "oauth_access_tokens_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "oauth_assertions": {
+      "columns": {
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "oauth_assertions_expires_at_index": {
+          "columns": ["expires_at"],
+          "unique": false
+        },
+        "oauth_assertions_key_index": {
+          "columns": ["key"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "oauth_clients": {
+      "columns": {
+        "application_type": {
+          "default": "web",
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "backchannel_logout_uri": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "client_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "client_secret": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "contacts": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "disabled": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "dpop_bound_access_tokens": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "grant_types": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "icon": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "jwks": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "jwks_uri": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "metadata": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "metadata_document_expires_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "policy_uri": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "post_logout_redirect_uris": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "redirect_uris": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "reference_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "require_pkce": {
+          "default": true,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "response_types": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "scopes": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "skip_consent": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "software_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "software_statement": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "software_version": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "subject_type": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "token_endpoint_auth_method": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "tos_uri": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "uri": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "oauth_clients_client_id_index": {
+          "columns": ["client_id"],
+          "unique": true
+        },
+        "oauth_clients_reference_id_index": {
+          "columns": ["reference_id"],
+          "unique": false
+        },
+        "oauth_clients_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "oauth_consents": {
+      "columns": {
+        "oauth_client_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "oauth_clients",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "reference_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "scopes": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "oauth_consents_oauth_client_id_index": {
+          "columns": ["oauth_client_id"],
+          "unique": false
+        },
+        "oauth_consents_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "oauth_refresh_tokens": {
+      "columns": {
+        "auth_time": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "dpop_jkt": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "family_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "oauth_client_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "oauth_clients",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "reference_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "resource": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "revoked_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "scopes": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "session_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "token": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "oauth_refresh_tokens_family_id_index": {
+          "columns": ["family_id"],
+          "unique": false
+        },
+        "oauth_refresh_tokens_oauth_client_id_index": {
+          "columns": ["oauth_client_id"],
+          "unique": false
+        },
+        "oauth_refresh_tokens_session_id_index": {
+          "columns": ["session_id"],
+          "unique": false
+        },
+        "oauth_refresh_tokens_token_index": {
+          "columns": ["token"],
+          "unique": true
+        },
+        "oauth_refresh_tokens_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "organizations": {
       "columns": {
         "logo": {
@@ -559,6 +1043,228 @@
         },
         "passkeys_user_id_index": {
           "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "scim_connections": {
+      "columns": {
+        "last_used_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "provider_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "token": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "nothing",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "scim_connections_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "scim_connections_token_index": {
+          "columns": ["token"],
+          "unique": true
+        },
+        "scim_connections_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "scim_group_members": {
+      "columns": {
+        "scim_group_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "scim_groups",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "scim_user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "scim_users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "scim_group_members_scim_group_id_index": {
+          "columns": ["scim_group_id"],
+          "unique": false
+        },
+        "scim_group_members_scim_user_id_index": {
+          "columns": ["scim_user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "scim_groups": {
+      "columns": {
+        "display_name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "external_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "role": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "scim_connection_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "scim_connections",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "scim_groups_scim_connection_id_index": {
+          "columns": ["scim_connection_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "scim_users": {
+      "columns": {
+        "active": {
+          "default": true,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "deprovisioned_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "external_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "family_name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "given_name": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "scim_connection_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "scim_connections",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "user_name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "scim_users_external_id_index": {
+          "columns": ["external_id"],
+          "unique": false
+        },
+        "scim_users_scim_connection_id_index": {
+          "columns": ["scim_connection_id"],
+          "unique": false
+        },
+        "scim_users_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        },
+        "scim_users_user_name_index": {
+          "columns": ["user_name"],
           "unique": false
         }
       },
@@ -698,6 +1404,82 @@
           "unique": true
         },
         "sessions_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "sso_providers": {
+      "columns": {
+        "domain": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "domain_verified": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "issuer": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "oidc_config": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "provider_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "type": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "nothing",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "sso_providers_domain_index": {
+          "columns": ["domain"],
+          "unique": false
+        },
+        "sso_providers_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "sso_providers_provider_id_index": {
+          "columns": ["provider_id"],
+          "unique": true
+        },
+        "sso_providers_user_id_index": {
           "columns": ["user_id"],
           "unique": false
         }

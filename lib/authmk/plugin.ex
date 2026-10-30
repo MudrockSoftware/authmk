@@ -119,6 +119,13 @@ defmodule Authmk.Plugin do
   @callback database_hook(event :: atom(), model :: atom(), data :: term(), Context.t()) ::
               {:ok, term()} | {:error, Error.t()} | term()
 
+  @doc """
+  Runs after sessions end by sign-out or revocation (not by expiring), with
+  the user's id and the ended sessions. For telling others, like OAuth
+  clients through back-channel logout.
+  """
+  @callback sessions_ended(user_id :: term(), sessions :: [struct()], Context.t()) :: :ok
+
   @optional_callbacks init: 1,
                       schema: 1,
                       endpoints: 1,
@@ -131,7 +138,8 @@ defmodule Authmk.Plugin do
                       sign_in_challenge: 3,
                       authenticate_request: 1,
                       send_email_verification: 3,
-                      database_hook: 4
+                      database_hook: 4,
+                      sessions_ended: 3
 
   defmacro __using__(_opts) do
     quote do

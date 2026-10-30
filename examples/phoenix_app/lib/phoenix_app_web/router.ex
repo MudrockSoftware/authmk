@@ -36,12 +36,50 @@ defmodule PhoenixAppWeb.Router do
     pipe_through [:browser, :require_authenticated]
 
     get "/account", PageController, :account
+    get "/consent", PageController, :consent
   end
 
   scope "/api", PhoenixAppWeb do
     pipe_through :api
 
     get "/whoami", ApiController, :whoami
+  end
+
+  # For other apps, with access tokens from the OAuth provider.
+  pipeline :oauth_api do
+    plug :accepts, ["json"]
+    plug Authmk.Plug.RequireAccessToken, auth: PhoenixApp.Auth, scopes: ["profile"]
+  end
+
+  scope "/api", PhoenixAppWeb do
+    pipe_through :oauth_api
+
+    get "/profile", ApiController, :profile
+  end
+
+  # The MCP server: tools for MCP clients holding a token for it.
+  pipeline :mcp do
+    plug :accepts, ["json"]
+    plug :require_mcp_token
+  end
+
+  scope "/", PhoenixAppWeb do
+    pipe_through :mcp
+
+    get "/mcp", ApiController, :mcp
+  end
+
+  defp require_mcp_token(conn, _opts) do
+    base_url = Application.fetch_env!(:phoenix_app, PhoenixApp.Auth)[:base_url]
+
+    opts =
+      Authmk.Plug.RequireAccessToken.init(
+        auth: PhoenixApp.Auth,
+        resource: PhoenixApp.Auth.mcp_url(),
+        resource_metadata: base_url <> "/.well-known/oauth-protected-resource/mcp"
+      )
+
+    Authmk.Plug.RequireAccessToken.call(conn, opts)
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

@@ -1,5 +1,16 @@
 import Config
 
+# An identity provider for single sign-on, played by the providers' stub.
+config :plug_app, :sso_providers, [
+  [
+    provider_id: "acme",
+    issuer: "https://idp.acme.example",
+    client_id: "acme-id",
+    client_secret: "acme-secret",
+    domain: "acme.example"
+  ]
+]
+
 # This server plays production for the OAuth proxy, and
 # http://localhost:4100 a preview deployment that signs in through it.
 config :plug_app, :oauth_proxy,

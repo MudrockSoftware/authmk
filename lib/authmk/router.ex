@@ -41,13 +41,47 @@ defmodule Authmk.Router do
     config = Config.fetch!(auth)
     conn = conn |> fetch_cookies() |> fetch_query_params() |> parse_body()
 
-    with {:ok, base_url} <- BaseURL.resolve(config, conn),
+    with :not_preflight <- preflight(conn, config),
+         {:ok, base_url} <- BaseURL.resolve(config, conn),
          {endpoint, path_params} <- find_endpoint(config, conn) do
       serve(conn, %Context{config: config, conn: conn, base_url: base_url}, endpoint, path_params)
     else
+      {:preflight, conn} -> conn
       {:error, %Error{} = error} -> send_error(conn, error)
       nil -> send_json(conn, 404, Error.to_map(Error.new(:not_found)))
     end
+  end
+
+  # CORS preflight, for endpoints that allow it. They never use cookies, so
+  # any origin may call them, without credentials.
+  defp preflight(%Plug.Conn{method: "OPTIONS"} = conn, config) do
+    methods =
+      for endpoint <- config.endpoints,
+          endpoint.cors,
+          Endpoint.path_matches?(endpoint, conn.path_info),
+          do: endpoint.method |> Atom.to_string() |> String.upcase()
+
+    if methods == [] do
+      :not_preflight
+    else
+      conn =
+        conn
+        |> cors_headers()
+        |> put_resp_header("access-control-allow-methods", Enum.join(["OPTIONS" | methods], ", "))
+        |> put_resp_header("access-control-allow-headers", "authorization, content-type, dpop")
+        |> put_resp_header("access-control-max-age", "600")
+        |> send_resp(204, "")
+
+      {:preflight, conn}
+    end
+  end
+
+  defp preflight(_conn, _config), do: :not_preflight
+
+  defp cors_headers(conn) do
+    conn
+    |> put_resp_header("access-control-allow-origin", "*")
+    |> put_resp_header("access-control-expose-headers", "www-authenticate, dpop-nonce")
   end
 
   @doc "Applies the context's cookie changes to the conn."
@@ -152,6 +186,8 @@ defmodule Authmk.Router do
     conn =
       conn
       |> put_resp_cookies(ctx)
+      |> merge_resp_headers(ctx.resp_headers)
+      |> then(&if(ctx.endpoint && ctx.endpoint.cors, do: cors_headers(&1), else: &1))
       |> register_before_send(&Hooks.on_response(&1, ctx))
 
     case result do
@@ -184,9 +220,15 @@ defmodule Authmk.Router do
 
   defp send_error(conn, %Error{} = error), do: send_json(conn, error.status, Error.to_map(error))
 
+  # Protocols with their own JSON type (SCIM's) set it on the context.
   defp send_json(conn, status, body) do
     conn
-    |> put_resp_content_type("application/json")
+    |> then(
+      &if(get_resp_header(&1, "content-type") == [],
+        do: put_resp_content_type(&1, "application/json"),
+        else: &1
+      )
+    )
     |> send_resp(status, JSON.encode!(body))
   end
 

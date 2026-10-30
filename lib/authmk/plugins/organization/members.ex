@@ -69,6 +69,33 @@ defmodule Authmk.Plugins.Organization.Members do
     end
   end
 
+  @doc "Sets a member's role, for server code: same checks as the endpoint, minus the actor's."
+  def set_role(ctx, organization, user, role) do
+    with %{} = member <-
+           Store.get_by(ctx, :member, organization_id: organization.id, user_id: user.id),
+         :ok <- valid_role(ctx, organization, role),
+         :ok <- not_demoting_last_owner(ctx, member, role),
+         {:ok, attrs} <- Hooks.before_event(ctx, :update_member_role, %{role: role}),
+         {:ok, member} <- Store.update(ctx, :member, member, attrs) do
+      :ok = Hooks.after_event(ctx, :update_member_role, member)
+      {:ok, member}
+    else
+      nil -> {:error, Errors.error(:member_not_found)}
+      error -> error
+    end
+  end
+
+  @doc "Removes a user from an organization, for server code."
+  def remove_user(ctx, organization, user) do
+    case Store.get_by(ctx, :member, organization_id: organization.id, user_id: user.id) do
+      nil ->
+        {:error, Errors.error(:member_not_found)}
+
+      member ->
+        with :ok <- Access.check_not_last_owner(ctx, member), do: remove_member(ctx, member)
+    end
+  end
+
   @doc """
   Adds `user` to `organization` with `role`, within the membership limit.
   Runs the `:add_member` hooks.

@@ -24,6 +24,24 @@ defmodule PlugApp.Auth do
       Authmk.Plugins.DeviceAuthorization,
       Authmk.Plugins.HaveIBeenPwned,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
+      # The API description at /auth/open-api/generate-schema, browsable at
+      # /auth/reference. Turn the page off in production with reference: false.
+      Authmk.Plugins.OpenAPI,
+      # Other apps sign in with this one ("Sign in with ...", OpenID Connect).
+      # The MCP server at /mcp: MCP clients register themselves, or name
+      # themselves by the URL of their metadata document.
+      {Authmk.Plugins.OAuthProvider,
+       login_page: "/sign-in",
+       consent_page: "/consent",
+       scopes: ["openid", "profile", "email", "offline_access"],
+       resources: &__MODULE__.mcp_resources/0,
+       allow_dynamic_client_registration: true,
+       allow_unauthenticated_client_registration: true,
+       client_id_metadata_documents: true},
+      # Customers' directories provision their people (SCIM 2.0 at /auth/scim/v2).
+      {Authmk.Plugins.SCIM, can_manage: &__MODULE__.organization_admin?/3},
+      # Single sign-on with customers' identity providers; see config.
+      {Authmk.Plugins.SSO, default_providers: &__MODULE__.sso_providers/0},
       {Authmk.Plugins.OAuthProxy,
        production_url: &__MODULE__.oauth_proxy_url/0, secret: &__MODULE__.oauth_proxy_secret/0},
       # Cloudflare's test secret, which passes every token; use your own.
@@ -35,6 +53,20 @@ defmodule PlugApp.Auth do
     ]
 
   import Swoosh.Email
+
+  # Owners and admins of an organization manage its SCIM connections.
+  def organization_admin?(_action, organization_id, %{user: user} = ctx) do
+    case Authmk.Store.get_by(ctx, :member, organization_id: organization_id, user_id: user.id) do
+      %{role: role} -> role in ["owner", "admin"]
+      nil -> false
+    end
+  end
+
+  def sso_providers, do: Application.get_env(:plug_app, :sso_providers, [])
+
+  @doc "The MCP server's URL, from the base URL in config."
+  def mcp_url, do: Application.fetch_env!(:plug_app, __MODULE__)[:base_url] <> "/mcp"
+  def mcp_resources, do: [mcp_url()]
 
   # Social sign-in through production's callback; see config/runtime.exs.
   def oauth_proxy_url, do: Application.fetch_env!(:plug_app, :oauth_proxy)[:production_url]

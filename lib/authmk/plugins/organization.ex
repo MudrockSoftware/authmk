@@ -424,6 +424,34 @@ defmodule Authmk.Plugins.Organization do
     end
   end
 
+  @doc """
+  Sets a member's role, from your own server code (for example when a
+  directory changes someone's groups). The last owner can't be demoted.
+  """
+  @spec set_member_role(module(), term(), term(), String.t()) ::
+          {:ok, struct()} | {:error, Authmk.Error.t()}
+  def set_member_role(auth, organization_id, user_id, role) do
+    with_member(auth, organization_id, user_id, &Members.set_role(&1, &2, &3, role))
+  end
+
+  @doc "Removes a user from an organization, from your own server code. Not the last owner."
+  @spec remove_member(module(), term(), term()) :: {:ok, struct()} | {:error, Authmk.Error.t()}
+  def remove_member(auth, organization_id, user_id) do
+    with_member(auth, organization_id, user_id, &Members.remove_user/3)
+  end
+
+  defp with_member(auth, organization_id, user_id, fun) do
+    ctx = auth.config() |> Context.new() |> Context.put_private(:organization_plugin, __MODULE__)
+
+    with {:ok, organization} <- Access.fetch_organization(ctx, organization_id),
+         %{} = user <- Store.get_by(ctx, :user, id: user_id) do
+      fun.(ctx, organization, user)
+    else
+      nil -> {:error, Authmk.Error.custom(:user_not_found, 404, "User not found")}
+      error -> error
+    end
+  end
+
   defp post(name, path, handler, params), do: endpoint(name, :post, path, handler, params)
   defp get(name, path, handler, params), do: endpoint(name, :get, path, handler, params)
 

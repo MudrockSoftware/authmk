@@ -36,6 +36,46 @@ defmodule Authmk.OAuth.HTTP do
     request(ctx, [method: :post, url: url, headers: headers] ++ body)
   end
 
+  @doc """
+  GET of a small document from an address someone else chose: the body is
+  read raw (never decoded) and refused past `max_bytes`, so a huge or
+  endless answer can't exhaust memory. Returns the status, body and headers.
+  """
+  @spec get_limited(Context.t(), String.t(), pos_integer()) ::
+          {:ok, pos_integer(), binary(), map()} | {:error, :too_large | term()}
+  def get_limited(%Context{config: config}, url, max_bytes) do
+    opts =
+      @defaults
+      |> Keyword.merge(config.advanced[:http_options] || [])
+      |> Keyword.merge(
+        method: :get,
+        url: url,
+        decode_body: false,
+        receive_timeout: 5_000,
+        headers: [{"user-agent", "authmk"}, {"accept", "application/json"}],
+        into: &collect(&1, &2, max_bytes)
+      )
+
+    case Req.request(opts) do
+      {:ok, %Req.Response{private: %{body: :too_large}}} ->
+        {:error, :too_large}
+
+      {:ok, %Req.Response{status: status, headers: headers} = response} ->
+        {:ok, status, response.private[:body] || "", headers}
+
+      {:error, exception} ->
+        {:error, exception}
+    end
+  end
+
+  defp collect({:data, data}, {request, response}, max_bytes) do
+    body = (response.private[:body] || "") <> data
+
+    if byte_size(body) > max_bytes,
+      do: {:halt, {request, Req.Response.put_private(response, :body, :too_large)}},
+      else: {:cont, {request, Req.Response.put_private(response, :body, body)}}
+  end
+
   defp request(%Context{config: config}, opts) do
     opts =
       @defaults

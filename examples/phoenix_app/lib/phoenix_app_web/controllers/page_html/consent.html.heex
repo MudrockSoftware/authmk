@@ -1,0 +1,21 @@
+<Layouts.app flash={@flash}>
+  <%!-- Another app asks to sign the user in (Authmk.Plugins.OAuthProvider). --%>
+  <h1 class="text-2xl font-semibold">{@client[:client_name] || "An app"} wants to sign you in</h1>
+  <p class="mt-4">It asks for: {@scope}</p>
+  <div class="mt-4 flex gap-2">
+    <button class="btn btn-primary" data-accept="true" onclick="answer(this)">Allow</button>
+    <button class="btn" data-accept="false" onclick="answer(this)">Deny</button>
+  </div>
+  <script>
+    async function answer(button) {
+      const params = new URLSearchParams(window.location.search)
+      const response = await fetch("/auth/oauth2/consent", {
+        method: "POST",
+        headers: {"content-type": "application/json"},
+        body: JSON.stringify({oauth_query: params.get("oauth_query"), accept: button.dataset.accept === "true"})
+      })
+      const {url} = await response.json()
+      if (url) window.location.href = url
+    }
+  </script>
+</Layouts.app>

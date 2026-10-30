@@ -10,6 +10,7 @@ defmodule Authmk.Context do
   * `raw_params`: params as received, with string keys
   * `session` and `user`: the signed-in session and user, when loaded
   * `resp_cookies`: cookies to set or delete on the response
+  * `resp_headers`: headers to set on the response
   * `private`: data that authmk and plugins pass along within one request
   """
 
@@ -25,6 +26,7 @@ defmodule Authmk.Context do
     params: %{},
     raw_params: %{},
     resp_cookies: [],
+    resp_headers: [],
     private: %{}
   ]
 
@@ -46,6 +48,11 @@ defmodule Authmk.Context do
   @spec delete_cookie(t(), String.t(), keyword()) :: t()
   def delete_cookie(ctx, name, opts),
     do: %{ctx | resp_cookies: ctx.resp_cookies ++ [{name, :delete, opts}]}
+
+  @doc "Sets a header on the response, replacing one of the same name."
+  @spec put_resp_header(t(), String.t(), String.t()) :: t()
+  def put_resp_header(ctx, name, value),
+    do: %{ctx | resp_headers: List.keystore(ctx.resp_headers, name, 0, {name, value})}
 
   @doc "Stores a value in `private`."
   @spec put_private(t(), atom(), term()) :: t()

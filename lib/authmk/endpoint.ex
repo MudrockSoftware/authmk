@@ -22,7 +22,7 @@ defmodule Authmk.Endpoint do
 
   @schema NimbleOptions.new!(
             name: [type: :atom, required: true, doc: "Unique name, used by hooks."],
-            method: [type: {:in, [:get, :post]}, required: true],
+            method: [type: {:in, [:get, :post, :put, :patch, :delete]}, required: true],
             path: [type: :string, required: true, doc: "Like `/reset-password/:token`."],
             handler: [type: {:tuple, [:atom, :atom]}, required: true],
             params: [
@@ -47,6 +47,12 @@ defmodule Authmk.Endpoint do
               default: true,
               doc:
                 "Reject untrusted origins (CSRF protection). Turn off only for endpoints that change nothing, like a provider's cross-site callback."
+            ],
+            cors: [
+              type: :boolean,
+              default: false,
+              doc:
+                "Let browser apps on any origin call it (CORS, without credentials). Only for endpoints that never use cookies, like OAuth's token endpoint."
             ],
             cookie_cache: [
               type: :boolean,
@@ -73,6 +79,7 @@ defmodule Authmk.Endpoint do
     session: :none,
     fresh: false,
     cookie_cache: false,
+    cors: false,
     origin_check: true,
     middleware: []
   ]
@@ -82,6 +89,11 @@ defmodule Authmk.Endpoint do
   @doc "Builds and validates an endpoint."
   @spec new(keyword()) :: t()
   def new(opts), do: struct!(__MODULE__, NimbleOptions.validate!(opts, @schema))
+
+  @doc "Whether the endpoint is at `path_info`, whatever the method."
+  @spec path_matches?(t(), [String.t()]) :: boolean()
+  def path_matches?(%__MODULE__{} = endpoint, path_info),
+    do: match_segments(String.split(endpoint.path, "/", trim: true), path_info, %{}) != :error
 
   @doc """
   Matches a request against the endpoint. Returns the path params, or `:error`.
