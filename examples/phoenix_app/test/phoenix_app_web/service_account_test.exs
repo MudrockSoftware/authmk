@@ -7,9 +7,18 @@ defmodule PhoenixAppWeb.ServiceAccountTest do
   test "a service account calls the API with its key", %{conn: conn} do
     user = %{email: "ada@example.com", password: "correct horse", name: "Ada"}
     conn = conn |> from_browser() |> post("/auth/sign-up/email", user)
-    conn = conn |> recycle() |> from_browser() |> post("/auth/service-account/create", %{name: "Nightly export"})
+
+    conn =
+      conn
+      |> recycle()
+      |> from_browser()
+      |> post("/auth/service-account/create", %{name: "Nightly export"})
+
     id = json_response(conn, 200)["id"]
-    conn = conn |> recycle() |> from_browser() |> post("/auth/service-account/create-key", %{id: id})
+
+    conn =
+      conn |> recycle() |> from_browser() |> post("/auth/service-account/create-key", %{id: id})
+
     key = json_response(conn, 200)["key"]
 
     conn = build_conn() |> put_req_header("x-api-key", key) |> get("/api/whoami")

@@ -1,8 +1,15 @@
 import Config
 
+# This server plays production for the OAuth proxy, and
+# http://localhost:4100 a preview deployment that signs in through it.
+config :plug_app, :oauth_proxy,
+  production_url: "http://localhost:4001",
+  secret: "test-only OAuth proxy secret, 32+ bytes"
+
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
 config :plug_app, PlugApp.Auth,
+  trusted_origins: ["http://localhost:4100"],
   secret: "RkLUU1T_IwR_HoOrGRjMeoeZ2uoM7GqfbuVOVBLtkPo",
   background: :inline,
   rate_limit: [enabled: false],

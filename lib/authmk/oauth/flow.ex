@@ -7,10 +7,17 @@ defmodule Authmk.OAuth.Flow do
   alias Authmk.{Context, Error, Log, URL}
   alias Authmk.OAuth.{Provider, Tokens}
 
-  @doc "The provider's redirect URI: its option, or `<base_url>/callback/<provider>`."
+  @doc """
+  The provider's redirect URI: its option, or `<base_url>/callback/<provider>`.
+  A plugin can put another base URL in `ctx.private[:oauth_redirect_base_url]`
+  (the OAuth proxy sends callbacks to production).
+  """
   @spec redirect_uri(Context.t(), Provider.t()) :: String.t()
-  def redirect_uri(ctx, %Provider{} = provider) do
-    provider.options[:redirect_uri] || URL.endpoint(ctx, "/callback/#{provider.id}")
+  def redirect_uri(%Context{} = ctx, %Provider{} = provider) do
+    base_url = ctx.private[:oauth_redirect_base_url] || ctx.base_url
+
+    provider.options[:redirect_uri] ||
+      URL.endpoint(%{ctx | base_url: base_url}, "/callback/#{provider.id}")
   end
 
   @doc """

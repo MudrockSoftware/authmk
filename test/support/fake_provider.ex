@@ -15,6 +15,8 @@ defmodule Authmk.Test.FakeProvider do
   #   * `public_routes:` - GET paths answered without a bearer token.
   #   * `jwks:` served at `jwks_path:` (Google's by default), without a token.
   #   * `id_token:`, `expires_in:`, `refresh_token:`, `scope:` - token response fields.
+  #   * `redirect_uri:` - the callback the code was issued for: code exchanges
+  #     must send it, as real providers require.
   #   * `client_secret:` (default "client-secret"); `token_auth: :basic | :post`
   #     accepts only that client authentication; `public_client: true` none.
   #
@@ -137,6 +139,9 @@ defmodule Authmk.Test.FakeProvider do
 
       form["grant_type"] == "refresh_token" ->
         json(conn, 200, tokens(opts, "refreshed"))
+
+      opts[:redirect_uri] && form["redirect_uri"] != opts[:redirect_uri] ->
+        json(conn, 400, %{"error" => "invalid_grant"})
 
       valid_code?(form) ->
         json(conn, 200, tokens(opts, "access"))

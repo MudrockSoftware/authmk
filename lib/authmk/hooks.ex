@@ -5,7 +5,8 @@ defmodule Authmk.Hooks do
 
   alias Authmk.{Context, Error}
 
-  @spec before_endpoint(Context.t()) :: {:cont, Context.t()} | {:halt, Error.t()}
+  @spec before_endpoint(Context.t()) ::
+          {:cont, Context.t()} | {:halt, Error.t()} | {:respond, term(), Context.t()}
   def before_endpoint(%Context{} = ctx) do
     name = ctx.endpoint.name
 
@@ -15,6 +16,7 @@ defmodule Authmk.Hooks do
       case module.before_endpoint(name, ctx) do
         {:cont, %Context{} = ctx} -> {:cont, {:cont, ctx}}
         {:halt, %Error{} = error} -> {:halt, {:halt, error}}
+        {:respond, result} -> {:halt, {:respond, result, ctx}}
       end
     end)
   end

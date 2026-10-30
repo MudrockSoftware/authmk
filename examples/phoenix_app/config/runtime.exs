@@ -39,6 +39,16 @@ if config_env() != :test do
   config :phoenix_app, PhoenixApp.Auth, social_providers: providers
 end
 
+# Social sign-in on previews and localhost through production's callback
+# URL (Authmk.Plugins.OAuthProxy): set OAUTH_PROXY_URL to production's base
+# URL and OAUTH_PROXY_SECRET to a secret every deployment shares, production
+# included, and add the previews to trusted_origins there.
+if config_env() != :test and System.get_env("OAUTH_PROXY_URL") do
+  config :phoenix_app, :oauth_proxy,
+    production_url: System.fetch_env!("OAUTH_PROXY_URL"),
+    secret: System.fetch_env!("OAUTH_PROXY_SECRET")
+end
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :phoenix_app, PhoenixAppWeb.Endpoint,
@@ -95,7 +105,15 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
-  config :phoenix_app, PhoenixApp.Auth, base_url: System.fetch_env!("AUTHMK_BASE_URL")
+  base_url = System.fetch_env!("AUTHMK_BASE_URL")
+  config :phoenix_app, PhoenixApp.Auth, base_url: base_url
+
+  # Without OAUTH_PROXY_URL, this is production.
+  if !System.get_env("OAUTH_PROXY_URL") do
+    config :phoenix_app, :oauth_proxy,
+      production_url: base_url,
+      secret: System.fetch_env!("OAUTH_PROXY_SECRET")
+  end
 
   # ## SSL Support
   #

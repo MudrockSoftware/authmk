@@ -24,6 +24,8 @@ defmodule PlugApp.Auth do
       Authmk.Plugins.DeviceAuthorization,
       Authmk.Plugins.HaveIBeenPwned,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
+      {Authmk.Plugins.OAuthProxy,
+       production_url: &__MODULE__.oauth_proxy_url/0, secret: &__MODULE__.oauth_proxy_secret/0},
       # Cloudflare's test secret, which passes every token; use your own.
       {Authmk.Plugins.Captcha,
        provider: :turnstile,
@@ -33,6 +35,10 @@ defmodule PlugApp.Auth do
     ]
 
   import Swoosh.Email
+
+  # Social sign-in through production's callback; see config/runtime.exs.
+  def oauth_proxy_url, do: Application.fetch_env!(:plug_app, :oauth_proxy)[:production_url]
+  def oauth_proxy_secret, do: Application.fetch_env!(:plug_app, :oauth_proxy)[:secret]
 
   @impl Authmk
   def send_verification_email(%{user: user, url: url}, _ctx) do

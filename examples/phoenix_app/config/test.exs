@@ -1,12 +1,18 @@
 import Config
 
+# This server plays production for the OAuth proxy, and
+# http://localhost:4100 a preview deployment that signs in through it.
+config :phoenix_app, :oauth_proxy,
+  production_url: "http://localhost:4000",
+  secret: "test-only OAuth proxy secret, 32+ bytes"
+
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
 config :phoenix_app, PhoenixApp.Auth,
+  trusted_origins: ["http://localhost:4100"],
   secret: "gQ4n9fvOWNIrCTcEva1RdFmyIWL0wrF9knYFdm4IX9c",
   background: :inline,
   rate_limit: [enabled: false],
-  # GitHub is played by a Req.Test stub (see test/phoenix_app_web/social_test.exs).
   # The providers are played by a Req.Test stub (see the social tests).
   social_providers: [
     github: [client_id: "github-id", client_secret: "github-secret"],

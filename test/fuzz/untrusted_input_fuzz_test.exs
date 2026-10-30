@@ -12,7 +12,10 @@ defmodule Authmk.Fuzz.Auth do
       {Authmk.Plugins.APIKey, enable_sessions: true},
       Authmk.Plugins.JWT,
       Authmk.Plugins.DeviceAuthorization,
-      {Authmk.Plugins.LastSignInMethod, store_in_database: true}
+      {Authmk.Plugins.LastSignInMethod, store_in_database: true},
+      # This server plays production for the OAuth proxy.
+      {Authmk.Plugins.OAuthProxy,
+       production_url: "http://localhost:4000", secret: "the fuzz proxy secret, 32+ bytes long"}
     ],
     base_url: "http://localhost:4000",
     trusted_origins: ["https://app.example.com"],
@@ -248,6 +251,27 @@ defmodule Authmk.UntrustedInputFuzzTest do
         nil -> :ok
         method -> assert method =~ ~r/\A[a-zA-Z0-9_-]{1,64}\z/
       end
+    end
+  end
+
+  property "the OAuth proxy only sends codes back to trusted origins", %{browser: browser} do
+    check all(
+            to <- one_of([callback_url(), map(callback_url(), &(&1 <> "/callback/github"))]),
+            signed? <- boolean(),
+            junk <- string(:printable, max_length: 80)
+          ) do
+      state =
+        if signed?,
+          do:
+            Plug.Crypto.sign("the fuzz proxy secret, 32+ bytes long", "authmk-oauth-proxy", %{
+              "state" => junk,
+              "to" => to
+            }),
+          else: junk
+
+      {_browser, conn} = get(browser, "/callback/github", %{code: "c", state: state})
+      location = redirected_to(conn)
+      assert safe_location?(location), "redirected to #{inspect(location)}"
     end
   end
 

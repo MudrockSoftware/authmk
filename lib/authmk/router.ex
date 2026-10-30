@@ -87,6 +87,11 @@ defmodule Authmk.Router do
       {Context.put_private(ctx, :exception, exception), {:error, Error.new(:internal_error)}}
   end
 
+  defp finish(ctx, result) do
+    result = Hooks.after_endpoint(ctx, result)
+    {result_ctx(result, ctx), result}
+  end
+
   defp run(ctx) do
     with {:cont, ctx} <- Hooks.on_request(ctx),
          :ok <- Origin.check_request(ctx),
@@ -96,9 +101,9 @@ defmodule Authmk.Router do
          {:cont, ctx} <- run_middleware(ctx),
          {:cont, ctx} <- Hooks.before_endpoint(ctx) do
       {module, function} = ctx.endpoint.handler
-      result = Hooks.after_endpoint(ctx, apply(module, function, [ctx]))
-      {result_ctx(result, ctx), result}
+      finish(ctx, apply(module, function, [ctx]))
     else
+      {:respond, result, hook_ctx} -> finish(hook_ctx, result)
       {:halt, %Error{} = error} -> {ctx, {:error, error}}
       {:error, %Error{} = error} -> {ctx, {:error, error}}
     end

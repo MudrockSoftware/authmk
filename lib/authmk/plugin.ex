@@ -58,9 +58,13 @@ defmodule Authmk.Plugin do
   @doc "Changes the response (headers, status) just before it is sent."
   @callback on_response(Plug.Conn.t(), Context.t()) :: Plug.Conn.t()
 
-  @doc "Runs before an endpoint. Return `{:halt, error}` to stop the request."
+  @doc """
+  Runs before an endpoint. Return `{:halt, error}` to stop the request, or
+  `{:respond, result}` to answer it instead of the endpoint (`after_endpoint`
+  hooks still run on `result`).
+  """
   @callback before_endpoint(endpoint :: atom(), Context.t()) ::
-              {:cont, Context.t()} | {:halt, Error.t()}
+              {:cont, Context.t()} | {:halt, Error.t()} | {:respond, result()}
 
   @doc "Runs after an endpoint, and may change its result."
   @callback after_endpoint(endpoint :: atom(), Context.t(), result()) :: result()

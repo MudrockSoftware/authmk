@@ -1,4 +1,11 @@
 import Config
+
+# This server is its own production for social sign-in, unless
+# OAUTH_PROXY_URL says otherwise (config/runtime.exs).
+config :phoenix_app, :oauth_proxy,
+  production_url: "http://localhost:4000",
+  secret: "dev-only OAuth proxy secret, replace it in production"
+
 config :phoenix_app, PhoenixApp.Auth, secret: "84yEgdqYnTazq3ih38nWXbZx5A5APNQ9At9Kf5CXyDo"
 
 # Configure your database

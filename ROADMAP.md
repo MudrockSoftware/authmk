@@ -364,7 +364,7 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] **Captcha**: Vercel BotID
 - [x] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
 - [x] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
-- [ ] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
+- [x] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
 - [ ] **OpenAPI**: generate an OpenAPI spec for all enabled endpoints, plus a reference UI
 - [ ] **Test helpers**: ExUnit factories, database helpers, sign-in helpers for `Plug.Test` / LiveView tests, captured OTPs and emails
 

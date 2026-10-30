@@ -10,7 +10,9 @@ defmodule PhoenixAppWeb.JWTTest do
     conn = conn |> recycle() |> get("/auth/token")
     token = json_response(conn, 200)["token"]
 
-    assert {:ok, %{"email" => "ada@example.com"}} = Authmk.Plugins.JWT.verify(PhoenixApp.Auth, token)
+    assert {:ok, %{"email" => "ada@example.com"}} =
+             Authmk.Plugins.JWT.verify(PhoenixApp.Auth, token)
+
     assert [_key] = build_conn() |> get("/auth/jwks") |> json_response(200) |> Map.fetch!("keys")
   end
 end

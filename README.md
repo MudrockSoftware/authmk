@@ -134,6 +134,7 @@ Sessions and security, also plugins:
 | `Authmk.Plugins.Captcha` | Turnstile, reCAPTCHA, hCaptcha or CaptchaFox on chosen endpoints |
 | `Authmk.Plugins.HaveIBeenPwned` | Refuses passwords from known data breaches |
 | `Authmk.Plugins.LastSignInMethod` | Remembers how a user last signed in, for "Last used" hints |
+| `Authmk.Plugins.OAuthProxy` | Social sign-in on previews and localhost through production's callback URL |
 
 To test passkey and wallet sign-in in your own app, `Authmk.Testing.FakeAuthenticator`
 and `Authmk.Testing.FakeWallet` play the authenticator and the wallet.
