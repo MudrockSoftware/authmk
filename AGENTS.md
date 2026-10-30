@@ -111,6 +111,10 @@ it, possibly during an incident:
 - Return errors with enough context (`%Authmk.Error{code:, message:}`) to see
   what failed and why, without leaking secrets.
 - Don't add abstractions, options or dependencies until a real need exists.
+- When something is needed, use what Erlang/OTP ships first (for example
+  `xmerl` for XML, `public_key` and `crypto` for certificates and
+  signatures). Only when OTP lacks it, look for an Elixir library, then for
+  a popular, maintained one on hex.pm, and check it for open advisories.
 - Delete dead code instead of leaving it commented out.
 
 General rules:
