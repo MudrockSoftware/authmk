@@ -161,6 +161,27 @@ Sessions and security, also plugins:
 | `Authmk.Plugins.Security` | Credential stuffing, sign-up abuse, email checks, impossible travel, geo and bot blocking, proof-of-work |
 | `Authmk.Plugins.OpenAPI` | An OpenAPI 3.1 description of every enabled endpoint, and a reference page |
 
+Payments, also plugins (one payment provider per app):
+
+| Plugin | What it adds |
+|---|---|
+| `Authmk.Plugins.Stripe` | Customers, Checkout, the customer portal, subscriptions, trials, organization subscriptions, tax collection |
+| `Authmk.Plugins.Polar` | Checkout, the customer portal, subscriptions, usage events and meters |
+| `Authmk.Plugins.Chargebee` | Customers, hosted pages, subscriptions, trials |
+| `Authmk.Plugins.Creem` | Checkout, the customer portal, subscriptions, access checks |
+| `Authmk.Plugins.DodoPayments` | Checkout, the customer portal, subscriptions |
+| `Authmk.Plugins.Commet` | Subscriptions, the customer portal, feature access, usage, seats |
+| `Authmk.Plugins.Autumn` | Plans, balances and feature access kept by Autumn |
+| `Authmk.Plugins.Dub` | Sign-ups from Dub links as leads, sales, and Dub accounts linked to users |
+
+They share one set of endpoints (`/billing/checkout`, `/billing/portal`,
+`/billing/subscriptions`, `/billing/cancel`, `/billing/webhook`) and tables.
+Webhooks are checked against the provider's signature, and each
+subscription is then read again from the provider's API. A user or
+organization gets one trial and one subscription at a time. Your code asks
+`Authmk.Payments.allowed?(MyApp.Auth, user.id, :projects, 3)`. See the
+payments guide.
+
 An admin dashboard (licensed separately: see License below) mounts in any
 Plug or Phoenix router with one line,
 `forward "/admin/auth", Authmk.Dashboard, auth: MyApp.Auth`: users,

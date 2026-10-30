@@ -16,9 +16,8 @@ defmodule Authmk.Plugins.DodoPayments do
   The endpoints, plans, trials, organizations and hooks are
   `Authmk.Payments`'. A plan's `trial_days` overrides the product's trial;
   without it, the product's own trial stands. A user or organization that
-  had a trial checks out with none. Sending `trial_period_days` tells Dodo
-  to grant that trial and to skip its own one-trial check, so authmk sends
-  `0` once the trial has been had, and omits it otherwise.
+  had a trial checks out with none: authmk sends `trial_period_days: 0`,
+  which overrides the product's trial.
 
   In Dodo, add a webhook endpoint for `<base URL>/billing/webhook` with the
   `subscription.*` events. Webhooks are checked as Dodo signs them
@@ -89,8 +88,8 @@ defmodule Authmk.Plugins.DodoPayments do
          do: {:ok, url}
   end
 
-  # A number here is granted, and it skips Dodo's own one-trial check.
-  # 0 is how a trial already had is refused. Omitting it leaves the product's.
+  # `trial_period_days` overrides the product's trial: 0 once the trial has
+  # been had, the plan's days otherwise. Omitting it leaves the product's.
   defp trial(body, %{trial_allowed: false}),
     do: Map.put(body, :subscription_data, %{trial_period_days: 0})
 

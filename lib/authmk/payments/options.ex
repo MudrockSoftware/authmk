@@ -49,7 +49,7 @@ defmodule Authmk.Payments.Options do
             "Let organizations subscribe (`reference_id` in requests), with `Authmk.Plugins.Organization`. Their owners and admins manage billing, unless `authorize_reference` says otherwise."
         ],
         authorize_reference: [
-          type: {:fun, 3},
+          type: {:fun, 4},
           doc:
             "`fn user, reference_id, action, ctx -> boolean end`, for organizations' billing (`:checkout`, `:list`, `:portal`, `:cancel`)."
         ]

@@ -78,13 +78,13 @@ defmodule Authmk.AutumnTest do
     assert json(conn) == %{"url" => "https://checkout.stripe.com/autumn/1", "redirect" => true}
 
     assert_received {:billing_request, "POST", "/v1/customers.get_or_create", customer, headers}
-    assert customer["customer_id"] == user["id"]
+    assert customer["customer_id"] == "user_" <> user["id"]
     assert {"authorization", "Bearer am_sk_test"} in headers
     assert {"x-api-version", "2.6.0"} in headers
     assert_received {:billing_request, "POST", "/v1/billing.attach", attach, _h}
 
     assert attach == %{
-             "customer_id" => user["id"],
+             "customer_id" => "user_" <> user["id"],
              "plan_id" => "pro",
              "success_url" => "http://localhost:4000/done"
            }

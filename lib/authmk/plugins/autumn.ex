@@ -13,7 +13,7 @@ defmodule Authmk.Plugins.Autumn do
         ],
         ...
 
-  Autumn's customer is the user (or organization) itself, by its id.
+  Autumn's customer id is `user_<id>` (or `org_<id>` for an organization).
 
   | Method | Path | Session |
   |---|---|---|
@@ -31,7 +31,7 @@ defmodule Authmk.Plugins.Autumn do
   From your code:
 
       Authmk.Plugins.Autumn.check(MyApp.Auth, user.id, "messages")       # {:ok, true}
-      Authmk.Plugins.Autumn.track(MyApp.Auth, user.id, "messages", 1)
+      Authmk.Plugins.Autumn.track(MyApp.Auth, {:organization, org.id}, "messages", 1)
 
   `check/4` answers `false` when Autumn can't be asked, and when Autumn
   says it's degraded and allowing everything (HTTP 202): no access that
@@ -69,7 +69,7 @@ defmodule Authmk.Plugins.Autumn do
       api_version: [type: :string, default: "2.6.0"],
       on_event: [type: {:fun, 2}],
       organizations: [type: :boolean, default: false],
-      authorize_reference: [type: {:fun, 3}]
+      authorize_reference: [type: {:fun, 4}]
     )
   end
 
@@ -113,7 +113,11 @@ defmodule Authmk.Plugins.Autumn do
            request(
              ctx,
              "/billing.attach",
-             %{customer_id: reference.id, plan_id: params.plan, success_url: success_url},
+             %{
+               customer_id: Reference.external_id(reference),
+               plan_id: params.plan,
+               success_url: success_url
+             },
              opts
            ) do
       case attached do
@@ -133,7 +137,7 @@ defmodule Authmk.Plugins.Autumn do
            request(
              ctx,
              "/billing.open_customer_portal",
-             %{customer_id: reference.id, return_url: return_url},
+             %{customer_id: Reference.external_id(reference), return_url: return_url},
              opts
            ) do
       {:ok, %{url: url, redirect: true}, ctx}
@@ -150,7 +154,11 @@ defmodule Authmk.Plugins.Autumn do
            request(
              ctx,
              "/billing.update",
-             %{customer_id: reference.id, plan_id: params.plan, cancel_action: action},
+             %{
+               customer_id: Reference.external_id(reference),
+               plan_id: params.plan,
+               cancel_action: action
+             },
              opts
            ) do
       {:ok, %{success: true}, ctx}
@@ -189,7 +197,11 @@ defmodule Authmk.Plugins.Autumn do
     request(
       ctx,
       "/customers.get_or_create",
-      %{customer_id: reference.id, name: reference.name, email: reference.email},
+      %{
+        customer_id: Reference.external_id(reference),
+        name: reference.name,
+        email: reference.email
+      },
       opts
     )
   end
@@ -205,16 +217,16 @@ defmodule Authmk.Plugins.Autumn do
   end
 
   @doc """
-  Whether a user or organization may use `feature` (Autumn's feature id),
-  `required` units of it. `false` when Autumn can't be asked or answers
-  degraded (202).
+  Whether a user (by id) or `{:organization, id}` may use `feature`
+  (Autumn's feature id), `required` units of it. `false` when Autumn can't
+  be asked or answers degraded (202).
   """
-  @spec check(module(), term(), String.t(), number()) :: {:ok, boolean()}
-  def check(auth, reference_id, feature, required \\ 1) do
+  @spec check(module(), Authmk.Payments.billed(), String.t(), number()) :: {:ok, boolean()}
+  def check(auth, reference, feature, required \\ 1) do
     {ctx, opts} = server(auth)
 
     body = %{
-      customer_id: to_string(reference_id),
+      customer_id: external_id(reference),
       feature_id: feature,
       required_balance: required
     }
@@ -226,13 +238,16 @@ defmodule Authmk.Plugins.Autumn do
     end
   end
 
-  @doc "Records `value` units of `feature` used by a user or organization."
-  @spec track(module(), term(), String.t(), number()) :: :ok | {:error, Error.t()}
-  def track(auth, reference_id, feature, value \\ 1) do
+  @doc "Records `value` units of `feature` used by a user (by id) or `{:organization, id}`."
+  @spec track(module(), Authmk.Payments.billed(), String.t(), number()) ::
+          :ok | {:error, Error.t()}
+  def track(auth, reference, feature, value \\ 1) do
     {ctx, opts} = server(auth)
-    body = %{customer_id: to_string(reference_id), feature_id: feature, value: value}
+    body = %{customer_id: external_id(reference), feature_id: feature, value: value}
     with {:ok, _tracked} <- request(ctx, "/balances.track", body, opts), do: :ok
   end
+
+  defp external_id(reference), do: reference |> Reference.from_app() |> Reference.external_id()
 
   defp server(auth) do
     ctx = Context.new(auth.config())

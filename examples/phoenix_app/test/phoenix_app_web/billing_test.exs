@@ -94,5 +94,14 @@ defmodule PhoenixAppWeb.BillingTest do
 
     assert %{plan: "pro", status: "active"} =
              Authmk.Payments.active_subscription(PhoenixApp.Auth, user_id)
+
+    # Subscribed: no second checkout (plans change in Stripe's portal).
+    again =
+      signed_up
+      |> recycle()
+      |> put_req_header("origin", "http://localhost:4000")
+      |> post("/auth/billing/checkout", %{plan: "pro", success_url: "/account"})
+
+    assert json_response(again, 409)["error"]["code"] == "already_subscribed"
   end
 end

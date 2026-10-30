@@ -38,6 +38,8 @@ defmodule Authmk.Plugins.Stripe do
 
   use Authmk.Plugin
 
+  require Logger
+
   @behaviour Authmk.Payments.Provider
 
   alias Authmk.{Background, Context, Error}
@@ -237,12 +239,18 @@ defmodule Authmk.Plugins.Stripe do
     end
   end
 
-  # Stripe's own message stays in the logs' reach, not the user's.
-  defp stripe_error(%{"error" => %{"code" => code}}) when is_binary(code),
-    do: Error.custom(:payment_provider_error, 502, "Stripe refused: #{code}")
+  # What Stripe said goes to the logs, not to the user.
+  defp stripe_error(body) do
+    case body do
+      %{"error" => %{"code" => code}} when is_binary(code) ->
+        Logger.warning("authmk Stripe refused a request (#{code})")
 
-  defp stripe_error(_body),
-    do: Error.custom(:payment_provider_error, 502, "Stripe refused the request")
+      _other ->
+        Logger.warning("authmk Stripe refused a request")
+    end
+
+    Error.custom(:payment_provider_error, 502, "Stripe refused the request")
+  end
 
   defp unavailable,
     do: Error.custom(:payment_provider_unavailable, 502, "Stripe can't be reached")

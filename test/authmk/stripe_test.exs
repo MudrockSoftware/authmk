@@ -280,18 +280,29 @@ defmodule Authmk.StripeTest do
       "subscription" => "sub_team"
     })
 
-    assert Payments.allowed?(Auth, org_id, :projects, 1000)
+    assert Payments.allowed?(Auth, {:organization, org_id}, :projects, 1000)
+    # The organization's plan, not its owner's.
+    refute Payments.allowed?(Auth, owner_user["id"], :projects, 1)
     {_owner, conn} = get(owner, "/billing/subscriptions", %{reference_id: org_id})
     assert [%{"plan" => "team", "seats" => 5, "reference_type" => "organization"}] = json(conn)
   end
 
   test "Stripe refusing: a generic error, nothing of Stripe's passed on", %{browser: browser} do
     {browser, _user} = sign_up(browser)
-    {_browser, conn} = post(browser, "/billing/checkout", %{plan: "gone", success_url: "/"})
 
-    assert conn.status == 502
-    assert json(conn)["error"]["code"] == "payment_provider_error"
-    refute conn.resp_body =~ "acct_secret"
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        {_browser, conn} = post(browser, "/billing/checkout", %{plan: "gone", success_url: "/"})
+
+        assert conn.status == 502
+        assert json(conn)["error"]["code"] == "payment_provider_error"
+        assert json(conn)["error"]["message"] == "Stripe refused the request"
+        refute conn.resp_body =~ "acct_secret"
+        refute conn.resp_body =~ "resource_missing"
+      end)
+
+    # Stripe's code is in the logs, for whoever runs the app.
+    assert log =~ "resource_missing"
 
     {_browser, conn} =
       post(browser, "/billing/checkout", %{plan: "pro", success_url: "https://evil.example/"})

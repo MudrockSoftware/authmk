@@ -344,9 +344,9 @@
           "columns": ["provider","customer_id"],
           "unique": true
         },
-        "billing_customers_reference_id_index": {
-          "columns": ["reference_id"],
-          "unique": false
+        "billing_customers_provider_reference_type_reference_id_index": {
+          "columns": ["provider","reference_type","reference_id"],
+          "unique": true
         }
       },
       "primary_key": "binary_id",

@@ -14,8 +14,8 @@ defmodule Authmk.Plugins.Polar do
         ...
 
   The endpoints, plans, trials, organizations and hooks are
-  `Authmk.Payments`'. Polar's customers get the user's (or organization's)
-  id as their `external_id`, so usage events and meters name them by it.
+  `Authmk.Payments`'. Polar's customers get `user_<id>` (or `org_<id>`) as
+  their `external_id`.
   Trials are set on Polar's products; a user or organization that had one
   checks out with `allow_trial: false`.
 
@@ -28,7 +28,7 @@ defmodule Authmk.Plugins.Polar do
   Usage, from your code:
 
       Authmk.Plugins.Polar.track(MyApp.Auth, user.id, "ai_tokens", %{tokens: 1200})
-      Authmk.Plugins.Polar.meters(MyApp.Auth, user.id)
+      Authmk.Plugins.Polar.meters(MyApp.Auth, {:organization, org.id})
 
   ## Options
 
@@ -40,7 +40,7 @@ defmodule Authmk.Plugins.Polar do
   @behaviour Authmk.Payments.Provider
 
   alias Authmk.{Background, Context, Error}
-  alias Authmk.Payments.{Client, Endpoints, Options, Schema, Webhook}
+  alias Authmk.Payments.{Client, Endpoints, Options, Reference, Schema, Webhook}
   alias Authmk.Plugins.Polar.Options, as: PolarOptions
 
   @servers %{production: "https://api.polar.sh/v1", sandbox: "https://sandbox-api.polar.sh/v1"}
@@ -72,14 +72,14 @@ defmodule Authmk.Plugins.Polar do
     body = %{
       email: reference.email,
       name: reference.name,
-      external_id: reference.id,
+      external_id: Reference.external_id(reference),
       metadata: %{reference_type: reference.type}
     }
 
     case request(ctx, :post, "/customers/", body, opts) do
       {:ok, %{"id" => id}} -> {:ok, id}
       # Made before (the external id is taken): that one.
-      {:error, _error} -> existing_customer(ctx, reference.id, opts)
+      {:error, _error} -> existing_customer(ctx, body.external_id, opts)
     end
   end
 
@@ -133,7 +133,8 @@ defmodule Authmk.Plugins.Polar do
     }
 
     with :ok <- verify(headers, body, Options.secret(opts[:webhook_secret])),
-         {:ok, %{"type" => "subscription." <> _, "data" => %{"id" => id}}} <- JSON.decode(body),
+         {:ok, %{"type" => "subscription." <> _, "data" => %{"id" => id}}} when is_binary(id) <-
+           JSON.decode(body),
          {:ok, object} <- request(ctx, :get, "/subscriptions/" <> URI.encode(id), nil, opts) do
       {:ok, [normalize(object)]}
     else
@@ -185,29 +186,31 @@ defmodule Authmk.Plugins.Polar do
   defp status(status), do: status
 
   @doc """
-  Records a usage event for a user or organization (by its id, Polar's
-  `external_customer_id`), for Polar's meters: `name` and `metadata` (up
-  to 50 keys).
+  Records a usage event for a user (by id) or `{:organization, id}`, for
+  Polar's meters: `name` and `metadata` (up to 50 keys).
   """
-  @spec track(module(), term(), String.t(), map()) :: :ok | {:error, Error.t()}
-  def track(auth, reference_id, name, metadata \\ %{}) do
+  @spec track(module(), Authmk.Payments.billed(), String.t(), map()) ::
+          :ok | {:error, Error.t()}
+  def track(auth, reference, name, metadata \\ %{}) do
     {ctx, opts} = server(auth)
-    event = %{name: name, external_customer_id: to_string(reference_id), metadata: metadata}
+    event = %{name: name, external_customer_id: external_id(reference), metadata: metadata}
 
     with {:ok, _counts} <- request(ctx, :post, "/events/ingest", %{events: [event]}, opts),
          do: :ok
   end
 
   @doc "A user's or organization's meters: Polar's customer meters (`consumed_units`, `balance`...)."
-  @spec meters(module(), term()) :: {:ok, [map()]} | {:error, Error.t()}
-  def meters(auth, reference_id) do
+  @spec meters(module(), Authmk.Payments.billed()) :: {:ok, [map()]} | {:error, Error.t()}
+  def meters(auth, reference) do
     {ctx, opts} = server(auth)
-    query = URI.encode_query(external_customer_id: to_string(reference_id))
+    query = URI.encode_query(external_customer_id: external_id(reference))
 
     with {:ok, %{"items" => items}} <-
            request(ctx, :get, "/customer-meters/?" <> query, nil, opts),
          do: {:ok, items}
   end
+
+  defp external_id(reference), do: reference |> Reference.from_app() |> Reference.external_id()
 
   defp server(auth) do
     ctx = Context.new(auth.config())

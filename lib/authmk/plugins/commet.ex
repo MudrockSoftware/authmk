@@ -20,7 +20,7 @@ defmodule Authmk.Plugins.Commet do
 
       Authmk.Plugins.Commet.check(MyApp.Auth, user.id, "api_calls")      # {:ok, true}
       Authmk.Plugins.Commet.track(MyApp.Auth, user.id, "api_calls", 1)
-      Authmk.Plugins.Commet.set_seats(MyApp.Auth, org.id, "editor_seats", 12)
+      Authmk.Plugins.Commet.set_seats(MyApp.Auth, {:organization, org.id}, "editor_seats", 12)
 
   `check/3` answers `false` when Commet can't be asked: no access on an
   outage.
@@ -40,7 +40,7 @@ defmodule Authmk.Plugins.Commet do
   @behaviour Authmk.Payments.Provider
 
   alias Authmk.{Background, Context, Error}
-  alias Authmk.Payments.{Client, Endpoints, Options, Schema, Store, Webhook}
+  alias Authmk.Payments.{Client, Endpoints, Options, Reference, Schema, Store, Webhook}
   alias Authmk.Plugins.Commet.Options, as: CommetOptions
 
   @api "https://commet.co/api/v1"
@@ -69,23 +69,41 @@ defmodule Authmk.Plugins.Commet do
 
   @impl Authmk.Payments.Provider
   def create_customer(ctx, reference, opts) do
-    body = %{email: reference.email, externalId: reference.id, fullName: reference.name}
+    body = %{
+      email: reference.email,
+      externalId: Reference.external_id(reference),
+      fullName: reference.name
+    }
+
     with {:ok, %{"id" => id}} <- request(ctx, :post, "/customers", body, opts), do: {:ok, id}
   end
 
   @impl Authmk.Payments.Provider
   def checkout(ctx, checkout, opts) do
-    body =
-      %{
-        customerId: checkout.customer_id,
-        planId: checkout.price_id,
-        successUrl: checkout.success_url,
-        initialSeats: checkout.seats,
-        customTrialDays: checkout.trial_days,
-        skipTrial: not checkout.trial_allowed
-      }
-      |> Map.reject(fn {_key, value} -> is_nil(value) end)
+    with {:ok, seats} <- initial_seats(checkout.seats, opts[:seat_feature]) do
+      body =
+        %{
+          customerId: checkout.customer_id,
+          planId: checkout.price_id,
+          successUrl: checkout.success_url,
+          initialSeats: seats,
+          customTrialDays: checkout.trial_days,
+          skipTrial: not checkout.trial_allowed
+        }
+        |> Map.reject(fn {_key, value} -> is_nil(value) end)
 
+      create_subscription(ctx, checkout, body, opts)
+    end
+  end
+
+  # Commet counts seats per seat feature: `%{"editor_seats" => 5}`.
+  defp initial_seats(nil, _feature), do: {:ok, nil}
+  defp initial_seats(seats, feature) when is_binary(feature), do: {:ok, %{feature => seats}}
+
+  defp initial_seats(_seats, nil),
+    do: {:error, Error.custom(:invalid_seats, 422, "This plan isn't sold by the seat")}
+
+  defp create_subscription(ctx, checkout, body, opts) do
     case request(ctx, :post, "/subscriptions", body, opts) do
       {:ok, %{"checkoutUrl" => url}} when is_binary(url) -> {:ok, url}
       # Nothing to pay (a free plan, a trial without a card): it's on already.
@@ -146,6 +164,9 @@ defmodule Authmk.Plugins.Commet do
     %{
       provider_subscription_id: object["id"],
       customer_id: object["customerId"],
+      # Commet may name the customer by the external id it was made with.
+      reference_id: from_external(object["customerId"], :id),
+      reference_type: from_external(object["customerId"], :type),
       status: status(object["status"]),
       price_id: get_in(object, ["plan", "id"]),
       period_start: Client.time(period["start"]),
@@ -158,21 +179,28 @@ defmodule Authmk.Plugins.Commet do
     }
   end
 
+  defp from_external("user_" <> id, :id), do: id
+  defp from_external("org_" <> id, :id), do: id
+  defp from_external("user_" <> _id, :type), do: "user"
+  defp from_external("org_" <> _id, :type), do: "organization"
+  defp from_external(_customer_id, _part), do: nil
+
   # Commet's statuses, in Authmk.Payments' words.
   defp status("draft"), do: "incomplete"
   defp status("pending_payment"), do: "incomplete"
   defp status(status), do: status
 
   @doc """
-  Whether a user or organization may use `feature` (Commet's feature
-  code), by its plan and usage. `false` when Commet can't be asked, or the
-  reference has no customer yet.
+  Whether a user (by id) or `{:organization, id}` may use `feature`
+  (Commet's feature code), by its plan and usage. `false` when Commet
+  can't be asked, or there's no customer yet.
   """
-  @spec check(module(), term(), String.t()) :: {:ok, boolean()}
-  def check(auth, reference_id, feature) do
+  @spec check(module(), Authmk.Payments.billed(), String.t()) :: {:ok, boolean()}
+  def check(auth, reference, feature) do
     {ctx, opts} = server(auth)
 
-    with %{customer_id: customer_id} <- Store.customer(ctx, provider(), reference_id),
+    with %{customer_id: customer_id} <-
+           Store.customer(ctx, provider(), Reference.from_app(reference)),
          query = URI.encode_query(customerId: customer_id),
          {:ok, %{"allowed" => true}} <-
            request(ctx, :get, "/feature-access/#{URI.encode(feature)}?" <> query, nil, opts) do
@@ -183,9 +211,10 @@ defmodule Authmk.Plugins.Commet do
   end
 
   @doc "Records `value` units of usage of `feature` for a user or organization."
-  @spec track(module(), term(), String.t(), number()) :: :ok | {:error, Error.t()}
-  def track(auth, reference_id, feature, value \\ 1) do
-    with {:ok, ctx, opts, customer_id} <- customer(auth, reference_id),
+  @spec track(module(), Authmk.Payments.billed(), String.t(), number()) ::
+          :ok | {:error, Error.t()}
+  def track(auth, reference, feature, value \\ 1) do
+    with {:ok, ctx, opts, customer_id} <- customer(auth, reference),
          {:ok, _event} <-
            request(
              ctx,
@@ -198,9 +227,10 @@ defmodule Authmk.Plugins.Commet do
   end
 
   @doc "Sets a user's or organization's seats of `feature`."
-  @spec set_seats(module(), term(), String.t(), non_neg_integer()) :: :ok | {:error, Error.t()}
-  def set_seats(auth, reference_id, feature, count) do
-    with {:ok, ctx, opts, customer_id} <- customer(auth, reference_id),
+  @spec set_seats(module(), Authmk.Payments.billed(), String.t(), non_neg_integer()) ::
+          :ok | {:error, Error.t()}
+  def set_seats(auth, reference, feature, count) do
+    with {:ok, ctx, opts, customer_id} <- customer(auth, reference),
          {:ok, _event} <-
            request(
              ctx,
@@ -212,10 +242,10 @@ defmodule Authmk.Plugins.Commet do
          do: :ok
   end
 
-  defp customer(auth, reference_id) do
+  defp customer(auth, reference) do
     {ctx, opts} = server(auth)
 
-    case Store.customer(ctx, provider(), reference_id) do
+    case Store.customer(ctx, provider(), Reference.from_app(reference)) do
       %{customer_id: customer_id} -> {:ok, ctx, opts, customer_id}
       nil -> {:error, Error.custom(:no_billing_customer, 404, "There's no billing account yet")}
     end

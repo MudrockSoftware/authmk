@@ -94,5 +94,11 @@ defmodule PlugApp.BillingTest do
              Authmk.Payments.active_subscription(PlugApp.Auth, user_id)
 
     assert Authmk.Payments.allowed?(PlugApp.Auth, user_id, :projects, 50)
+
+    # Subscribed: no second checkout (plans change in Stripe's portal).
+    again =
+      post_json("/auth/billing/checkout", %{plan: "pro", success_url: "/me"}, cookies(signed_up))
+
+    assert again.status == 409
   end
 end

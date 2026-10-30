@@ -39,7 +39,7 @@ defmodule Authmk.Plugins.Creem do
   @behaviour Authmk.Payments.Provider
 
   alias Authmk.{Background, Context, Error}
-  alias Authmk.Payments.{Client, Endpoints, Options, Schema, Webhook}
+  alias Authmk.Payments.{Client, Endpoints, Options, Reference, Schema, Webhook}
   alias Authmk.Plugins.Creem.Options, as: CreemOptions
 
   @servers %{production: "https://api.creem.io/v1", test: "https://test-api.creem.io/v1"}
@@ -71,7 +71,7 @@ defmodule Authmk.Plugins.Creem do
     body = %{
       email: reference.email,
       name: reference.name || reference.email,
-      external_id: reference.id,
+      external_id: Reference.external_id(reference),
       metadata: %{reference_type: reference.type}
     }
 
@@ -151,16 +151,33 @@ defmodule Authmk.Plugins.Creem do
       customer_id: id(object["customer"]),
       status: status(object["status"]),
       price_id: id(object["product"]),
-      seats: object["units"],
+      seats: seats(object["items"]),
       period_start: Client.time(object["current_period_start_date"]),
       period_end: Client.time(object["current_period_end_date"]),
       cancel_at_period_end: object["status"] == "scheduled_cancel",
       canceled_at: Client.time(object["canceled_at"]),
-      # Creem doesn't say when a trial began: trialing now is when it's seen.
-      trial_start:
-        Client.time(object["trial_start"]) ||
-          if(object["status"] == "trialing", do: DateTime.utc_now())
+      trial_start: trial_start(object)
     }
+  end
+
+  defp seats([%{"units" => units} | _items]) when is_integer(units), do: units
+  defp seats(_items), do: nil
+
+  # Creem keeps no trial dates on the subscription: one of a product with a
+  # trial began with one, when it was created (or trialing now, when seen).
+  defp trial_start(object) do
+    trial_days = get_in(object, ["product", "trial_period_days"])
+
+    cond do
+      is_integer(trial_days) and trial_days > 0 ->
+        Client.time(object["created_at"]) || DateTime.utc_now()
+
+      object["status"] == "trialing" ->
+        DateTime.utc_now()
+
+      true ->
+        nil
+    end
   end
 
   # Creem's statuses, in Authmk.Payments' words.

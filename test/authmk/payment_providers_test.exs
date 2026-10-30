@@ -14,7 +14,7 @@ defmodule Authmk.PaymentProvidersTest do
         Dodo: {Authmk.Plugins.DodoPayments, environment: :test},
         Creem: {Authmk.Plugins.Creem, environment: :test},
         Chargebee: {Authmk.Plugins.Chargebee, site: "acme-test"},
-        Commet: {Authmk.Plugins.Commet, []}
+        Commet: {Authmk.Plugins.Commet, seat_feature: "editor_seats"}
       ] do
     {module, own} = plugin
 
@@ -99,8 +99,10 @@ defmodule Authmk.PaymentProvidersTest do
       {browser, conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
       assert json(conn)["url"] == "https://sandbox.polar.sh/checkout/1"
 
-      assert_received {:billing_request, "POST", "/v1/customers/", %{"external_id" => ^user_id},
-                       _h}
+      assert_received {:billing_request, "POST", "/v1/customers/",
+                       %{"external_id" => external_id}, _h}
+
+      assert external_id == "user_" <> user_id
 
       assert_received {:billing_request, "POST", "/v1/checkouts/", checkout, headers}
       assert checkout["products"] == ["prod_pro"]
@@ -136,7 +138,7 @@ defmodule Authmk.PaymentProvidersTest do
 
       assert event == %{
                "name" => "ai_tokens",
-               "external_customer_id" => user_id,
+               "external_customer_id" => "user_" <> user_id,
                "metadata" => %{"tokens" => 1200}
              }
 
@@ -402,6 +404,37 @@ defmodule Authmk.PaymentProvidersTest do
       {_browser, conn} = post(browser, "/billing/checkout", %{plan: "missing", success_url: "/"})
       assert json(conn)["error"]["code"] == "plan_not_found"
     end
+
+    test "a trial known from the product, seen after it; seats from its items", %{
+      browser: browser,
+      provider: state
+    } do
+      {browser, _user_id} = signed_in(browser)
+      {browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
+
+      FakeBilling.put(state, "sub_1", %{
+        "id" => "sub_1",
+        "customer" => %{"id" => "cust_1"},
+        "product" => %{"id" => "prod_pro", "trial_period_days" => 7},
+        "items" => [%{"id" => "item_1", "units" => 4}],
+        "status" => "canceled",
+        "created_at" => "2026-09-01T00:00:00Z",
+        "current_period_end_date" => "2026-10-01T00:00:00Z"
+      })
+
+      body =
+        JSON.encode!(%{"eventType" => "subscription.canceled", "object" => %{"id" => "sub_1"}})
+
+      assert creem_webhook(body).status == 200
+
+      assert [%{"seats" => 4, "trial_start" => "2026-09-01T00:00:00" <> _}] =
+               subscriptions(browser)
+
+      {_browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
+
+      assert_received {:billing_request, "POST", "/v1/checkouts",
+                       %{"product_id" => "prod_pro_no_trial"}, _h}
+    end
   end
 
   describe "Chargebee" do
@@ -548,8 +581,8 @@ defmodule Authmk.PaymentProvidersTest do
 
       assert json(conn)["url"] == "https://commet.co/checkout/1"
 
-      assert_received {:billing_request, "POST", "/api/v1/customers", %{"externalId" => ^user_id},
-                       headers}
+      assert_received {:billing_request, "POST", "/api/v1/customers", customer, headers}
+      assert customer["externalId"] == "user_" <> user_id
 
       assert {"x-api-key", "provider-key"} in headers
       assert {"commet-version", "2026-08-27"} in headers
@@ -557,7 +590,7 @@ defmodule Authmk.PaymentProvidersTest do
 
       assert %{
                "planId" => "prod_pro",
-               "initialSeats" => 3,
+               "initialSeats" => %{"editor_seats" => 3},
                "customTrialDays" => 7,
                "skipTrial" => false
              } = checkout
@@ -615,6 +648,41 @@ defmodule Authmk.PaymentProvidersTest do
                        %{"skipTrial" => true} = again, _h}
 
       refute Map.has_key?(again, "customTrialDays")
+    end
+
+    test "Commet naming the customer by our id; a trial seen only after it ended", %{
+      browser: browser,
+      provider: state
+    } do
+      {browser, user_id} = signed_in(browser)
+      {browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
+
+      # Read back with our external id as customerId, already past its trial.
+      FakeBilling.put(state, "sub_1", %{
+        "id" => "sub_1",
+        "customerId" => "user_" <> user_id,
+        "plan" => %{"id" => "prod_pro"},
+        "status" => "active",
+        "trialEndsAt" => "2026-10-01T00:00:00Z",
+        "currentPeriod" => %{"start" => "2026-10-01T00:00:00Z", "end" => "2099-01-01T00:00:00Z"}
+      })
+
+      body =
+        JSON.encode!(%{
+          "event" => "subscription.updated",
+          "data" => %{"subscriptionId" => "sub_1"}
+        })
+
+      assert commet_webhook(body).status == 200
+      assert Payments.allowed?(Commet, user_id, :projects, 20)
+
+      # The trial counts: after cancelling, no second one.
+      FakeBilling.put(state, "sub_1", %{FakeBilling.get(state, "sub_1") | "status" => "canceled"})
+      assert commet_webhook(body).status == 200
+      {_browser, _conn} = post(browser, "/billing/checkout", %{plan: "pro", success_url: "/done"})
+
+      assert_received {:billing_request, "POST", "/api/v1/subscriptions", %{"skipTrial" => true},
+                       _h}
     end
   end
 end

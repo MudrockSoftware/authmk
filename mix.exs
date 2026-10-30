@@ -84,6 +84,7 @@ defmodule Authmk.MixProject do
           "guides/social-sign-in.md",
           "guides/phoenix-and-liveview.md",
           "guides/api-clients.md",
+          "guides/payments.md",
           "guides/browser-extensions.md",
           "guides/performance.md",
           "guides/migrating-from-phx-gen-auth.md",

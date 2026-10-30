@@ -37,6 +37,22 @@ defmodule Authmk.PaymentWebhooksTest do
     assert Webhook.standard(rotated, body, key, 1_614_265_330) == :ok
   end
 
+  test "Standard Webhooks secrets: with or without whsec_; anything else verifies nothing" do
+    assert Webhook.standard_key("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw") ==
+             Webhook.standard_key("MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
+
+    for secret <- ["whsec_not base64!", "whsec_", "", nil] do
+      assert Webhook.standard_key(secret) == nil
+
+      assert Webhook.standard(
+               %{id: "msg_1", timestamp: "1", signature: "v1,AAAA"},
+               "{}",
+               Webhook.standard_key(secret),
+               1
+             ) == {:error, :invalid_signature}
+    end
+  end
+
   test "Stripe: v1 signatures over the timestamp and body; v0 never counts" do
     body = ~s({"id":"evt_1"})
     t = 1_700_000_000

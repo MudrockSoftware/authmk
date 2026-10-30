@@ -76,11 +76,12 @@ defmodule Authmk.Payments.Endpoints do
     {plugin, opts} = plugin(ctx)
 
     with {:ok, reference} <- Reference.resolve(ctx, params.reference_id, :checkout, opts),
-         trial_allowed = not Store.had_trial?(ctx, reference.id),
+         trial_allowed = not Store.had_trial?(ctx, reference),
          {:ok, success_url} <- absolute(ctx, params.success_url),
          {:ok, cancel_url} <- absolute(ctx, params.cancel_url || params.success_url),
          {:ok, plan} <- plan(opts, params.plan),
-         :ok <- not_subscribed(ctx, reference, plan),
+         :ok <- seats(params.seats),
+         :ok <- not_subscribed(ctx, reference),
          {:ok, customer_id} <- ensure_customer(ctx, plugin, reference, opts) do
       checkout = %{
         customer_id: customer_id,
@@ -104,7 +105,7 @@ defmodule Authmk.Payments.Endpoints do
     {_plugin, opts} = plugin(ctx)
 
     with {:ok, reference} <- Reference.resolve(ctx, params.reference_id, :list, opts) do
-      {:ok, ctx |> Store.list(reference.id) |> Enum.map(&serialize(ctx, &1)), ctx}
+      {:ok, ctx |> Store.list(reference) |> Enum.map(&serialize(ctx, &1)), ctx}
     end
   end
 
@@ -115,7 +116,7 @@ defmodule Authmk.Payments.Endpoints do
     with {:ok, reference} <- Reference.resolve(ctx, params.reference_id, :portal, opts),
          {:ok, return_url} <- absolute(ctx, params.return_url),
          %{customer_id: customer_id} <-
-           Store.customer(ctx, plugin.provider(), reference.id) || {:error, no_customer()},
+           Store.customer(ctx, plugin.provider(), reference) || {:error, no_customer()},
          {:ok, url} <-
            plugin.portal(ctx, %{customer_id: customer_id, return_url: return_url}, opts) do
       {:ok, %{url: url, redirect: true}, ctx}
@@ -128,7 +129,7 @@ defmodule Authmk.Payments.Endpoints do
 
     with {:ok, reference} <- Reference.resolve(ctx, params.reference_id, :cancel, opts),
          %{} = subscription <-
-           Store.get_for_reference(ctx, reference.id, params.subscription_id) ||
+           Store.get_for_reference(ctx, reference, params.subscription_id) ||
              {:error, not_found()},
          {:ok, attrs} <- plugin.cancel(ctx, subscription, not params.immediately, opts),
          {:ok, subscription} <- Store.sync(ctx, plugin.provider(), attrs, hooks(opts)) do
@@ -142,10 +143,14 @@ defmodule Authmk.Payments.Endpoints do
     headers = Map.new(conn.req_headers)
 
     with body when is_binary(body) <- RawBody.get(conn) || {:error, :raw_body_unavailable},
-         {:ok, subscriptions} <- plugin.webhook(ctx, body, headers, opts) do
-      Enum.each(subscriptions, &sync(ctx, plugin, opts, &1))
+         {:ok, subscriptions} <- plugin.webhook(ctx, body, headers, opts),
+         :ok <- sync_all(ctx, plugin, opts, subscriptions) do
       {:json, 200, %{received: true}, ctx}
     else
+      # Not saved: the provider sends it again later (syncing is idempotent).
+      :not_saved ->
+        {:json, 500, %{error: "not_saved"}, ctx}
+
       {:error, :raw_body_unavailable} ->
         Logger.error(
           "authmk billing webhook: no raw body. Add Authmk.Plug.RawBody to Plug.Parsers"
@@ -157,6 +162,18 @@ defmodule Authmk.Payments.Endpoints do
         Logger.warning("authmk billing webhook refused (#{reason})")
         {:json, 400, %{error: "invalid_webhook"}, ctx}
     end
+  end
+
+  defp sync_all(ctx, plugin, opts, subscriptions) do
+    results = Enum.map(subscriptions, &sync(ctx, plugin, opts, &1))
+    if Enum.all?(results, &(&1 == :ok)), do: :ok, else: :not_saved
+  end
+
+  # Without the provider's ids there's nothing to match it to.
+  defp sync(_ctx, _plugin, _opts, %{provider_subscription_id: id, customer_id: customer})
+       when not is_binary(id) or not is_binary(customer) do
+    Logger.warning("authmk billing: a subscription without its ids was ignored")
+    :ok
   end
 
   defp sync(ctx, plugin, opts, attrs) do
@@ -172,28 +189,40 @@ defmodule Authmk.Payments.Endpoints do
 
       save(ctx, provider, attrs, opts)
     else
+      # Not ours (made for another app on the same account): nothing to save.
       Logger.warning("authmk billing: a subscription for an unknown customer was ignored")
+      :ok
     end
   end
 
   defp save(ctx, provider, attrs, opts) do
     case Store.sync(ctx, provider, attrs, hooks(opts)) do
-      {:ok, _subscription} -> :ok
-      {:error, error} -> Logger.warning("authmk billing: subscription not saved (#{error.code})")
+      {:ok, _subscription} ->
+        :ok
+
+      {:error, error} ->
+        Logger.warning("authmk billing: subscription not saved (#{error.code})")
+        :not_saved
     end
   end
 
-  # Whose subscription it is: the reference checkout put in its metadata,
-  # or the customer we know.
-  defp reference_of(_ctx, _provider, %{reference_id: id} = attrs) when is_binary(id) and id != "",
-    do: %{reference_id: id, reference_type: attrs[:reference_type] || "user"}
-
+  # Whose subscription it is: the customer checkout made for the
+  # reference, or else the reference checkout put in the metadata.
   defp reference_of(ctx, provider, attrs) do
     case Store.customer_by_id(ctx, provider, attrs.customer_id) do
-      nil -> nil
-      customer -> %{reference_id: customer.reference_id, reference_type: customer.reference_type}
+      %{} = customer ->
+        %{reference_id: customer.reference_id, reference_type: customer.reference_type}
+
+      nil ->
+        from_metadata(attrs)
     end
   end
+
+  defp from_metadata(%{reference_id: id, reference_type: type})
+       when is_binary(id) and id != "" and type in ["user", "organization"],
+       do: %{reference_id: id, reference_type: type}
+
+  defp from_metadata(_attrs), do: nil
 
   @doc false
   # Background work (create_customer_on_sign_up): the new user's customer.
@@ -208,15 +237,27 @@ defmodule Authmk.Payments.Endpoints do
   end
 
   defp ensure_customer(ctx, plugin, reference, opts) do
-    case Store.customer(ctx, plugin.provider(), reference.id) do
+    case Store.customer(ctx, plugin.provider(), reference) do
       %{customer_id: customer_id} ->
         {:ok, customer_id}
 
       nil ->
         with {:ok, customer_id} <- plugin.create_customer(ctx, reference, opts),
-             {:ok, _customer} <-
-               Store.put_customer(ctx, plugin.provider(), reference, customer_id),
-             do: {:ok, customer_id}
+             do: put_customer(ctx, plugin.provider(), reference, customer_id)
+    end
+  end
+
+  # Two requests at once may both make one: the first saved is the one used.
+  defp put_customer(ctx, provider, reference, customer_id) do
+    case Store.put_customer(ctx, provider, reference, customer_id) do
+      {:ok, _customer} ->
+        {:ok, customer_id}
+
+      {:error, error} ->
+        case Store.customer(ctx, provider, reference) do
+          %{customer_id: saved} -> {:ok, saved}
+          nil -> {:error, error}
+        end
     end
   end
 
@@ -230,12 +271,23 @@ defmodule Authmk.Payments.Endpoints do
     end
   end
 
-  # The same plan again: change plans in the provider's portal instead.
-  defp not_subscribed(ctx, reference, plan) do
-    if Enum.any?(Store.list(ctx, reference.id), &(Store.active?(&1) and &1.plan == plan[:name])),
-      do: {:error, Error.custom(:already_subscribed, 409, "Already subscribed to this plan")},
+  # One subscription at a time, so nobody pays twice: plans are changed,
+  # and failed payments fixed, in the provider's portal instead.
+  defp not_subscribed(ctx, reference) do
+    if Enum.any?(Store.list(ctx, reference), &(Store.active?(&1) or Store.owing?(&1))),
+      do:
+        {:error,
+         Error.custom(
+           :already_subscribed,
+           409,
+           "Already subscribed: change plans in the billing portal"
+         )},
       else: :ok
   end
+
+  defp seats(nil), do: :ok
+  defp seats(seats) when seats in 1..10_000, do: :ok
+  defp seats(_seats), do: {:error, Error.custom(:invalid_seats, 422, "Seats must be 1 to 10000")}
 
   defp plan(opts, name) do
     case Enum.find(opts[:plans], &(to_string(&1[:name]) == name)) do

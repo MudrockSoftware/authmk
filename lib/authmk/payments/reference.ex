@@ -3,14 +3,31 @@ defmodule Authmk.Payments.Reference do
   # Who's billed: the signed-in user, or (with `organizations: true`) an
   # organization they may manage billing for: its owners and admins, or
   # whoever the app's `authorize_reference` allows.
+  #
+  # A reference is its type and id together: with integer ids, user 1 and
+  # organization 1 are different customers, so nothing looks one up by id
+  # alone.
 
   alias Authmk.{AccessControl, Context, Error, Store}
 
   @managers ["owner", "admin"]
 
+  @doc "The app's way of naming one (`user_id` or `{:organization, id}`), as `%{type:, id:}`."
+  def from_app({:organization, id}), do: %{type: "organization", id: to_string(id)}
+  def from_app(user_id), do: %{type: "user", id: to_string(user_id)}
+
+  @doc """
+  The id a provider that keeps our ids (`external_id`) knows a reference
+  by: `user_<id>` or `org_<id>`, so the two can't collide there either.
+  """
+  def external_id(%{type: "user", id: id}), do: "user_" <> id
+  def external_id(%{type: "organization", id: id}), do: "org_" <> id
+
+  # `reference_id` in a request names an organization; without it, the
+  # signed-in user is billed.
   def resolve(%Context{user: user} = ctx, reference_id, action, opts) do
     cond do
-      reference_id in [nil, "", to_string(user.id)] ->
+      reference_id in [nil, ""] ->
         {:ok, %{id: to_string(user.id), type: "user", email: user.email, name: user.name}}
 
       not opts[:organizations] or not Map.has_key?(ctx.config.schema.models, :member) ->

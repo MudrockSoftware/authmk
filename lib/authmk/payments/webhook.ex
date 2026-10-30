@@ -68,13 +68,20 @@ defmodule Authmk.Payments.Webhook do
 
   def standard(_headers, _body, _key, _now), do: {:error, :invalid_signature}
 
-  @doc "The HMAC key of a Standard Webhooks secret: `whsec_<base64>`, decoded."
-  def standard_key("whsec_" <> encoded) do
+  @doc """
+  The HMAC key of a Standard Webhooks secret: its base64 (after `whsec_`,
+  when it has it), decoded. `nil` for anything else, so nothing verifies.
+  """
+  def standard_key("whsec_" <> encoded), do: standard_key(encoded)
+
+  def standard_key(encoded) when is_binary(encoded) do
     case Base.decode64(encoded) do
-      {:ok, key} -> key
-      :error -> raise ArgumentError, "the webhook secret isn't valid base64 after whsec_"
+      {:ok, key} when key != "" -> key
+      _invalid -> nil
     end
   end
+
+  def standard_key(_secret), do: nil
 
   @doc "A hex HMAC-SHA256 of the body alone (no timestamp: providers that sign only the body)."
   def hex(signature, body, secret)

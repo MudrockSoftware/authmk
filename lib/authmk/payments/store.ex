@@ -10,12 +10,16 @@ defmodule Authmk.Payments.Store do
   alias Authmk.{Context, Store}
 
   @active ~w(active trialing)
+  @owing ~w(past_due unpaid paused)
 
-  def customer(ctx, provider, reference_id) do
-    ctx
-    |> Store.all(:billing_customer, provider: provider, reference_id: to_string(reference_id))
-    |> List.first()
-  end
+  # `reference`: `%{type:, id:}` (Authmk.Payments.Reference).
+  def customer(ctx, provider, %{type: type, id: id}),
+    do:
+      Store.get_by(ctx, :billing_customer,
+        provider: provider,
+        reference_type: type,
+        reference_id: id
+      )
 
   def customer_by_id(ctx, provider, customer_id),
     do: Store.get_by(ctx, :billing_customer, provider: provider, customer_id: customer_id)
@@ -30,8 +34,8 @@ defmodule Authmk.Payments.Store do
   end
 
   @doc "A reference's subscriptions, newest first."
-  def list(ctx, reference_id) do
-    condition = dynamic([s], s.reference_id == ^to_string(reference_id))
+  def list(ctx, %{type: type, id: id}) do
+    condition = dynamic([s], s.reference_type == ^type and s.reference_id == ^id)
 
     ctx
     |> Store.all(:subscription, condition, limit: 100)
@@ -45,9 +49,9 @@ defmodule Authmk.Payments.Store do
         provider_subscription_id: provider_subscription_id
       )
 
-  def get_for_reference(ctx, reference_id, id) do
+  def get_for_reference(ctx, %{type: type, id: reference_id}, id) do
     case Store.get_by(ctx, :subscription, id: id) do
-      %{reference_id: ^reference_id} = subscription -> subscription
+      %{reference_type: ^type, reference_id: ^reference_id} = subscription -> subscription
       _other -> nil
     end
   rescue
@@ -62,13 +66,16 @@ defmodule Authmk.Payments.Store do
 
   def active?(_subscription), do: false
 
+  @doc "Whether it still exists at the provider, waiting for a payment (no access meanwhile)."
+  def owing?(%{status: status}), do: status in @owing
+
   @doc "Whether the reference ever had a trial, with any provider: one per reference."
-  def had_trial?(ctx, reference_id) do
+  def had_trial?(ctx, %{type: type, id: id}) do
     condition =
       dynamic(
         [s],
-        s.reference_id == ^to_string(reference_id) and
-          (not is_nil(s.trial_start) or s.status == "trialing")
+        s.reference_type == ^type and s.reference_id == ^id and
+          (not is_nil(s.trial_start) or not is_nil(s.trial_end) or s.status == "trialing")
       )
 
     Store.all(ctx, :subscription, condition, limit: 1) != []
@@ -82,9 +89,14 @@ defmodule Authmk.Payments.Store do
     previous = get(ctx, provider, attrs.provider_subscription_id)
     attrs = Map.put(attrs, :provider, provider)
 
-    # A trial's start stays known, even when later updates leave it out.
+    # A trial's dates stay known, even when later updates leave them out.
     attrs =
-      if previous && is_nil(attrs[:trial_start]), do: Map.delete(attrs, :trial_start), else: attrs
+      if previous,
+        do:
+          Map.reject(attrs, fn {key, value} ->
+            key in [:trial_start, :trial_end] and is_nil(value)
+          end),
+        else: attrs
 
     result =
       if previous,

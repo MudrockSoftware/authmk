@@ -11,11 +11,15 @@ defmodule Authmk.Payments.Schema do
         fields: [
           provider: [type: :string, required: true, input: false],
           # A user's or an organization's id. Without foreign keys: either.
-          reference_id: [type: :string, required: true, index: true, input: false],
+          reference_id: [type: :string, required: true, input: false],
           reference_type: [type: :string, required: true, default: "user", input: false],
           customer_id: [type: :string, required: true, input: false]
         ],
-        indexes: [[columns: [:provider, :customer_id], unique: true]]
+        # One customer per reference and provider, and the other way round.
+        indexes: [
+          [columns: [:provider, :customer_id], unique: true],
+          [columns: [:provider, :reference_type, :reference_id], unique: true]
+        ]
       ],
       subscription: [
         plural: "subscriptions",

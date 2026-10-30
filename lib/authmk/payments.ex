@@ -33,27 +33,38 @@ defmodule Authmk.Payments do
   organization, managed by its owners and admins (or whoever
   `authorize_reference` allows).
 
+  A reference that already has a subscription (active, trialing, or
+  waiting for a payment) can't check out again: plans are changed and
+  payments fixed in the provider's portal, so nobody pays twice.
+
   From your code, check what a user or organization has with the functions
-  below.
+  below. They take a user's id, or `{:organization, id}`:
+
+      Authmk.Payments.allowed?(MyApp.Auth, user.id, :projects, 3)
+      Authmk.Payments.plan(MyApp.Auth, {:organization, org.id})
   """
 
   alias Authmk.Context
+  alias Authmk.Payments.Reference
   alias Authmk.Payments.Store, as: Billing
 
+  @typedoc "Who's billed: a user's id, or `{:organization, id}`."
+  @type billed :: term() | {:organization, term()}
+
   @doc "A user's or organization's subscriptions, newest first."
-  @spec subscriptions(module(), term()) :: [struct()]
-  def subscriptions(auth, reference_id),
-    do: Billing.list(Context.new(auth.config()), reference_id)
+  @spec subscriptions(module(), billed()) :: [struct()]
+  def subscriptions(auth, reference),
+    do: Billing.list(Context.new(auth.config()), Reference.from_app(reference))
 
   @doc "The subscription that counts now (active or trialing), or `nil`."
-  @spec active_subscription(module(), term()) :: struct() | nil
-  def active_subscription(auth, reference_id),
-    do: auth |> subscriptions(reference_id) |> Enum.find(&Billing.active?/1)
+  @spec active_subscription(module(), billed()) :: struct() | nil
+  def active_subscription(auth, reference),
+    do: auth |> subscriptions(reference) |> Enum.find(&Billing.active?/1)
 
   @doc "The plan (from the plugin's `plans`) of the active subscription, or `nil`."
-  @spec plan(module(), term()) :: keyword() | nil
-  def plan(auth, reference_id) do
-    with %{plan: name} when is_binary(name) <- active_subscription(auth, reference_id),
+  @spec plan(module(), billed()) :: keyword() | nil
+  def plan(auth, reference) do
+    with %{plan: name} when is_binary(name) <- active_subscription(auth, reference),
          {_plugin, opts} <- plugin(auth) do
       Enum.find(opts[:plans], &(to_string(&1[:name]) == name))
     else
@@ -62,12 +73,12 @@ defmodule Authmk.Payments do
   end
 
   @doc """
-  What the active plan allows of `limit` (from its `limits`), or `nil`
-  without a plan or that limit: `allowed?(MyApp.Auth, user.id, :projects, 3)`.
+  Whether the active plan allows `wanted` of `limit` (from its `limits`):
+  `false` without an active plan or that limit.
   """
-  @spec allowed?(module(), term(), atom(), number()) :: boolean()
-  def allowed?(auth, reference_id, limit, wanted \\ 1) do
-    case plan(auth, reference_id) do
+  @spec allowed?(module(), billed(), atom(), number()) :: boolean()
+  def allowed?(auth, reference, limit, wanted \\ 1) do
+    case plan(auth, reference) do
       nil ->
         false
 
