@@ -120,8 +120,9 @@ authorization requests, `private_key_jwt`, dynamic client registration and
 logout. `Authmk.Plug.RequireAccessToken` protects your APIs with its tokens.
 
 For business customers, `Authmk.Plugins.SSO` signs organizations in with
-their own OpenID Connect identity providers, with DNS domain verification
-and automatic provisioning, and `Authmk.Plugins.SCIM` lets their directories
+their own OpenID Connect or SAML 2.0 identity providers, with DNS domain
+verification and automatic provisioning (SAML is read with OTP's xmerl and
+public_key, refusing DTDs, unsigned and replayed assertions), and `Authmk.Plugins.SCIM` lets their directories
 (Okta, Entra ID, Google Workspace) provision and deprovision people and
 groups over SCIM 2.0.
 

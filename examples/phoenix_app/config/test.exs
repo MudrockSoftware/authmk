@@ -8,6 +8,17 @@ config :phoenix_app, :sso_providers, [
     client_id: "acme-id",
     client_secret: "acme-secret",
     domain: "acme.example"
+  ],
+  # A SAML 2.0 identity provider, played by Authmk.Testing.SAMLIdP with the
+  # test-only key pair in test/fixtures.
+  [
+    provider_id: "globex",
+    domain: "globex.example",
+    saml: [
+      entity_id: "https://idp.globex.example/saml",
+      sso_url: "https://idp.globex.example/saml/sso",
+      certificates: [File.read!("test/fixtures/saml_idp.crt")]
+    ]
   ]
 ]
 

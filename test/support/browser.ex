@@ -13,6 +13,9 @@ defmodule Authmk.Test.Browser do
   def get(browser, path, params \\ %{}), do: request(browser, :get, path, params)
   def post(browser, path, params \\ %{}), do: request(browser, :post, path, params)
 
+  @doc "Posts an HTML form, as pages on other sites do (SAML identity providers)."
+  def post_form(browser, path, params), do: request(browser, :post, path, {:form, params})
+
   @doc "Sends a request and returns the browser with updated cookies, and the conn."
   def request(%__MODULE__{} = browser, method, path, params) do
     conn =
@@ -45,6 +48,12 @@ defmodule Authmk.Test.Browser do
   defp build_conn(:get, path, params) do
     query = if params == %{}, do: "", else: "?" <> URI.encode_query(params)
     Plug.Test.conn(:get, "/auth" <> path <> query)
+  end
+
+  defp build_conn(method, path, {:form, params}) do
+    method
+    |> Plug.Test.conn("/auth" <> path, URI.encode_query(params))
+    |> put_req_header("content-type", "application/x-www-form-urlencoded")
   end
 
   defp build_conn(method, path, params) do

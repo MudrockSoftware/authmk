@@ -14,6 +14,17 @@ defmodule Authmk.Fuzz.Auth do
       Authmk.Plugins.DeviceAuthorization,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
       Authmk.Plugins.SCIM,
+      {Authmk.Plugins.SSO,
+       default_providers: [
+         [
+           provider_id: "okta",
+           saml: [
+             entity_id: "https://idp.acme.example/saml",
+             sso_url: "https://idp.acme.example/sso",
+             certificates: [File.read!("test/fixtures/saml/idp-rsa.crt")]
+           ]
+         ]
+       ]},
       # Client ID metadata documents on, with no DNS: URLs get checked, never fetched.
       {Authmk.Plugins.OAuthProvider,
        login_page: "/sign-in",
@@ -52,6 +63,7 @@ defmodule Authmk.UntrustedInputFuzzTest do
   use ExUnitProperties
 
   alias Authmk.Plugins.{JWT, LastSignInMethod, OAuthProvider, SCIM}
+  alias Authmk.Plugins.SSO.SAML.XML
   alias Authmk.Test.Browser
   alias Authmk.Testing.{FakeAuthenticator, FakeWallet}
 
@@ -525,12 +537,64 @@ defmodule Authmk.UntrustedInputFuzzTest do
       [data] =
         Regex.run(
           ~r{<script type="application/json" id="authmk-page">(.*?)</script>}s,
-          conn.resp_body, capture: :all_but_first)
+          conn.resp_body,
+          capture: :all_but_first
+        )
 
       refute data =~ "<"
       page = JSON.decode!(data)
       if error != "", do: assert(page["code"] == error)
       if description not in [nil, ""], do: assert(page["message"] == description)
+    end
+  end
+
+  # Real-looking responses, bent at random, and plain garbage.
+  property "garbled SAML responses never crash or sign anyone in", %{browser: browser} do
+    xml = File.read!("test/fixtures/saml/response-rsa.xml")
+
+    check all(
+            response <-
+              one_of([
+                binary(max_length: 400),
+                map({integer(0..(byte_size(xml) - 1)), binary(min_length: 1, max_length: 8)}, fn
+                  {at, bytes} ->
+                    <<before::binary-size(at), _::binary-size(1), rest::binary>> = xml
+                    Base.encode64(before <> bytes <> rest)
+                end)
+              ])
+          ) do
+      {_idp_page, conn} =
+        Browser.post_form(
+          Browser.new(Authmk.Fuzz.Auth, origin: "https://idp.acme.example"),
+          "/sso/saml2/acs/okta",
+          %{
+            SAMLResponse: response,
+            RelayState: "x"
+          }
+        )
+
+      # Unreadable bodies are a 400; readable ones, the error page.
+      assert conn.status == 400 or redirected_to(conn) =~ "/auth/error?error="
+      assert conn.resp_cookies |> Map.keys() |> Enum.all?(&(not String.contains?(&1, "session")))
+    end
+
+    {_browser, conn} = get(browser, "/get-session")
+    assert json(conn) == nil
+  end
+
+  property "the XML reader never crashes, and never takes a DTD" do
+    tokens =
+      member_of(
+        ~w(< > </ /> = " ' & &amp; &x; <!DOCTYPE <!ENTITY SYSTEM <![CDATA[ ]]> <!-- --> <? ?> a b:c xmlns xmlns:b ID ="x" text)
+      )
+
+    check all(pieces <- list_of(tokens, max_length: 40)) do
+      xml = Enum.join(pieces, " ")
+
+      case XML.parse(xml) do
+        {:ok, _root} -> refute xml =~ "<!DOCTYPE"
+        {:error, :invalid_xml} -> :ok
+      end
     end
   end
 

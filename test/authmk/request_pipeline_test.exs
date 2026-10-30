@@ -122,6 +122,29 @@ defmodule Authmk.RequestPipelineTest do
     assert_raise RuntimeError, "kaboom", fn -> get(browser, "/boom") end
   end
 
+  test "unreadable bodies and query strings get a JSON client error", %{browser: _browser} do
+    auth = Authmk.RequestPipelineTest.Auth
+    send = fn conn -> Plug.forward(conn, tl(conn.path_info), auth, auth.init([])) end
+
+    bad_form =
+      Plug.Test.conn(:post, "/auth/sign-in/email", "email=%80")
+      |> Plug.Conn.put_req_header("content-type", "application/x-www-form-urlencoded")
+      |> send.()
+
+    assert bad_form.status == 400
+    assert JSON.decode!(bad_form.resp_body)["error"]["code"] == "invalid_request"
+
+    bad_json =
+      Plug.Test.conn(:post, "/auth/sign-in/email", "{nope")
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+      |> send.()
+
+    assert bad_json.status == 400
+
+    bad_query = send.(Plug.Test.conn(:get, "/auth/get-session?a=%80"))
+    assert bad_query.status == 400
+  end
+
   test "the error page: themed, escaped, and its files served", %{browser: browser} do
     hostile = "</script><script>alert(1)</script>"
 
@@ -136,7 +159,9 @@ defmodule Authmk.RequestPipelineTest do
     [data] =
       Regex.run(
         ~r{<script type="application/json" id="authmk-page">(.*?)</script>}s,
-        conn.resp_body, capture: :all_but_first)
+        conn.resp_body,
+        capture: :all_but_first
+      )
 
     refute data =~ "<"
 

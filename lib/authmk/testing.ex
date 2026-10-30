@@ -13,7 +13,8 @@ defmodule Authmk.Testing do
   test's Ecto sandbox, and database hooks run as they would in the app.
   Use this module in tests and development seeds, never in production code.
 
-  For the codes and links authmk sends, see `Authmk.Testing.Inbox`.
+  For the codes and links authmk sends, see `Authmk.Testing.Inbox`; for
+  SAML sign-ins without a real identity provider, `Authmk.Testing.SAMLIdP`.
   """
 
   alias Authmk.{BaseURL, Context, Credentials, Email, Error, Sessions, Store}

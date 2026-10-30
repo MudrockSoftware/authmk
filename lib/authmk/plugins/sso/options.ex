@@ -7,7 +7,25 @@ defmodule Authmk.Plugins.SSO.Options do
         type: {:or, [{:list, :keyword_list}, {:fun, 0}]},
         default: [],
         doc:
-          "Providers from config, used before any in the database: `[provider_id:, issuer:, client_id:, client_secret:, domain:]`, plus `discovery_url:`, `scopes:`, `organization_id:`. Their domains count as verified. A function of no arguments is called when the auth module starts, for secrets from runtime config."
+          "Providers from config, used before any in the database: `[provider_id:, issuer:, client_id:, client_secret:, domain:]`, plus `discovery_url:`, `scopes:`, `organization_id:`. SAML ones have `saml: [entity_id:, sso_url:, certificates: [pem], mapping: %{}, allow_idp_initiated: false]` instead of the client and issuer. Their domains count as verified. A function of no arguments is called when the auth module starts, for secrets from runtime config."
+      ],
+      saml: [
+        type: :keyword_list,
+        default: [],
+        doc: "SAML 2.0, for providers registered with `saml_config`.",
+        keys: [
+          signing_keys: [
+            type: {:or, [{:list, :keyword_list}, {:fun, 0}]},
+            default: [],
+            doc:
+              "`[[private_key: pem, certificate: pem]]`: RSA keys to sign authentication requests with. The first signs; all are published in the metadata, so a new key can be announced before it's used, and an old one kept until providers stop expecting it. A function of no arguments is called at start. Without keys, requests go unsigned."
+          ],
+          clock_skew: [
+            type: :non_neg_integer,
+            default: 120,
+            doc: "Seconds of clock difference allowed when checking a response's time limits."
+          ]
+        ]
       ],
       shared_redirect_uri: [
         type: :boolean,

@@ -1111,6 +1111,34 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "saml_assertions": {
+      "columns": {
+        "expires_at": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "key": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "saml_assertions_expires_at_index": {
+          "columns": ["expires_at"],
+          "unique": false
+        },
+        "saml_assertions_key_index": {
+          "columns": ["key"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "scim_connections": {
       "columns": {
         "last_used_at": {
@@ -1510,6 +1538,12 @@
           "null": false,
           "references": null,
           "type": "string"
+        },
+        "saml_config": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
         },
         "type": {
           "default": null,

@@ -405,12 +405,14 @@ Legend: `[ ]` planned, `[x]` done
 
 ### Single sign-on
 - [x] Register OIDC providers, with discovery
-- [ ] Register SAML 2.0 providers
-- [ ] Sign-in started from the service provider and from the identity provider
-- [ ] Service provider metadata endpoint
-- [ ] Signed SAML authentication requests; rotating signing certificates
-- [ ] SAML attribute mapping
-- [ ] SAML protections: request/response matching, replay protection, timestamp checks, algorithm allow-list, size limits
+- [x] Register SAML 2.0 providers
+- [x] Sign-in started from the service provider and from the identity provider
+- [x] Service provider metadata endpoint
+- [x] Signed SAML authentication requests; rotating signing certificates
+- [x] SAML attribute mapping
+- [x] SAML protections: request/response matching, replay protection, timestamp checks, algorithm allow-list, size limits
+- [ ] SAML encrypted assertions
+- [ ] SAML single logout
 - [x] Default SSO provider; shared redirect URI
 - [x] Domain verification (DNS TXT record)
 - [x] User and organization provisioning on sign-in

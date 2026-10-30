@@ -1,0 +1,8 @@
+<r:Root xmlns:r="urn:r">
+  <Child xmlns="urn:default" xmlns:a="urn:a" xmlns:b="urn:b" a="1" b="2" a:z="&amp;&lt;&quot;&#x9;&#xA;&#xD;x" b:y="1">text &amp; &lt;more&gt; &#xD; after &lt;cdata&gt; </Child>
+  <r:Empty></r:Empty>
+  <Inner><deep xml:lang="en">é ü 日本</deep></Inner>
+  <r:Mixed><plain>x</plain><Default xmlns="urn:default">y</Default></r:Mixed>
+  <Outer xmlns="urn:default"><In xmlns="">z</In></Outer>
+  <x:Other xmlns:x="urn:other"><r:Again xmlns:r="urn:r2"></r:Again></x:Other>
+</r:Root>

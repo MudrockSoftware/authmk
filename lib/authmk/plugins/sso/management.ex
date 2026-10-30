@@ -9,13 +9,14 @@ defmodule Authmk.Plugins.SSO.Management do
   def register(%Context{params: params} = ctx) do
     with :ok <- allowed(ctx, :register, params.organization_id),
          {:ok, provider} <- Providers.register(ctx, params) do
-      {:ok, Providers.to_public(provider), ctx}
+      {:ok, Providers.to_public(ctx, provider), ctx}
     end
   end
 
   def list(%Context{params: params} = ctx) do
     with :ok <- allowed(ctx, :read, params.organization_id) do
-      {:ok, ctx |> Providers.list(params.organization_id) |> Enum.map(&Providers.to_public/1),
+      {:ok,
+       ctx |> Providers.list(params.organization_id) |> Enum.map(&Providers.to_public(ctx, &1)),
        ctx}
     end
   end

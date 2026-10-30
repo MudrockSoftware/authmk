@@ -39,8 +39,27 @@ defmodule Authmk.Router do
   @spec call(Plug.Conn.t(), module()) :: Plug.Conn.t()
   def call(conn, auth) do
     config = Config.fetch!(auth)
-    conn = conn |> fetch_cookies() |> fetch_query_params() |> parse_body()
 
+    case read_request(conn) do
+      {:ok, conn} -> route(conn, config)
+      {:error, conn, status} -> send_error(conn, unreadable(status))
+    end
+  end
+
+  # Bodies and query strings that can't be read (bad encoding, malformed,
+  # too large) get the client error Plug gives them, as JSON.
+  defp read_request(conn) do
+    {:ok, conn |> fetch_cookies() |> fetch_query_params() |> parse_body()}
+  rescue
+    exception ->
+      status = Plug.Exception.status(exception)
+      if status in 400..499, do: {:error, conn, status}, else: reraise(exception, __STACKTRACE__)
+  end
+
+  defp unreadable(status),
+    do: Error.custom(:invalid_request, status, "The request couldn't be read")
+
+  defp route(conn, config) do
     with :not_page_file <- page_file(conn),
          :not_preflight <- preflight(conn, config),
          {:ok, base_url} <- BaseURL.resolve(config, conn),
@@ -216,8 +235,9 @@ defmodule Authmk.Router do
       {:redirect, url, _ctx} ->
         conn |> put_resp_header("location", url) |> send_resp(302, "")
 
+      # HTML, or another type the handler set (like SAML's XML metadata).
       {:html, status, html, _ctx} ->
-        conn |> put_resp_content_type("text/html") |> send_resp(status, html)
+        conn |> default_content_type("text/html") |> send_resp(status, html)
 
       # For protocols with their own JSON (like OAuth's errors).
       {:json, status, body, _ctx} ->
@@ -240,15 +260,13 @@ defmodule Authmk.Router do
   defp send_error(conn, %Error{} = error), do: send_json(conn, error.status, Error.to_map(error))
 
   # Protocols with their own JSON type (SCIM's) set it on the context.
-  defp send_json(conn, status, body) do
-    conn
-    |> then(
-      &if(get_resp_header(&1, "content-type") == [],
-        do: put_resp_content_type(&1, "application/json"),
-        else: &1
-      )
-    )
-    |> send_resp(status, JSON.encode!(body))
+  defp send_json(conn, status, body),
+    do: conn |> default_content_type("application/json") |> send_resp(status, JSON.encode!(body))
+
+  defp default_content_type(conn, type) do
+    if get_resp_header(conn, "content-type") == [],
+      do: put_resp_content_type(conn, type),
+      else: conn
   end
 
   defp find_endpoint(config, conn) do

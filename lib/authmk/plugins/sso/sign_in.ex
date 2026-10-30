@@ -4,15 +4,23 @@ defmodule Authmk.Plugins.SSO.SignIn do
   # authorization code flow with PKCE and a nonce, bound to this browser by
   # the state cookie, like social sign-in.
 
-  alias Authmk.{Context, Email, Error, Origin, Sessions, URL}
+  alias Authmk.{Context, Email, Error, Origin}
   alias Authmk.OAuth.{Discovery, Flow, State}
-  alias Authmk.Plugins.SSO.{Providers, Users}
+  alias Authmk.Plugins.SSO.{Outcome, Providers, SAMLSignIn, Users}
 
   @doc "POST /sign-in/sso: the provider's URL to send the user to."
   def start(%Context{params: params} = ctx) do
     with {:ok, provider} <- pick(ctx, params),
-         :ok <- check_redirects(ctx, params),
-         {:ok, oauth} <- discovered(ctx, provider) do
+         :ok <- check_redirects(ctx, params) do
+      case provider do
+        %{type: "saml"} -> SAMLSignIn.start(ctx, provider)
+        _oidc -> start_oidc(ctx, provider)
+      end
+    end
+  end
+
+  defp start_oidc(%Context{params: params} = ctx, provider) do
+    with {:ok, oauth} <- discovered(ctx, provider) do
       data = %{
         "sso_provider_id" => provider.provider_id,
         "callback_url" => params.callback_url,
@@ -76,7 +84,7 @@ defmodule Authmk.Plugins.SSO.SignIn do
   def callback(%Context{raw_params: params} = ctx) do
     case State.finish(ctx, params["state"]) do
       {:ok, ctx, state} -> finish(ctx, state, params)
-      {:error, ctx, error} -> redirect_error(ctx, nil, error.code)
+      {:error, ctx, error} -> Outcome.redirect_error(ctx, nil, error.code)
     end
   end
 
@@ -94,10 +102,10 @@ defmodule Authmk.Plugins.SSO.SignIn do
          {:ok, profile} <- profile(ctx, oauth, tokens),
          {:ok, info} <- oauth.module.map_profile(profile, tokens, oauth),
          {:ok, user, status} <- Users.resolve(ctx, provider, info, profile) do
-      sign_in(ctx, user, status, state)
+      Outcome.complete(ctx, user, status, state)
     else
-      {:error, %Error{} = error} -> redirect_error(ctx, error_url, error.code)
-      {:error, _reason} -> redirect_error(ctx, error_url, :invalid_sso_response)
+      {:error, %Error{} = error} -> Outcome.redirect_error(ctx, error_url, error.code)
+      {:error, _reason} -> Outcome.redirect_error(ctx, error_url, :invalid_sso_response)
     end
   end
 
@@ -128,31 +136,5 @@ defmodule Authmk.Plugins.SSO.SignIn do
       {:ok, profile} -> {:ok, profile}
       {:error, _reason} -> {:error, Error.new(:unable_to_get_user_info)}
     end
-  end
-
-  defp sign_in(ctx, user, status, state) do
-    destination =
-      if status == :new,
-        do: state["new_user_callback_url"] || state["callback_url"],
-        else: state["callback_url"]
-
-    case Sessions.sign_in(ctx, user) do
-      {:ok, ctx} ->
-        {:redirect, destination || "/", ctx}
-
-      {:challenge, %{redirect_url: url}, ctx} when is_binary(url) ->
-        {:redirect, url, ctx}
-
-      {:challenge, _body, ctx} ->
-        redirect_error(ctx, state["error_callback_url"], :additional_verification_required)
-
-      {:error, error} ->
-        redirect_error(ctx, state["error_callback_url"], error.code)
-    end
-  end
-
-  defp redirect_error(%Context{config: config} = ctx, error_url, code) do
-    url = error_url || config.errors[:error_url] || URL.endpoint(ctx, "/error")
-    {:redirect, URL.append_query(url, error: code), ctx}
   end
 end

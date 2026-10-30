@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<r:Root xmlns:r="urn:r" xmlns="urn:default" xmlns:unused="urn:u" xmlns:a="urn:a" xmlns:b="urn:b">
+  <Child b:y="1" b="2" a:z="&amp;&lt;&quot;&#9;&#10;&#13;x" a="1" xmlns:x="urn:x">text &amp; &lt;more&gt; &#13; after<![CDATA[ <cdata> ]]></Child>
+  <r:Empty/>
+  <Inner xmlns=""><deep xml:lang="en">é ü 日本</deep></Inner>
+  <r:Mixed><plain xmlns="">x</plain><Default>y</Default></r:Mixed>
+  <Outer><In xmlns="">z</In></Outer>
+  <x:Other xmlns:x="urn:other" xmlns:r="urn:r2"><r:Again/></x:Other>
+</r:Root>

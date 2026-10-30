@@ -9,7 +9,7 @@ defmodule Authmk.Plugins.SSO.Providers do
   alias Authmk.{Context, Crypto, Error, Store, URL}
   alias Authmk.OAuth.{Discovery, Provider, PublicHost}
   alias Authmk.OAuth.Providers.Generic
-  alias Authmk.Plugins.SSO.Config
+  alias Authmk.Plugins.SSO.{Config, SAMLConfig}
 
   @secret_purpose "sso-client-secret"
   @id_format ~r/\A[a-z0-9][a-z0-9-]{1,62}\z/
@@ -60,10 +60,8 @@ defmodule Authmk.Plugins.SSO.Providers do
     ctx |> Store.list(:sso_provider, query) |> Enum.map(&from_record(&1, ctx))
   end
 
-  @doc "Registers an OpenID Connect provider. Its issuer must answer discovery."
-  def register(%Context{user: user} = ctx, params) do
-    oidc = params.oidc_config
-
+  @doc "Registers a provider: OpenID Connect (`oidc_config`) or SAML (`saml_config`)."
+  def register(ctx, params) do
     with :ok <-
            check(
              Regex.match?(@id_format, params.provider_id),
@@ -74,8 +72,18 @@ defmodule Authmk.Plugins.SSO.Providers do
            check(
              is_nil(params.domain) or Regex.match?(@domain_format, String.downcase(params.domain)),
              "Not a domain name"
-           ),
-         :ok <-
+           ) do
+      case params do
+        %{oidc_config: %{} = oidc, saml_config: nil} -> register_oidc(ctx, params, oidc)
+        %{oidc_config: nil, saml_config: %{} = saml} -> register_saml(ctx, params, saml)
+        _neither_or_both -> check(false, "Give oidc_config or saml_config")
+      end
+    end
+  end
+
+  # Its issuer must answer discovery.
+  defp register_oidc(%Context{user: user} = ctx, params, oidc) do
+    with :ok <-
            check(
              is_binary(oidc["client_id"]) and is_binary(oidc["client_secret"]),
              "oidc_config needs client_id and client_secret"
@@ -95,6 +103,23 @@ defmodule Authmk.Plugins.SSO.Providers do
             "discovery_url" => provider.discovery_url,
             "scopes" => oidc["scopes"] || ["openid", "email", "profile"]
           })
+      }
+
+      with {:ok, record} <- Store.insert(ctx, :sso_provider, attrs),
+           do: {:ok, from_record(record, ctx)}
+    end
+  end
+
+  defp register_saml(%Context{user: user} = ctx, params, saml) do
+    with {:ok, idp} <- SAMLConfig.from_params(saml) do
+      attrs = %{
+        provider_id: params.provider_id,
+        type: "saml",
+        issuer: idp["entity_id"],
+        domain: params.domain && String.downcase(params.domain),
+        organization_id: params.organization_id,
+        user_id: user.id,
+        saml_config: JSON.encode!(idp)
       }
 
       with {:ok, record} <- Store.insert(ctx, :sso_provider, attrs),
@@ -161,16 +186,28 @@ defmodule Authmk.Plugins.SSO.Providers do
   end
 
   @doc "What the management endpoints show. Never the secret."
-  def to_public(provider) do
-    %{
+  def to_public(ctx, provider) do
+    base = %{
       provider_id: provider.provider_id,
       type: provider.type,
       issuer: provider.issuer,
       domain: provider.domain,
       domain_verified: provider.domain_verified,
-      organization_id: provider.organization_id,
-      client_id: provider.oidc["client_id"]
+      organization_id: provider.organization_id
     }
+
+    case provider do
+      %{saml: %{} = saml} ->
+        Map.put(base, :saml, %{
+          sso_url: saml.sso_url,
+          metadata_url: SAMLConfig.entity_id(ctx, provider),
+          acs_url: SAMLConfig.acs_url(ctx, provider),
+          allow_idp_initiated: saml.allow_idp_initiated
+        })
+
+      _oidc ->
+        Map.put(base, :client_id, provider.oidc["client_id"])
+    end
   end
 
   defp configured(ctx, provider_id),
@@ -180,8 +217,8 @@ defmodule Authmk.Plugins.SSO.Providers do
     for entry <- Config.opts(ctx)[:default_providers] do
       %{
         provider_id: entry[:provider_id],
-        type: "oidc",
-        issuer: entry[:issuer],
+        type: if(entry[:saml], do: "saml", else: "oidc"),
+        issuer: if(entry[:saml], do: entry[:saml][:entity_id], else: entry[:issuer]),
         domain: entry[:domain] && String.downcase(entry[:domain]),
         domain_verified: true,
         organization_id: entry[:organization_id],
@@ -192,7 +229,8 @@ defmodule Authmk.Plugins.SSO.Providers do
           "client_secret" => entry[:client_secret],
           "discovery_url" => entry[:discovery_url],
           "scopes" => entry[:scopes]
-        }
+        },
+        saml: entry[:saml] && SAMLConfig.from_config(entry[:saml])
       }
     end
   end
@@ -217,7 +255,8 @@ defmodule Authmk.Plugins.SSO.Providers do
       organization_id: record.organization_id,
       user_id: record.user_id,
       record: record,
-      oidc: Map.put(oidc, "client_secret", secret)
+      oidc: Map.put(oidc, "client_secret", secret),
+      saml: record.saml_config && SAMLConfig.from_json(record.saml_config)
     }
   end
 
