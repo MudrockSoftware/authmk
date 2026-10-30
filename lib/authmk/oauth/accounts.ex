@@ -33,8 +33,10 @@ defmodule Authmk.OAuth.Accounts do
   @spec sign_in(Context.t(), Provider.t(), Provider.user_info(), Tokens.t(), keyword()) ::
           {:ok, struct(), :existing | :new} | {:error, Error.t()}
   def sign_in(ctx, %Provider{} = provider, info, %Tokens{} = tokens, opts \\ []) do
-    with {:ok, info} <- normalize(info) do
+    with {:ok, info} <- normalize(info, provider) do
       case find_account(ctx, provider.id, info.id) do
+        # No email, no account yet: nothing to sign in, nothing to sign up.
+        nil when is_nil(info.email) -> {:error, Error.new(:email_not_found)}
         nil -> sign_in_by_email(ctx, provider, info, tokens, opts)
         account -> sign_in_linked(ctx, provider, account, info, tokens)
       end
@@ -45,8 +47,10 @@ defmodule Authmk.OAuth.Accounts do
   @spec link(Context.t(), Provider.t(), struct(), Provider.user_info(), Tokens.t()) ::
           {:ok, struct()} | {:error, Error.t()}
   def link(%Context{config: config} = ctx, %Provider{} = provider, user, info, tokens) do
-    with {:ok, info} <- normalize(info) do
-      allow_different_emails = config.account[:account_linking][:allow_different_emails]
+    with {:ok, info} <- normalize(info, provider) do
+      # Providers without emails: the signed-in user proved the account is theirs.
+      allow_different_emails =
+        config.account[:account_linking][:allow_different_emails] or is_nil(info.email)
 
       case find_account(ctx, provider.id, info.id) do
         %{user_id: user_id} = account when user_id == user.id ->
@@ -222,10 +226,11 @@ defmodule Authmk.OAuth.Accounts do
     |> List.first()
   end
 
-  defp normalize(%{id: id}) when id in [nil, ""],
+  defp normalize(%{id: id}, _provider) when id in [nil, ""],
     do: {:error, Error.new(:unable_to_get_user_info)}
 
-  defp normalize(%{id: id, email: email} = info) when is_binary(email) and email != "" do
+  defp normalize(%{id: id, email: email} = info, _provider)
+       when is_binary(email) and email != "" do
     {:ok,
      %{
        info
@@ -235,5 +240,8 @@ defmodule Authmk.OAuth.Accounts do
      }}
   end
 
-  defp normalize(_info), do: {:error, Error.new(:email_not_found)}
+  defp normalize(%{id: id} = info, %Provider{requires_email: false}),
+    do: {:ok, %{info | id: to_string(id), email: nil, email_verified: false}}
+
+  defp normalize(_info, _provider), do: {:error, Error.new(:email_not_found)}
 end

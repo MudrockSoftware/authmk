@@ -76,3 +76,9 @@ config :phoenix, :json_library, Jason
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
+
+# Billing (Stripe) and Dub keys: from the environment, placeholders otherwise.
+config :phoenix_app, :billing,
+  stripe_key: System.get_env("STRIPE_SECRET_KEY", "sk_test_replace_me"),
+  stripe_webhook_secret: System.get_env("STRIPE_WEBHOOK_SECRET", "whsec_replace_me"),
+  dub_key: System.get_env("DUB_API_KEY", "dub_replace_me")

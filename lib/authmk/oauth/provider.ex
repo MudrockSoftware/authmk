@@ -48,6 +48,9 @@ defmodule Authmk.OAuth.Provider do
     * `:id_token_algorithms` - allowed signing algorithms (default: any
       asymmetric one)
     * `:id_token_max_age` - refuse ID tokens issued longer ago, in seconds
+    * `:requires_email` - `false` for providers that give no email: their
+      accounts can only be linked to a signed-in user (`POST /link-social`),
+      then sign that user in; they never create users (default `true`)
   """
 
   alias Authmk.Context
@@ -85,6 +88,7 @@ defmodule Authmk.OAuth.Provider do
     id_token_sign_in: false,
     id_token_algorithms: nil,
     id_token_max_age: nil,
+    requires_email: true,
     audiences: [],
     options: []
   ]
@@ -233,6 +237,7 @@ defmodule Authmk.OAuth.Provider do
         Keyword.get(options, :id_token_sign_in, Keyword.get(config, :id_token_sign_in, false)),
       id_token_algorithms: config[:id_token_algorithms],
       id_token_max_age: config[:id_token_max_age],
+      requires_email: Keyword.get(config, :requires_email, true),
       audiences: [options[:client_id] | List.wrap(options[:audience])],
       options: options
     )

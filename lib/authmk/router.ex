@@ -35,7 +35,13 @@ defmodule Authmk.Router do
     Sessions
   }
 
-  @parsers Plug.Parsers.init(parsers: [:urlencoded, :json], pass: ["*/*"], json_decoder: JSON)
+  # Bodies are kept as they came too, for webhook signatures (Authmk.Plug.RawBody).
+  @parsers Plug.Parsers.init(
+             parsers: [:urlencoded, :json],
+             pass: ["*/*"],
+             json_decoder: JSON,
+             body_reader: {Authmk.Plug.RawBody, :read_body, []}
+           )
 
   @doc "Handles a request for the `auth` module."
   @spec call(Plug.Conn.t(), module()) :: Plug.Conn.t()

@@ -50,6 +50,22 @@ defmodule PlugApp.Auth do
       },
       # Who did what, when: the user's own history at /auth/audit-log/list.
       {Authmk.Plugins.AuditLog, can_view_all: &__MODULE__.admin?/1},
+      # Subscriptions with Stripe (Authmk.Payments): /auth/billing/*.
+      {Authmk.Plugins.Stripe,
+       api_key: &__MODULE__.stripe_key/0,
+       webhook_secret: &__MODULE__.stripe_webhook_secret/0,
+       organizations: true,
+       plans: [
+         [
+           name: "pro",
+           id: "price_pro_monthly",
+           annual_id: "price_pro_yearly",
+           trial_days: 14,
+           limits: %{projects: 50}
+         ]
+       ]},
+      # Sign-ups from Dub links become leads.
+      {Authmk.Plugins.Dub, api_key: &__MODULE__.dub_key/0},
       # Credential-stuffing blocking and disposable-email refusal by default.
       Authmk.Plugins.Security,
       {Authmk.Plugins.OAuthProxy,
@@ -76,6 +92,13 @@ defmodule PlugApp.Auth do
   end
 
   def saml_signing_keys, do: Application.get_env(:plug_app, :saml_signing_keys, [])
+
+  def stripe_key, do: Application.fetch_env!(:plug_app, :billing)[:stripe_key]
+
+  def stripe_webhook_secret,
+    do: Application.fetch_env!(:plug_app, :billing)[:stripe_webhook_secret]
+
+  def dub_key, do: Application.fetch_env!(:plug_app, :billing)[:dub_key]
 
   def sso_providers, do: Application.get_env(:plug_app, :sso_providers, [])
 

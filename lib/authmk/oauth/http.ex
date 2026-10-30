@@ -26,6 +26,17 @@ defmodule Authmk.OAuth.HTTP do
   @spec get(Context.t(), String.t(), [{String.t(), String.t()}]) :: response()
   def get(ctx, url, headers \\ []), do: request(ctx, method: :get, url: url, headers: headers)
 
+  @doc "A request with a JSON body and any method (PATCH, PUT)."
+  @spec request_json(Context.t(), atom(), String.t(), term(), [{String.t(), String.t()}]) ::
+          response()
+  def request_json(ctx, method, url, body, headers \\ []),
+    do: request(ctx, method: method, url: url, json: body, headers: headers)
+
+  @doc "DELETE request."
+  @spec delete(Context.t(), String.t(), [{String.t(), String.t()}]) :: response()
+  def delete(ctx, url, headers \\ []),
+    do: request(ctx, method: :delete, url: url, headers: headers)
+
   @doc "POST with a form body."
   @spec post_form(Context.t(), String.t(), map() | keyword(), [{String.t(), String.t()}]) ::
           response()

@@ -29,6 +29,7 @@ defmodule Authmk.OAuth.Providers do
     cognito: Providers.Cognito,
     discord: Providers.Discord,
     dropbox: Providers.Dropbox,
+    dub: Providers.Dub,
     facebook: Providers.Facebook,
     figma: Providers.Figma,
     generic: Providers.Generic,

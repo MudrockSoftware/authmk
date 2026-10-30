@@ -312,6 +312,46 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "billing_customers": {
+      "columns": {
+        "customer_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "provider": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "reference_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "reference_type": {
+          "default": "user",
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "billing_customers_provider_customer_id_index": {
+          "columns": ["provider","customer_id"],
+          "unique": true
+        },
+        "billing_customers_reference_id_index": {
+          "columns": ["reference_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "device_codes": {
       "columns": {
         "client_id": {
@@ -1619,6 +1659,112 @@
         },
         "sso_providers_user_id_index": {
           "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "subscriptions": {
+      "columns": {
+        "cancel_at_period_end": {
+          "default": false,
+          "null": false,
+          "references": null,
+          "type": "boolean"
+        },
+        "canceled_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "customer_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "period_end": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "period_start": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "plan": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "price_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "provider": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "provider_subscription_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "reference_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "reference_type": {
+          "default": "user",
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "seats": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "integer"
+        },
+        "status": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "trial_end": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        },
+        "trial_start": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
+        }
+      },
+      "indexes": {
+        "subscriptions_provider_provider_subscription_id_index": {
+          "columns": ["provider","provider_subscription_id"],
+          "unique": true
+        },
+        "subscriptions_reference_id_index": {
+          "columns": ["reference_id"],
           "unique": false
         }
       },

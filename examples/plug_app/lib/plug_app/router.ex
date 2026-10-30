@@ -7,7 +7,12 @@ defmodule PlugApp.Router do
 
   plug :well_known
   plug :match
-  plug Plug.Parsers, parsers: [:urlencoded, :json], json_decoder: JSON
+  # Bodies are kept as they came for webhook signatures (Stripe's).
+  plug Plug.Parsers,
+    parsers: [:urlencoded, :json],
+    json_decoder: JSON,
+    body_reader: {Authmk.Plug.RawBody, :read_body, []}
+
   plug :dispatch
 
   forward "/auth", to: PlugApp.Auth

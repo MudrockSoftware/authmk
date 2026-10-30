@@ -43,9 +43,11 @@ defmodule PhoenixAppWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  # Bodies are kept as they came for webhook signatures (Stripe's).
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
+    body_reader: {Authmk.Plug.RawBody, :read_body, []},
     json_decoder: Phoenix.json_library()
 
   plug Plug.MethodOverride

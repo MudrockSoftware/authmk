@@ -84,7 +84,7 @@ Clients then call `POST /auth/sign-up/email`, `POST /auth/sign-in/email`,
 `Authmk.Plugins.EmailPassword` for every endpoint. Working Plug and Phoenix
 apps are in [`examples/`](https://github.com/MudrockSoftware/authmk/tree/main/examples).
 
-Social sign-in takes a line per provider, with 43 built in and any other
+Social sign-in takes a line per provider, with 44 built in and any other
 OpenID Connect or OAuth 2.0 provider through `:generic`:
 
 ```elixir

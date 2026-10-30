@@ -17,3 +17,9 @@ config :plug_app, PlugApp.Mailer, adapter: Swoosh.Adapters.Local
 config :swoosh, :api_client, false
 
 import_config "#{config_env()}.exs"
+
+# Billing (Stripe) and Dub keys: from the environment, placeholders otherwise.
+config :plug_app, :billing,
+  stripe_key: System.get_env("STRIPE_SECRET_KEY", "sk_test_replace_me"),
+  stripe_webhook_secret: System.get_env("STRIPE_WEBHOOK_SECRET", "whsec_replace_me"),
+  dub_key: System.get_env("DUB_API_KEY", "dub_replace_me")

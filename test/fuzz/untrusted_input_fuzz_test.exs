@@ -14,6 +14,7 @@ defmodule Authmk.Fuzz.Auth do
       Authmk.Plugins.DeviceAuthorization,
       {Authmk.Plugins.LastSignInMethod, store_in_database: true},
       Authmk.Plugins.SCIM,
+      {Authmk.Plugins.Stripe, api_key: "sk_test_fuzz", webhook_secret: "whsec_fuzz"},
       {Authmk.Plugins.SSO,
        default_providers: [
          [
@@ -622,6 +623,33 @@ defmodule Authmk.UntrustedInputFuzzTest do
 
       assert conn.status in [302, 400]
       if conn.status == 302, do: assert(redirected_to(conn) =~ "/auth/error?error=")
+    end
+  end
+
+  property "forged billing webhooks never get through" do
+    check all(
+            header <-
+              one_of([
+                string(:printable, max_length: 120),
+                map({integer(), string(:alphanumeric, max_length: 64)}, fn {t, sig} ->
+                  "t=#{t},v1=#{sig}"
+                end)
+              ]),
+            body <-
+              one_of([
+                binary(max_length: 300),
+                constant(
+                  ~s({"type":"customer.subscription.created","data":{"object":{"id":"sub_1"}}})
+                )
+              ])
+          ) do
+      conn =
+        Plug.Test.conn(:post, "/auth/billing/webhook", body)
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("stripe-signature", header)
+
+      conn = Plug.forward(conn, ["billing", "webhook"], Authmk.Fuzz.Auth, [])
+      assert conn.status == 400
     end
   end
 

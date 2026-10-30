@@ -1,0 +1,15 @@
+{
+  "name": "@authmk/mcp",
+  "module": "index.ts",
+  "type": "module",
+  "private": false,
+  "scripts": {
+    "typecheck": "bun check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}
