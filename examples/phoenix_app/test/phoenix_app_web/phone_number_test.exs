@@ -8,7 +8,8 @@ defmodule PhoenixAppWeb.PhoneNumberTest do
     number = "+14155550123"
     conn = conn |> from_browser() |> post("/auth/phone-number/send-otp", %{phone_number: number})
     assert json_response(conn, 200) == %{"status" => true}
-    assert_received {:sms, ^number, "Your PhoenixApp code is " <> code}
+    assert_received {:sms, ^number, body}
+    [code] = Regex.run(~r/^\d+/, body)
 
     conn =
       conn

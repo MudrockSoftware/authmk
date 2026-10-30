@@ -24,6 +24,10 @@ defmodule PhoenixAppWeb.Router do
 
   scope "/" do
     forward "/auth", PhoenixApp.Auth
+
+    # authmk's admin dashboard, for users Authmk.Plugins.Admin calls admins.
+    # Licensed separately: in production it needs AUTHMK_LICENCE_KEY.
+    forward "/admin/auth", Authmk.Dashboard, auth: PhoenixApp.Auth
   end
 
   scope "/", PhoenixAppWeb do
@@ -36,6 +40,7 @@ defmodule PhoenixAppWeb.Router do
     pipe_through [:browser, :require_authenticated]
 
     get "/account", PageController, :account
+
     get "/consent", PageController, :consent
   end
 

@@ -6,6 +6,9 @@ if config_env() == :test do
   config :bcrypt_elixir, log_rounds: 4
   config :logger, level: :warning
 
+  # Swoosh (in Authmk.Emails' tests) sends nothing over HTTP.
+  config :swoosh, :api_client, false
+
   # Every fake provider sign-in signs with a fresh key, so the JWKS is
   # fetched again each time.
   config :authmk, :jwks_refetch_cooldown, 0

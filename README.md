@@ -147,7 +147,24 @@ Sessions and security, also plugins:
 | `Authmk.Plugins.HaveIBeenPwned` | Refuses passwords from known data breaches |
 | `Authmk.Plugins.LastSignInMethod` | Remembers how a user last signed in, for "Last used" hints |
 | `Authmk.Plugins.OAuthProxy` | Social sign-in on previews and localhost through production's callback URL |
+| `Authmk.Plugins.AuditLog` | Who did what to which account, with retention and export |
+| `Authmk.Plugins.Security` | Credential stuffing, sign-up abuse, email checks, impossible travel, geo and bot blocking, proof-of-work |
 | `Authmk.Plugins.OpenAPI` | An OpenAPI 3.1 description of every enabled endpoint, and a reference page |
+
+An admin dashboard (licensed separately: see License below) mounts in any
+Plug or Phoenix router with one line,
+`forward "/admin/auth", Authmk.Dashboard, auth: MyApp.Auth`: users,
+sessions, two-factor, bans, organizations, SSO and SCIM, the audit log and
+sign-in analytics, in Mudrock's light and dark themes.
+
+When a social, SSO or One Tap sign-in, or an OAuth authorization, fails
+with nowhere to send the user, authmk shows its own error page at
+`/auth/error` (themed, light and dark, with the error code and a way back).
+Pass `error_callback_url` (or set `errors: [error_url: ...]`) to send users
+to your own page instead.
+
+`Authmk.Emails` has ready-made Swoosh emails for every callback, and
+`Authmk.SMS` is the behaviour for sending phone codes.
 
 In your app's tests, `Authmk.Testing` creates users and sessions and signs
 test conns in, and `Authmk.Testing.Inbox` catches the codes and links authmk
@@ -299,3 +316,8 @@ Authmk is an independent project and is not affiliated with Better Auth.
 ## License
 
 MIT © Mudrock Software LTD. See [LICENSE](https://github.com/MudrockSoftware/authmk/blob/main/LICENSE).
+
+The admin dashboard and its analytics, in `licensed/`, aren't MIT licensed:
+see [licensed/LICENSE.md](https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md).
+They run freely in development and tests; elsewhere they need a licence key
+in `AUTHMK_LICENCE_KEY` (keys: https://license.mudrock.dev).

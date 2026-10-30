@@ -431,34 +431,34 @@ Legend: `[ ]` planned, `[x]` done
 ## 0.8 Security, auditing and admin UI
 
 ### Audit logs
-- [ ] Record user, session, account, verification and organization events
-- [ ] Query the current user's events and all events (admin)
-- [ ] Retention settings; export to log destinations
+- [x] Record user, session, account, verification and organization events
+- [x] Query the current user's events and all events (admin)
+- [x] Retention settings; export to log destinations
 
 ### Security plugin
-- [ ] Credential-stuffing detection
-- [ ] Impossible-travel detection
-- [ ] Free-trial abuse prevention
-- [ ] Compromised-password detection
-- [ ] Inactive-account monitoring
-- [ ] Geo-blocking
-- [ ] Bot blocking and suspicious-IP detection
-- [ ] Velocity limits
-- [ ] Email validation (disposable domains, MX check) and normalization (plus-addressing, dots)
-- [ ] Proof-of-work challenges with adjustable difficulty
-- [ ] Security events sent through hooks and `:telemetry`
+- [x] Credential-stuffing detection
+- [x] Impossible-travel detection
+- [x] Free-trial abuse prevention
+- [x] Compromised-password detection (`Authmk.Plugins.HaveIBeenPwned`)
+- [x] Inactive-account monitoring
+- [x] Geo-blocking
+- [x] Bot blocking and suspicious-IP detection
+- [x] Velocity limits
+- [x] Email validation (disposable domains, MX check) and normalization (plus-addressing, dots)
+- [x] Proof-of-work challenges with adjustable difficulty
+- [x] Security events sent through hooks and `:telemetry`
 
-### Admin dashboard (Phoenix LiveView)
-- [ ] Users, sessions, organizations, teams and invitations
-- [ ] SSO connections and directory sync
-- [ ] Event and audit-log browser
-- [ ] Sign-in and sign-up analytics
-- [ ] Two-factor management
-- [ ] Mounted in the app's router, behind admin access control
+### Admin dashboard (SvelteKit app, any Plug or Phoenix router; licensed, in `licensed/`)
+- [x] Users, sessions, organizations, teams and invitations
+- [x] SSO connections and directory sync
+- [x] Event and audit-log browser
+- [x] Sign-in and sign-up analytics
+- [x] Two-factor management
+- [x] Mounted in the app's router (Plug or Phoenix), behind admin access control
 
 ### Messaging
-- [ ] Ready-made email templates for verification, password reset, magic links, OTPs and invitations (Swoosh)
-- [ ] SMS sender behaviour for OTP delivery
+- [x] Ready-made email templates for verification, password reset, magic links, OTPs and invitations (Swoosh)
+- [x] SMS sender behaviour for OTP delivery
 
 ---
 

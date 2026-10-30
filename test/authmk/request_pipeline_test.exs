@@ -122,15 +122,38 @@ defmodule Authmk.RequestPipelineTest do
     assert_raise RuntimeError, "kaboom", fn -> get(browser, "/boom") end
   end
 
-  test "the error page escapes what it shows", %{browser: browser} do
-    {_browser, conn} = get(browser, "/error", %{error: "<script>alert(1)</script>"})
+  test "the error page: themed, escaped, and its files served", %{browser: browser} do
+    hostile = "</script><script>alert(1)</script>"
+
+    {_browser, conn} =
+      get(browser, "/error", %{error: hostile, error_description: "<img src=x onerror=alert(1)>"})
 
     assert conn.status == 400
     assert ["text/html" <> _] = Plug.Conn.get_resp_header(conn, "content-type")
-    refute conn.resp_body =~ "<script>"
-    assert conn.resp_body =~ "&lt;script&gt;"
+    assert Plug.Conn.get_resp_header(conn, "x-frame-options") == ["DENY"]
+
+    # The request's text only reaches the page as escaped JSON data.
+    [data] =
+      Regex.run(
+        ~r{<script type="application/json" id="authmk-page">(.*?)</script>}s,
+        conn.resp_body, capture: :all_but_first)
+
+    refute data =~ "<"
+
+    assert %{"name" => "error", "code" => ^hostile, "message" => "<img src=x onerror=alert(1)>"} =
+             JSON.decode!(data)
+
+    refute conn.resp_body =~ "<script>alert(1)"
+    refute conn.resp_body =~ "<img src=x"
 
     {_browser, conn} = get(browser, "/error", %{error: "invalid_token"})
     assert conn.resp_body =~ "The link or code is invalid or has expired"
+
+    # The page's own files, under authmk's path.
+    [_, script] = Regex.run(~r{"\./(_app/immutable/entry/start\.[^"]+)"}, conn.resp_body)
+    {_browser, asset} = get(browser, "/" <> script)
+    assert asset.status == 200
+    {_browser, missing} = get(browser, "/_app/nope.js")
+    assert missing.status == 404
   end
 end

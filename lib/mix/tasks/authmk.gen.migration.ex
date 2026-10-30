@@ -125,7 +125,13 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     module = "#{inspect(repo)}.Migrations.#{Macro.camelize(name)}#{timestamp}"
     source = Migration.render(auth, snapshot, module, renames)
 
-    file = Path.join(migrations_path, "#{timestamp}_#{Macro.underscore(name)}.exs")
+    # Ecto names a migration by what follows the version, and refuses two
+    # pending ones with the same name: a counter keeps each one unique.
+    base = Macro.underscore(name)
+
+    file =
+      Path.join(migrations_path, "#{timestamp}_#{base}_#{next_number(migrations_path, base)}.exs")
+
     File.mkdir_p!(migrations_path)
 
     formatted =
@@ -139,6 +145,24 @@ defmodule Mix.Tasks.Authmk.Gen.Migration do
     Mix.shell().info(
       "Wrote #{file}\nUpdated #{snapshot_path}\nRun `mix ecto.migrate` to apply it."
     )
+  end
+
+  # One more than the highest `<version>_<base>_<n>.exs` in the folder, so
+  # deleting an old migration can't bring a number back.
+  defp next_number(migrations_path, base) do
+    pattern = ~r/\A\d+_#{Regex.escape(base)}_(\d+)\.exs\z/
+
+    migrations_path
+    |> Path.join("*.exs")
+    |> Path.wildcard()
+    |> Enum.flat_map(fn file ->
+      case Regex.run(pattern, Path.basename(file), capture: :all_but_first) do
+        [number] -> [String.to_integer(number)]
+        nil -> []
+      end
+    end)
+    |> Enum.max(fn -> 0 end)
+    |> Kernel.+(1)
   end
 
   # The current time as YYYYMMDDHHMMSS, bumped past the newest existing

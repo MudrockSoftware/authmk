@@ -42,6 +42,10 @@ defmodule PhoenixApp.Auth do
       {Authmk.Plugins.SCIM, can_manage: &__MODULE__.organization_admin?/3},
       # Single sign-on with customers' identity providers; see config.
       {Authmk.Plugins.SSO, default_providers: &__MODULE__.sso_providers/0},
+      # Who did what, when: the user's own history at /auth/audit-log/list.
+      {Authmk.Plugins.AuditLog, can_view_all: &__MODULE__.admin?/1},
+      # Credential-stuffing blocking and disposable-email refusal by default.
+      Authmk.Plugins.Security,
       {Authmk.Plugins.OAuthProxy,
        production_url: &__MODULE__.oauth_proxy_url/0, secret: &__MODULE__.oauth_proxy_secret/0},
       # Cloudflare's test secret, which passes every token; use your own.
@@ -54,6 +58,9 @@ defmodule PhoenixApp.Auth do
     ]
 
   import Swoosh.Email
+
+  # Admins (Authmk.Plugins.Admin's role) read everyone's audit log.
+  def admin?(%{user: user}), do: user.role == "admin"
 
   # Owners and admins of an organization manage its SCIM connections.
   def organization_admin?(_action, organization_id, %{user: user} = ctx) do
@@ -87,12 +94,17 @@ defmodule PhoenixApp.Auth do
     deliver(user.email, "Your sign-in code", "Your sign-in code is #{code}")
   end
 
-  def send_phone_code(%{phone_number: number, code: code}, _ctx) do
-    PhoenixApp.SMS.deliver(number, "Your PhoenixApp code is #{code}")
-  end
+  def send_phone_code(message, ctx),
+    do: Authmk.SMS.send_otp(PhoenixApp.SMS, message, ctx, app_name: "PhoenixApp")
 
-  def send_magic_link(%{email: email, url: url}, _ctx) do
-    deliver(email, "Your sign-in link", "Open this link to sign in:\n\n#{url}")
+  # authmk's ready-made email, through the app's mailer.
+  def send_magic_link(data, ctx) do
+    data
+    |> Authmk.Emails.magic_link(ctx,
+      from: {"PhoenixApp", "no-reply@example.com"},
+      app_name: "PhoenixApp"
+    )
+    |> PhoenixApp.Mailer.deliver()
   end
 
   def send_email_code(%{email: email, otp: code}, _ctx) do

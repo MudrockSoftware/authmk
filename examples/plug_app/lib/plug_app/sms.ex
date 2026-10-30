@@ -5,9 +5,12 @@ defmodule PlugApp.SMS do
   the test process, like Swoosh's test adapter.
   """
 
+  @behaviour Authmk.SMS
+
   require Logger
 
-  def deliver(to, text) do
+  @impl Authmk.SMS
+  def deliver(to, text, _opts) do
     case Application.get_env(:plug_app, __MODULE__)[:adapter] do
       :test -> send(self(), {:sms, to, text})
       _log -> Logger.info("SMS to #{to}: #{text}")

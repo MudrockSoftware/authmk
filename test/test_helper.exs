@@ -23,3 +23,6 @@ excluded =
 Code.put_compiler_option(:ignore_module_conflict, true)
 
 ExUnit.start(exclude: excluded)
+
+# licensed/test's helper loads this one only when it hasn't run.
+Application.put_env(:authmk, :test_helper_loaded, true)

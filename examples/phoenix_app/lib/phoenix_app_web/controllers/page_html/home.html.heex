@@ -6,6 +6,12 @@
   </p>
   <div :if={!@current_user} class="mt-4">
     <p>You are not signed in.</p>
+    <%!-- POST /auth/sign-in/email sets the session cookie. --%>
+    <form id="sign-in" class="mt-4 flex gap-2" onsubmit="signIn(event)">
+      <input name="email" type="email" placeholder="Email" class="input" required />
+      <input name="password" type="password" placeholder="Password" class="input" required />
+      <button class="btn btn-primary">Sign in</button>
+    </form>
     <p :if={@last_used} class="mt-2">Last time you signed in with {@last_used}.</p>
     <%!-- POST /auth/sign-in/social answers with the provider's URL to go to. --%>
     <button
@@ -19,6 +25,18 @@
     </button>
   </div>
   <script>
+    async function signIn(event) {
+      event.preventDefault()
+      const form = new FormData(event.target)
+      const response = await fetch("/auth/sign-in/email", {
+        method: "POST",
+        headers: {"content-type": "application/json"},
+        body: JSON.stringify({email: form.get("email"), password: form.get("password")})
+      })
+      if (response.ok) window.location.reload()
+      else alert((await response.json()).error.message)
+    }
+
     async function signInWith(provider) {
       const response = await fetch("/auth/sign-in/social", {
         method: "POST",

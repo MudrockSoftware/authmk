@@ -26,12 +26,10 @@ defmodule Authmk.InstallTest do
     end
 
     test "mounts it and loads the user in the browser pipeline", %{igniter: igniter} do
-      igniter
-      |> assert_content_includes("lib/my_app_web/router.ex", ~s|forward("/auth", MyApp.Auth)|)
-      |> assert_content_includes(
-        "lib/my_app_web/router.ex",
-        "plug(Authmk.Plug.FetchSession, auth: MyApp.Auth)"
-      )
+      # With or without parentheses: that's up to the formatter Phoenix brings.
+      router = file_content(igniter, "lib/my_app_web/router.ex")
+      assert router =~ ~r{forward[ (]"/auth", MyApp\.Auth}
+      assert router =~ ~r{plug[ (]Authmk\.Plug\.FetchSession, auth: MyApp\.Auth}
     end
 
     test "configures secrets per environment, and production from the environment", %{

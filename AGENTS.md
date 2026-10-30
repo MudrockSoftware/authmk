@@ -22,7 +22,20 @@ completed.
 
 ## Project Structure
 
-- `lib/`: the library
+- `lib/`: the library (MIT)
+- `licensed/`: features under Mudrock's commercial licence, not MIT: the admin
+  dashboard and its analytics (`licensed/lib`, tests in `licensed/test`). They
+  need `AUTHMK_LICENCE_KEY` outside development (`Authmk.License`). Keep
+  licensed code here, and keep `lib/` free of dependencies on it. The
+  dashboard's UI is a SvelteKit app in `licensed/dashboard` (bun); after
+  changing it, run `bun run check` and `bun run build` there, and commit the
+  build in `priv/licensed/dashboard`. Follow Mudrock's design guide (colours,
+  British English, sentence case).
+- `assets/pages`: the user-facing pages authmk serves itself (the sign-in
+  error page), a SvelteKit app (bun, MIT). After changing it, run
+  `bun run check` and `bun run build` there and commit the build in
+  `priv/pages`. Its theme in `src/app.css` copies the dashboard's: change
+  both together.
 - `test/`: emulation tests for the library (see Testing)
 - `examples/plug_app`: a plain Plug + Bandit + Ecto (SQLite) app that uses authmk
 - `examples/phoenix_app`: a Phoenix 1.8 + LiveView + Ecto (SQLite) app that uses authmk.

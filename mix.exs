@@ -1,3 +1,49 @@
+defmodule Mix.Tasks.Compile.AuthmkPages do
+  @moduledoc false
+  # Builds authmk's SvelteKit apps into priv/ with bun when their sources
+  # changed. The built files aren't in git; the Hex package ships them
+  # without the sources, so apps using authmk never need bun.
+  use Mix.Task.Compiler
+
+  @apps [{"assets/pages", "priv/pages"}, {"licensed/dashboard", "priv/licensed/dashboard"}]
+
+  @impl true
+  def run(_args) do
+    stale = for {source, output} <- @apps, File.dir?(source), stale?(source, output), do: source
+    Enum.each(stale, &build/1)
+    if stale == [], do: {:noop, []}, else: {:ok, []}
+  end
+
+  defp stale?(source, output) do
+    case File.stat(Path.join(output, "index.html"), time: :posix) do
+      {:ok, %{mtime: built}} -> Enum.any?(sources(source), &(mtime(&1) > built))
+      {:error, _missing} -> true
+    end
+  end
+
+  defp sources(source) do
+    Path.wildcard(Path.join(source, "{src,static,scripts}/**")) ++
+      Path.wildcard(Path.join(source, "{package.json,bun.lock,vite.config.ts,tsconfig.json}"))
+  end
+
+  defp mtime(path), do: File.stat!(path, time: :posix).mtime
+
+  defp build(source) do
+    bun =
+      System.find_executable("bun") ||
+        Mix.raise("authmk builds #{source} with bun, which isn't installed (https://bun.sh)")
+
+    Mix.shell().info("Building #{source} with bun")
+    bun!(bun, ["install", "--frozen-lockfile"], source)
+    bun!(bun, ["run", "build"], source)
+  end
+
+  defp bun!(bun, args, dir) do
+    {_output, status} = System.cmd(bun, args, cd: dir, into: IO.stream(), stderr_to_stdout: true)
+    if status != 0, do: Mix.raise("bun #{Enum.join(args, " ")} failed in #{dir}")
+  end
+end
+
 defmodule Authmk.MixProject do
   use Mix.Project
 
@@ -11,6 +57,9 @@ defmodule Authmk.MixProject do
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      # Builds the pages and the dashboard (Mix.Tasks.Compile.AuthmkPages above).
+      compilers: [:authmk_pages | Mix.compilers()],
+      test_paths: ["test", "licensed/test"],
       build_path: build_path(),
       # Tests define auth modules, whose schemas derive protocols.
       consolidate_protocols: Mix.env() != :test,
@@ -64,8 +113,10 @@ defmodule Authmk.MixProject do
     end
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
+  # licensed/ holds the features under the commercial licence (see
+  # licensed/LICENSE.md); it builds with the rest.
+  defp elixirc_paths(:test), do: ["lib", "licensed/lib", "test/support", "licensed/test/support"]
+  defp elixirc_paths(_), do: ["lib", "licensed/lib"]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
@@ -86,6 +137,8 @@ defmodule Authmk.MixProject do
       # For Authmk.Plugins.SIWE.
       {:ex_secp256k1, "~> 0.8", optional: true},
       {:ex_keccak, "~> 0.7", optional: true},
+      # Ready-made emails (Authmk.Emails).
+      {:swoosh, "~> 1.17", optional: true},
       {:opentelemetry_api, "~> 1.4", optional: true},
       {:opentelemetry_telemetry, "~> 1.1", optional: true},
       {:opentelemetry, "~> 1.5", only: :test},
@@ -105,6 +158,9 @@ defmodule Authmk.MixProject do
     [
       # Fetches deps and enables the git pre-commit hook (lint + Dialyzer).
       setup: ["deps.get", &install_git_hooks/1],
+      # The package ships the built pages and dashboard: build them first.
+      "hex.build": ["compile", "hex.build"],
+      "hex.publish": ["compile", "hex.publish"],
       # As CI: fails under the threshold in test_coverage; HTML in cover/.
       coverage: ["test --cover"],
       # Only the fuzz tests (test/fuzz/), FUZZ_RUNS times each.
@@ -148,9 +204,12 @@ defmodule Authmk.MixProject do
 
   defp package do
     [
-      licenses: ["MIT"],
+      # lib/ is MIT; licensed/ and priv/licensed/ are under licensed/LICENSE.md.
+      licenses: ["MIT", "LicenseRef-Mudrock-Commercial"],
       links: %{"Website" => @homepage_url, "GitHub" => @source_url},
-      files: ~w(lib guides .formatter.exs mix.exs README.md ROADMAP.md SECURITY.md LICENSE)
+      files:
+        ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed guides .formatter.exs
+           mix.exs README.md ROADMAP.md SECURITY.md LICENSE)
     ]
   end
 end

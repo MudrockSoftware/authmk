@@ -11,7 +11,7 @@ defmodule Authmk.Testing do
 
   Records are written with your auth module's repo, so they follow your
   test's Ecto sandbox, and database hooks run as they would in the app.
-  Only use this module in tests.
+  Use this module in tests and development seeds, never in production code.
 
   For the codes and links authmk sends, see `Authmk.Testing.Inbox`.
   """

@@ -33,7 +33,7 @@ defmodule Authmk.Endpoints do
   | GET | `/account-info` | required |
   """
 
-  alias Authmk.{Endpoint, Error}
+  alias Authmk.{Context, Endpoint, Error, Pages}
   alias Authmk.Endpoints.{EmailVerification, Session, Social, User}
 
   @strict [window: 10, max: 3]
@@ -186,9 +186,27 @@ defmodule Authmk.Endpoints do
         nil -> "Something went wrong while signing you in."
       end
 
-    {:html, 400, render_error_page(code, params.error_description || message), ctx}
+    message = params.error_description || message
+    data = %{code: code, message: message, app_name: ctx.config.app_name, home: "/"}
+
+    html =
+      case Pages.render("error", data) do
+        {:ok, html} -> html
+        :missing -> render_error_page(code, message)
+      end
+
+    {:html, 400, html, page_headers(ctx)}
   end
 
+  # Only this site may frame it, which no one should.
+  defp page_headers(ctx) do
+    ctx
+    |> Context.put_resp_header("x-frame-options", "DENY")
+    |> Context.put_resp_header("content-security-policy", "frame-ancestors 'none'")
+    |> Context.put_resp_header("referrer-policy", "no-referrer")
+  end
+
+  # Without the built pages (priv/pages): plain, but still a page.
   defp render_error_page(code, message) do
     """
     <!DOCTYPE html>

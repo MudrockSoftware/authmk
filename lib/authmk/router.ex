@@ -41,16 +41,35 @@ defmodule Authmk.Router do
     config = Config.fetch!(auth)
     conn = conn |> fetch_cookies() |> fetch_query_params() |> parse_body()
 
-    with :not_preflight <- preflight(conn, config),
+    with :not_page_file <- page_file(conn),
+         :not_preflight <- preflight(conn, config),
          {:ok, base_url} <- BaseURL.resolve(config, conn),
          {endpoint, path_params} <- find_endpoint(config, conn) do
       serve(conn, %Context{config: config, conn: conn, base_url: base_url}, endpoint, path_params)
     else
       {:preflight, conn} -> conn
+      {:page_file, conn} -> conn
       {:error, %Error{} = error} -> send_error(conn, error)
       nil -> send_json(conn, 404, Error.to_map(Error.new(:not_found)))
     end
   end
+
+  # The files of authmk's own pages (Authmk.Pages), next to them.
+  @page_files Plug.Static.init(
+                at: "/",
+                from: {:authmk, "priv/pages"},
+                only: ["_app", "favicon.svg"]
+              )
+
+  defp page_file(%Plug.Conn{method: "GET", path_info: [first | _]} = conn)
+       when first in ["_app", "favicon.svg"] do
+    case Plug.Static.call(conn, @page_files) do
+      %Plug.Conn{halted: true} = conn -> {:page_file, conn}
+      conn -> {:page_file, conn |> send_resp(404, "Not found") |> halt()}
+    end
+  end
+
+  defp page_file(_conn), do: :not_page_file
 
   # CORS preflight, for endpoints that allow it. They never use cookies, so
   # any origin may call them, without credentials.

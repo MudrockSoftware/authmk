@@ -25,3 +25,9 @@ authmk-*.tar
 
 # Reference implementation clone (read-only, not part of this repo)
 /example/
+
+# Built from assets/pages and licensed/dashboard by `mix compile` (bun).
+/priv/pages/
+/priv/licensed/
+node_modules/
+.svelte-kit/

@@ -244,6 +244,68 @@
       "primary_key": "binary_id",
       "timestamps": true
     },
+    "audit_events": {
+      "columns": {
+        "actor_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "event": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "ip_address": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "metadata": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "text"
+        },
+        "organization_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_agent": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "user_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "audit_events_event_index": {
+          "columns": ["event"],
+          "unique": false
+        },
+        "audit_events_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "audit_events_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "device_codes": {
       "columns": {
         "client_id": {
@@ -1547,6 +1609,12 @@
           "references": null,
           "type": "boolean"
         },
+        "canonical_email": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "display_username": {
           "default": null,
           "null": true,
@@ -1576,6 +1644,12 @@
           "null": true,
           "references": null,
           "type": "boolean"
+        },
+        "last_sign_in_at": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "utc_datetime_usec"
         },
         "last_sign_in_method": {
           "default": null,
@@ -1621,6 +1695,10 @@
         }
       },
       "indexes": {
+        "users_canonical_email_index": {
+          "columns": ["canonical_email"],
+          "unique": false
+        },
         "users_email_index": {
           "columns": ["email"],
           "unique": true

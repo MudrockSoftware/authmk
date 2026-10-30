@@ -34,6 +34,19 @@ defmodule Authmk.Fuzz.Auth do
   def no_dns(_host), do: :error
 end
 
+defmodule Authmk.Fuzz.SecurityAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [
+      Authmk.Plugins.EmailPassword,
+      {Authmk.Plugins.Security, proof_of_work: [endpoints: [:sign_up_email], difficulty: 24]}
+    ],
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false]
+end
+
 defmodule Authmk.UntrustedInputFuzzTest do
   use Authmk.EmulationCase, async: true
   use ExUnitProperties
@@ -464,6 +477,60 @@ defmodule Authmk.UntrustedInputFuzzTest do
         200 -> assert is_integer(json(conn)["totalResults"])
         400 -> assert json(conn)["scimType"] == "invalidFilter"
       end
+    end
+  end
+
+  @tag auth: Authmk.Fuzz.SecurityAuth
+  property "made-up proof-of-work never passes", %{browser: browser} do
+    {_browser, conn} = get(browser, "/security/challenge")
+    real = json(conn)["challenge"]
+
+    check all(
+            challenge <- one_of([constant(real), string(:printable, max_length: 120)]),
+            nonce <- string(:alphanumeric, max_length: 80),
+            email <- string(:printable, max_length: 60)
+          ) do
+      # At 24 bits, a random nonce solves it about once in 16 million tries.
+      {_browser, conn} =
+        post(
+          %{browser | headers: [{"x-pow-challenge", challenge}, {"x-pow-nonce", nonce}]},
+          "/sign-up/email",
+          %{
+            email: email,
+            password: "correct horse",
+            name: "A"
+          }
+        )
+
+      assert conn.status != 200
+
+      assert json(conn)["error"]["code"] in [
+               "proof_of_work_required",
+               "validation_failed",
+               "invalid_email"
+             ]
+    end
+  end
+
+  property "the error page keeps any text inside its data block", %{browser: browser} do
+    check all(
+            error <- string(:printable, max_length: 120),
+            description <- one_of([constant(nil), string(:printable, max_length: 200)])
+          ) do
+      params =
+        if description, do: %{error: error, error_description: description}, else: %{error: error}
+
+      {_browser, conn} = get(browser, "/error", params)
+
+      [data] =
+        Regex.run(
+          ~r{<script type="application/json" id="authmk-page">(.*?)</script>}s,
+          conn.resp_body, capture: :all_but_first)
+
+      refute data =~ "<"
+      page = JSON.decode!(data)
+      if error != "", do: assert(page["code"] == error)
+      if description not in [nil, ""], do: assert(page["message"] == description)
     end
   end
 

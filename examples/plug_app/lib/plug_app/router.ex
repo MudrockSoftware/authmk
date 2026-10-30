@@ -12,6 +12,10 @@ defmodule PlugApp.Router do
 
   forward "/auth", to: PlugApp.Auth
 
+  # authmk's admin dashboard, for users Authmk.Plugins.Admin calls admins.
+  # Licensed separately: in production it needs AUTHMK_LICENCE_KEY.
+  forward "/admin/auth", to: Authmk.Dashboard, init_opts: [auth: PlugApp.Auth]
+
   get "/" do
     send_resp(conn, 200, "ok")
   end

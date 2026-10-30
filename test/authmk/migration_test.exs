@@ -109,6 +109,20 @@ defmodule Authmk.MigrationTest do
     assert length(migration_files(dir)) == 2
   end
 
+  # Every file was `<version>_authmk.exs`, and Ecto refuses to run several
+  # pending migrations with one name: a fresh database couldn't migrate.
+  test "migrations generated without a name run together from the folder", %{dir: dir, repo: repo} do
+    run_task(Base, dir, nil)
+    run_task(Extended, dir, nil)
+
+    assert [first, second] = migration_files(dir) |> Enum.map(&Path.basename/1)
+    assert first =~ ~r/\A\d+_authmk_1\.exs\z/
+    assert second =~ ~r/\A\d+_authmk_2\.exs\z/
+
+    Ecto.Migrator.run(Repo, dir, :up, all: true, dynamic_repo: repo, log: false)
+    assert "greeting_logs" in tables()
+  end
+
   test "the generated migration can be rolled back", %{dir: dir, repo: repo} do
     run_task(Base, dir, "initial")
     run_task(Extended, dir, "add_greeting")
