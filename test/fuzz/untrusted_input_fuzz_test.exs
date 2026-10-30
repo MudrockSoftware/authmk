@@ -723,16 +723,18 @@ defmodule Authmk.UntrustedInputFuzzTest do
     {_browser, conn} = post(browser, "/one-tap/nonce")
     nonce = json(conn)["nonce"]
 
+    claim = one_of([string(:printable, max_length: 20), integer(), boolean(), constant(nil)])
+
     segment =
       one_of([
         string(:printable, max_length: 80),
         map(binary(max_length: 80), &Base.url_encode64(&1, padding: false)),
         map(
-          map_of(string(:printable, max_length: 10), term(), max_length: 4),
+          map_of(string(:printable, max_length: 10), claim, max_length: 4),
           fn claims ->
             claims
             |> Map.put("nonce", nonce)
-            |> inspect()
+            |> JSON.encode!()
             |> Base.url_encode64(padding: false)
           end
         ),
