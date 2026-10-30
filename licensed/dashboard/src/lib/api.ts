@@ -17,8 +17,15 @@ export type User = {
 export type Me = {
   user: User;
   app_name: string;
-  can: { ban: boolean; revoke_sessions: boolean; update_users: boolean };
-  features: { organizations: boolean; audit_log: boolean; sso: boolean; scim: boolean; two_factor: boolean };
+  can: { ban: boolean; revoke_sessions: boolean; update_users: boolean; manage_service_accounts: boolean };
+  features: {
+    organizations: boolean;
+    audit_log: boolean;
+    sso: boolean;
+    scim: boolean;
+    two_factor: boolean;
+    service_accounts: boolean;
+  };
 };
 
 export type DayCount = { day: string; count: number };
@@ -30,6 +37,8 @@ export type Overview = {
     two_factor_users: number | null;
     organizations: number | null;
     active_sessions: number;
+    service_accounts: number | null;
+    active_service_accounts: number | null;
   };
   sign_ups: DayCount[];
   sign_ins: DayCount[];
@@ -51,6 +60,7 @@ export type AuditEvent = {
   event: string;
   user_id: string | null;
   actor_id: string | null;
+  actor_type: "user" | "service_account" | null;
   organization_id: string | null;
   ip_address: string | null;
   user_agent: string | null;
@@ -103,6 +113,20 @@ export type OrganizationDetail = {
   invitations: { id: string; email: string; role: string; status: string; expires_at: string }[];
   sso_providers: SSOProvider[];
   scim_connections: SCIMConnection[];
+};
+
+export type ServiceAccount = {
+  id: string;
+  name: string;
+  description: string | null;
+  user_id: string | null;
+  organization_id: string | null;
+  role: string | null;
+  disabled: boolean;
+  expires_at: string | null;
+  last_used_at: string | null;
+  oauth_client: boolean;
+  created_at: string;
 };
 
 export class ApiError extends Error {
@@ -166,6 +190,10 @@ export const api = {
     request<{ organizations: Organization[]; has_more: boolean }>(`organizations${query({ offset })}`),
   organization: (id: string) => request<OrganizationDetail>(`organizations/${encodeURIComponent(id)}`),
   sso: () => request<{ providers: SSOProvider[]; connections: SCIMConnection[] }>("sso"),
+  serviceAccounts: (offset = 0) =>
+    request<{ service_accounts: ServiceAccount[]; has_more: boolean }>(`service-accounts${query({ offset })}`),
+  serviceAccountAction: (id: string, action: "disable" | "enable" | "delete") =>
+    post(`service-accounts/${encodeURIComponent(id)}/${action}`),
   events: (filters: { event?: string; user_id?: string }, offset = 0) =>
     request<{ events: AuditEvent[]; total: number }>(`events${query({ ...filters, offset })}`)
 };

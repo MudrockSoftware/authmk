@@ -15,6 +15,8 @@ defmodule PlugApp.SSOSAMLTest do
       SAMLIdP.response(url,
         issuer: "https://idp.globex.example/saml",
         private_key: File.read!("test/fixtures/saml_idp.key"),
+        # Encrypted for this app's key, as identity providers can send it.
+        encrypt_for: File.read!("test/fixtures/saml_sp.crt"),
         name_id: "grace@globex.example",
         attributes: %{"email" => ["grace@globex.example"], "displayName" => ["Grace Hopper"]}
       )
@@ -31,6 +33,11 @@ defmodule PlugApp.SSOSAMLTest do
     signed_in = get_path(URI.parse(finish).path <> "?" <> URI.parse(finish).query, cookies(start))
     assert get_resp_header(signed_in, "location") == ["/"]
     assert json(get_path("/me", cookies(signed_in)))["email"] == "grace@globex.example"
+
+    # Signing out here signs out at the identity provider too.
+    out = post_json("/auth/sso/saml2/logout", %{callback_url: "/"}, cookies(signed_in))
+    assert "https://idp.globex.example/saml/slo?SAMLRequest=" <> _ = json(out)["url"]
+    assert get_path("/me", cookies(signed_in)).status == 401
   end
 
   test "the provider's admin gets this app's SAML metadata" do

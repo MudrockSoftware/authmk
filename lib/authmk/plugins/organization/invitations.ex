@@ -24,18 +24,13 @@ defmodule Authmk.Plugins.Organization.Invitations do
          :ok <- under_limit(ctx, organization, opts),
          {:ok, invitation} <-
            write(ctx, previous, invitation_attrs(ctx, organization, email, role, opts)) do
-      Background.run(ctx, fn ->
-        opts[:send_invitation_email].(
-          %{
-            id: invitation.id,
-            email: email,
-            role: role,
-            organization: organization,
-            inviter: inviter
-          },
-          ctx
-        )
-      end)
+      Background.plugin_callback(ctx, Config.plugin(ctx), :send_invitation_email, %{
+        id: invitation.id,
+        email: email,
+        role: role,
+        organization: organization,
+        inviter: inviter
+      })
 
       {:ok, Serializer.record(ctx, :invitation, invitation), ctx}
     end

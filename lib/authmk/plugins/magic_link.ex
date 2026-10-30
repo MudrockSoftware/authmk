@@ -120,7 +120,7 @@ defmodule Authmk.Plugins.MagicLink do
         )
 
       link = %{email: email, url: url, token: token}
-      Background.run(ctx, fn -> opts[:send_magic_link].(link, ctx) end)
+      Background.plugin_callback(ctx, __MODULE__, :send_magic_link, link)
       {:ok, %{status: true}, ctx}
     end
   end

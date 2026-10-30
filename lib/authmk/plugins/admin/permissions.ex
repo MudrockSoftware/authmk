@@ -1,8 +1,8 @@
 defmodule Authmk.Plugins.Admin.Permissions do
   @moduledoc """
   The admin plugin's default access control: an `admin` role that may do
-  every admin action except impersonating other admins, and a `user` role
-  that may do none.
+  every admin action (users, sessions, service accounts) except
+  impersonating other admins, and a `user` role that may do none.
 
   To add your own resources and roles, include these statements in yours:
 
@@ -32,7 +32,8 @@ defmodule Authmk.Plugins.Admin.Permissions do
       :impersonate_admins,
       :delete
     ],
-    session: [:list, :revoke]
+    session: [:list, :revoke],
+    service_account: [:list, :update, :delete]
   ]
 
   @doc "The admin actions, as access control statements."
@@ -44,7 +45,8 @@ defmodule Authmk.Plugins.Admin.Permissions do
     roles: [
       admin: [
         user: @statements[:user] -- [:impersonate_admins],
-        session: @statements[:session]
+        session: @statements[:session],
+        service_account: @statements[:service_account]
       ],
       user: []
     ]

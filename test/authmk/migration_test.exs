@@ -167,12 +167,65 @@ defmodule Authmk.MigrationTest do
   end
 
   @tag :sqlite
-  test "SQLite migrations can't change existing columns", %{dir: dir} do
+  test "SQLite rebuilds a table to change a column, keeping rows, references and indexes", %{
+    dir: dir,
+    repo: repo
+  } do
     run_task(Extended, dir, "initial")
+    [initial] = migrate_new!(dir, repo, [])
 
-    assert_raise ArgumentError, ~r/SQLite can't change existing columns/, fn ->
-      run_task(Authmk.MigrationTest.ChangedType, dir, "change", ["--allow-destructive"])
+    now = DateTime.utc_now()
+
+    {1, [%{id: user_id}]} =
+      Repo.insert_all(
+        "users",
+        [
+          %{
+            id: Ecto.UUID.bingenerate(),
+            email: "ada@example.com",
+            name: "Ada",
+            email_verified: true,
+            locale: "fr",
+            inserted_at: now,
+            updated_at: now
+          }
+        ],
+        returning: [:id]
+      )
+
+    Repo.insert_all("sessions", [
+      %{
+        id: Ecto.UUID.bingenerate(),
+        user_id: user_id,
+        token: "hash",
+        expires_at: now,
+        inserted_at: now,
+        updated_at: now
+      }
+    ])
+
+    run_task(Authmk.MigrationTest.ChangedType, dir, "change", ["--allow-destructive"])
+    [_initial, change] = migrate_new!(dir, repo, [initial])
+    assert File.read!(change_file(dir)) =~ "PRAGMA foreign_keys = OFF"
+
+    # The rows, and the session pointing at the user, are still there.
+    assert [["fr"]] = Repo.query!("SELECT locale FROM users").rows
+    assert [[1]] = Repo.query!("SELECT count(*) FROM sessions").rows
+    assert "locale" in columns("users")
+
+    # The unique email index came back, and foreign keys still point at users.
+    assert_raise Exqlite.Error, ~r/UNIQUE/, fn ->
+      Repo.query!(
+        "INSERT INTO users (id, email, name, email_verified, inserted_at, updated_at) SELECT x'00', email, name, 1, inserted_at, updated_at FROM users"
+      )
     end
+
+    Repo.query!("DELETE FROM users")
+    assert [[0]] = Repo.query!("SELECT count(*) FROM sessions").rows
+
+    # And back.
+    Ecto.Migrator.run(Repo, [initial, change], :down, step: 1, dynamic_repo: repo, log: false)
+    assert "locale" in columns("users")
   end
 
   @tag :server_database
@@ -308,6 +361,25 @@ defmodule Authmk.MigrationTest do
     Ecto.Migrator.run(Repo, migrations, :up, all: true, dynamic_repo: repo, log: false)
     migrations
   end
+
+  # Compiles and runs only the migrations not in `done`; returns them all.
+  defp migrate_new!(dir, repo, done) do
+    done_versions = Enum.map(done, &elem(&1, 0))
+
+    migrations =
+      done ++
+        for file <- migration_files(dir),
+            {version, _rest} = file |> Path.basename() |> Integer.parse(),
+            version not in done_versions do
+          [{module, _binary}] = Code.compile_file(file)
+          {version, module}
+        end
+
+    Ecto.Migrator.run(Repo, migrations, :up, all: true, dynamic_repo: repo, log: false)
+    migrations
+  end
+
+  defp change_file(dir), do: dir |> migration_files() |> List.last()
 
   defp tables, do: Database.tables()
 

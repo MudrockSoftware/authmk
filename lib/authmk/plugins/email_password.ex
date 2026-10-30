@@ -203,7 +203,7 @@ defmodule Authmk.Plugins.EmailPassword do
   end
 
   @doc false
-  def reset_password(%Context{params: params, config: config} = ctx) do
+  def reset_password(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
     with :ok <- validate_password(params.new_password, opts),
@@ -211,7 +211,7 @@ defmodule Authmk.Plugins.EmailPassword do
          %{} = user <- Store.get_by(ctx, :user, id: user_id),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
       if opts[:revoke_sessions_on_password_reset], do: Sessions.revoke_all(ctx, user.id)
-      Background.run(ctx, fn -> config.auth.on_password_reset(%{user: user}, ctx) end)
+      Background.callback(ctx, :on_password_reset, %{user: user})
       {:ok, %{status: true}, ctx}
     else
       nil -> {:error, Error.new(:invalid_token)}
@@ -282,7 +282,7 @@ defmodule Authmk.Plugins.EmailPassword do
     config.password_hasher.hash(ctx.params.password)
 
     if opts[:require_email_verification] do
-      Background.run(ctx, fn -> config.auth.on_existing_user_sign_up(%{user: user}, ctx) end)
+      Background.callback(ctx, :on_existing_user_sign_up, %{user: user})
       {:ok, %{status: true}, ctx}
     else
       {:error, Error.new(:user_already_exists)}
@@ -310,16 +310,14 @@ defmodule Authmk.Plugins.EmailPassword do
 
   defp send_reset_link(_ctx, _opts, nil = _unknown_user, _redirect_to), do: :ok
 
-  defp send_reset_link(%Context{config: config} = ctx, opts, user, redirect_to) do
+  defp send_reset_link(ctx, opts, user, redirect_to) do
     data = %{"user_id" => to_string(user.id)}
     expires_in = opts[:reset_password_token_expires_in]
 
     with {:ok, token} <- Verification.create(ctx, @reset_purpose, data, expires_in) do
       url = URL.endpoint(ctx, "/reset-password/#{token}", callback_url: redirect_to)
 
-      Background.run(ctx, fn ->
-        config.auth.send_reset_password(%{user: user, url: url, token: token}, ctx)
-      end)
+      Background.callback(ctx, :send_reset_password, %{user: user, url: url, token: token})
     end
   end
 

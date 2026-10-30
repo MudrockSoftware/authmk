@@ -6,8 +6,8 @@ defmodule Authmk.Plugins.Organization.Config do
 
   alias Authmk.Context
 
-  def opts(%Context{private: %{organization_plugin: plugin}} = ctx),
-    do: Context.plugin_opts(ctx, plugin)
+  def opts(ctx), do: Context.plugin_opts(ctx, plugin(ctx))
 
-  def opts(%Context{endpoint: %{plugin: plugin}} = ctx), do: Context.plugin_opts(ctx, plugin)
+  def plugin(%Context{private: %{organization_plugin: plugin}}), do: plugin
+  def plugin(%Context{endpoint: %{plugin: plugin}}), do: plugin
 end

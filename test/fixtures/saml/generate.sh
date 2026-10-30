@@ -30,3 +30,24 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout sp-rsa.key -out sp-rsa.crt \
 
 # Canonicalization test vectors, from libxml2.
 xmllint --exc-c14n c14n-input.xml > c14n-expected.xml
+
+# Encrypted assertions (for the SP's key): AES-256-GCM, and AES-256-CBC.
+python3 - <<'PY'
+import re
+s = open("response-rsa.xml").read()
+s = re.sub(r"(<saml:Assertion .*?</saml:Assertion>)", r"<saml:EncryptedAssertion>\1</saml:EncryptedAssertion>", s, flags=re.S)
+open("/tmp/authmk-wrapped.xml", "w").write(s)
+PY
+for mode in gcm cbc; do
+  case $mode in
+    gcm) alg="http://www.w3.org/2009/xmlenc11#aes256-gcm" ;;
+    cbc) alg="http://www.w3.org/2001/04/xmlenc#aes256-cbc" ;;
+  esac
+  cat > /tmp/authmk-enc-template.xml <<TPL
+<xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#" Type="http://www.w3.org/2001/04/xmlenc#Element"><xenc:EncryptionMethod Algorithm="$alg"/><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"><ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/></xenc:EncryptionMethod><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedData>
+TPL
+  xmlsec1 --encrypt --pubkey-cert-pem sp-rsa.crt --session-key aes-256 \
+    --xml-data /tmp/authmk-wrapped.xml --node-xpath "//*[local-name()='Assertion']" \
+    --output "response-encrypted-$mode.xml" /tmp/authmk-enc-template.xml
+done
+rm -f /tmp/authmk-wrapped.xml /tmp/authmk-enc-template.xml

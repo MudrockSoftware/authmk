@@ -2,10 +2,13 @@ defmodule Authmk.OAuth.HTTP do
   @moduledoc """
   Outbound HTTP for OAuth: token exchanges, user info and JWKS.
 
-  Redirects are never followed, so a provider response can't point authmk at
-  an internal address (server-side request forgery). Requests time out after
-  10 seconds and aren't retried. `advanced: [http_options: ...]` adds Req
-  options, for example a test stub.
+  Every outbound request authmk makes goes through here (OAuth, OpenID
+  Connect discovery, JWKS, SSO, captchas, Have I Been Pwned...).
+
+  Redirects are never followed, so a response can't point authmk at an
+  internal address (server-side request forgery); `http_options` can't turn
+  that back on. Requests time out after 10 seconds and aren't retried.
+  `advanced: [http_options: ...]` adds Req options, for example a test stub.
   """
 
   alias Authmk.Context
@@ -48,6 +51,7 @@ defmodule Authmk.OAuth.HTTP do
       @defaults
       |> Keyword.merge(config.advanced[:http_options] || [])
       |> Keyword.merge(
+        redirect: false,
         method: :get,
         url: url,
         decode_body: false,
@@ -81,6 +85,7 @@ defmodule Authmk.OAuth.HTTP do
       @defaults
       |> Keyword.merge(config.advanced[:http_options] || [])
       |> Keyword.merge(opts)
+      |> Keyword.put(:redirect, false)
       |> Keyword.update(
         :headers,
         [],

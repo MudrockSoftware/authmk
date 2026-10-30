@@ -241,13 +241,13 @@ defmodule Authmk.Plugins.TwoFactor do
     code = otp_code()
     expires_at = System.system_time(:second) + opts[:otp_expires_in]
 
-    with {:ok, sender} <- otp_sender(opts),
+    with {:ok, _sender} <- otp_sender(opts),
          {:ok, data, ctx} <- challenge_for_otp(ctx, opts),
          %{} = user <- Store.get_by(ctx, :user, id: data["user_id"]),
          otp = Crypto.encrypt(ctx.config, @otp_purpose, code),
          data = Map.merge(data, %{"otp" => otp, "otp_expires_at" => expires_at}),
          {:ok, ctx} <- Challenge.put(ctx, data) do
-      Background.run(ctx, fn -> sender.(%{user: user, otp: code}, ctx) end)
+      Background.plugin_callback(ctx, __MODULE__, :send_otp, %{user: user, otp: code})
       {:ok, %{status: true}, ctx}
     else
       nil -> {:error, Challenge.expired()}

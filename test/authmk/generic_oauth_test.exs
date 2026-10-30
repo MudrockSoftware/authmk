@@ -235,14 +235,17 @@ defmodule Authmk.GenericOAuthTest do
   test "signing out at the provider too", %{browser: browser} do
     stub_idp()
     {browser, _conn, _url} = sign_in(browser)
-    [id_token] = Repo.all(from(a in "accounts", select: a.id_token))
+    # Stored encrypted; sent to the provider as it issued it.
+    [stored] = Repo.all(from(a in "accounts", select: a.id_token))
+    assert "enc:" <> _ = stored
 
     {browser, conn} = post(browser, "/sign-out/social", %{provider: "acme", callback_url: "/bye"})
     %{"url" => url, "redirect" => true} = json(conn)
 
     assert url =~ "https://idp.example.com/logout?"
     query = URI.decode_query(URI.parse(url).query)
-    assert query["id_token_hint"] == id_token
+    assert [_header, _claims, _signature] = String.split(query["id_token_hint"], ".")
+    assert JOSE.JWT.peek_payload(query["id_token_hint"]).fields["sub"] == "u-1"
     assert query["client_id"] == "acme-id"
     assert query["post_logout_redirect_uri"] == "http://localhost:4000/bye"
 

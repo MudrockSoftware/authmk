@@ -96,6 +96,7 @@ defmodule Authmk.Config do
     }
 
     check_storage!(config)
+    check_sessions!(config)
     config
   end
 
@@ -132,6 +133,24 @@ defmodule Authmk.Config do
         raise ArgumentError,
               "sessions kept only in secondary storage can't have integer ids. " <>
                 "Use schema: [session: [primary_key: :uuid_v7]], or session: [store_in_database: true]"
+
+      true ->
+        :ok
+    end
+  end
+
+  defp check_sessions!(config) do
+    session = config.session
+    plugins = Enum.map(config.plugins, &elem(&1, 0))
+
+    cond do
+      session[:stateless] and (session[:store_in_database] or session[:preserve_in_database]) ->
+        raise ArgumentError,
+              "session: [stateless: true] keeps sessions nowhere; drop store_in_database and preserve_in_database"
+
+      session[:cookie_cache][:strategy] == :jwt_jwks and Authmk.Plugins.JWT not in plugins ->
+        raise ArgumentError,
+              "session: [cookie_cache: [strategy: :jwt_jwks]] needs the Authmk.Plugins.JWT plugin"
 
       true ->
         :ok

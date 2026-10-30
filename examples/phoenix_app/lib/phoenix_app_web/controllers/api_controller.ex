@@ -4,7 +4,8 @@ defmodule PhoenixAppWeb.ApiController do
   def mcp(conn, _params), do: json(conn, %{tools: [], user: conn.assigns.current_user.email})
 
   # For apps holding a user's access token with the profile scope.
-  def profile(conn, _params), do: json(conn, %{name: conn.assigns.current_user.name})
+  # A user's token, or a service account's (client credentials): both have a name.
+  def profile(conn, _params), do: json(conn, %{name: conn.assigns.current_principal.name})
 
   # Who called: a signed-in user, or a service account with its API key.
   def whoami(conn, _params) do

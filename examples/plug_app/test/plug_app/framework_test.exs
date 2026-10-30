@@ -107,4 +107,59 @@ defmodule PlugApp.FrameworkTest do
     app = post_json("/auth/one-time-token/verify", %{token: token})
     assert json(app)["user"]["email"] == "ada@example.com"
   end
+
+  test "a service account calls the API with OAuth client credentials" do
+    owner =
+      post_json("/auth/sign-up/email", %{
+        email: "ada@example.com",
+        password: "correct horse battery",
+        name: "Ada"
+      })
+
+    account = post_json("/auth/service-account/create", %{name: "Nightly export"}, cookies(owner))
+
+    client =
+      post_json(
+        "/auth/service-account/create-oauth-client",
+        %{id: json(account)["id"], scope: "profile"},
+        cookies(owner)
+      )
+
+    %{"client_id" => client_id, "client_secret" => secret} = json(client)
+
+    token =
+      Plug.Test.conn(
+        :post,
+        "/auth/oauth2/token",
+        URI.encode_query(grant_type: "client_credentials", scope: "profile")
+      )
+      |> put_req_header("content-type", "application/x-www-form-urlencoded")
+      |> put_req_header("authorization", "Basic " <> Base.encode64("#{client_id}:#{secret}"))
+      |> call()
+
+    profile =
+      Plug.Test.conn(:get, "/api/profile")
+      |> put_req_header("authorization", "Bearer " <> json(token)["access_token"])
+      |> call()
+
+    assert json(profile) == %{"name" => "Nightly export"}
+  end
+
+  test "mix authmk.create_admin makes the first admin" do
+    System.put_env("AUTHMK_ADMIN_PASSWORD", "correct horse battery")
+    on_exit(fn -> System.delete_env("AUTHMK_ADMIN_PASSWORD") end)
+    Mix.shell(Mix.Shell.Process)
+    on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
+
+    Mix.Tasks.Authmk.CreateAdmin.run(["boss@example.com", "--name", "Boss"])
+    assert_received {:mix_shell, :info, ["Created admin boss@example.com."]}
+
+    signed_in =
+      post_json("/auth/sign-in/email", %{
+        email: "boss@example.com",
+        password: "correct horse battery"
+      })
+
+    assert get_path("/admin", cookies(signed_in)).status == 200
+  end
 end

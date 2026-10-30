@@ -27,9 +27,7 @@ defmodule Authmk.EmailVerification do
     data = %{"user_id" => to_string(user.id), "email" => user.email}
 
     with {:ok, token, url} <- create_link(ctx, data, callback_url) do
-      Background.run(ctx, fn ->
-        ctx.config.auth.send_verification_email(%{user: user, url: url, token: token}, ctx)
-      end)
+      Background.callback(ctx, :send_verification_email, %{user: user, url: url, token: token})
     end
   end
 
@@ -48,12 +46,12 @@ defmodule Authmk.EmailVerification do
     data = %{"user_id" => to_string(user.id), "email" => user.email, "new_email" => new_email}
 
     with {:ok, token, url} <- create_link(ctx, data, callback_url) do
-      Background.run(ctx, fn ->
-        ctx.config.auth.send_change_email_verification(
-          %{user: user, new_email: new_email, url: url, token: token},
-          ctx
-        )
-      end)
+      Background.callback(ctx, :send_change_email_verification, %{
+        user: user,
+        new_email: new_email,
+        url: url,
+        token: token
+      })
     end
   end
 

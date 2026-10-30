@@ -55,7 +55,7 @@ defmodule Authmk.Endpoints.EmailVerification do
          {:ok, user} <- fetch_user(ctx, data["user_id"]),
          _ = ctx.config.auth.before_email_verification(user, ctx),
          {:ok, user} <- apply_verification(ctx, user, data) do
-      Background.run(ctx, fn -> ctx.config.auth.after_email_verification(user, ctx) end)
+      Background.callback(ctx, :after_email_verification, user)
       {:ok, user, refresh_signed_in_user(ctx, user)}
     end
   end

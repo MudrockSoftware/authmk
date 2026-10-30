@@ -18,12 +18,18 @@ defmodule Authmk.Plugins.SSO.Options do
             type: {:or, [{:list, :keyword_list}, {:fun, 0}]},
             default: [],
             doc:
-              "`[[private_key: pem, certificate: pem]]`: RSA keys to sign authentication requests with. The first signs; all are published in the metadata, so a new key can be announced before it's used, and an old one kept until providers stop expecting it. A function of no arguments is called at start. Without keys, requests go unsigned."
+              "`[[private_key: pem, certificate: pem]]`: RSA keys to sign authentication requests with, and to decrypt encrypted assertions. The first signs; all are published in the metadata, so a new key can be announced before it's used, and an old one kept until providers stop expecting it. A function of no arguments is called at start. Without keys, requests go unsigned."
           ],
           clock_skew: [
             type: :non_neg_integer,
             default: 120,
             doc: "Seconds of clock difference allowed when checking a response's time limits."
+          ],
+          allow_aes_cbc: [
+            type: :boolean,
+            default: false,
+            doc:
+              "Accept assertions encrypted with AES-CBC, as some identity providers send by default. XML Encryption's CBC mode has known padding-oracle attacks: prefer AES-GCM where the provider offers it."
           ]
         ]
       ],

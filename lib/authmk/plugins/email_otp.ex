@@ -264,7 +264,7 @@ defmodule Authmk.Plugins.EmailOTP do
     otp_opts = [length: opts[:otp_length], expires_in: opts[:expires_in]]
 
     with {:ok, otp} <- OTP.issue(ctx, purpose(type), key || email, otp_opts) do
-      Background.run(ctx, fn -> opts[:send_otp].(%{email: email, otp: otp, type: type}, ctx) end)
+      Background.plugin_callback(ctx, __MODULE__, :send_otp, %{email: email, otp: otp, type: type})
     end
   end
 

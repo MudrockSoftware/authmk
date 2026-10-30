@@ -15,6 +15,8 @@ defmodule PhoenixAppWeb.SSOSAMLTest do
       SAMLIdP.response(url,
         issuer: "https://idp.globex.example/saml",
         private_key: File.read!("test/fixtures/saml_idp.key"),
+        # Encrypted for this app's key, as identity providers can send it.
+        encrypt_for: File.read!("test/fixtures/saml_sp.crt"),
         name_id: "grace@globex.example",
         attributes: %{"email" => ["grace@globex.example"], "displayName" => ["Grace Hopper"]}
       )
@@ -35,6 +37,18 @@ defmodule PhoenixAppWeb.SSOSAMLTest do
            |> json_response(200)
            |> get_in(["user", "email"]) ==
              "grace@globex.example"
+
+    # Signing out here signs out at the identity provider too.
+    out =
+      signed_in
+      |> recycle()
+      |> put_req_header("origin", "http://localhost:4000")
+      |> post("/auth/sso/saml2/logout", %{callback_url: "/"})
+
+    assert "https://idp.globex.example/saml/slo?SAMLRequest=" <> _ =
+             json_response(out, 200)["url"]
+
+    assert out |> recycle() |> get("/auth/get-session") |> json_response(200) == nil
   end
 
   test "the provider's admin gets this app's SAML metadata", %{conn: conn} do

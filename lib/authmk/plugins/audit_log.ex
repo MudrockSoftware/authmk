@@ -68,6 +68,8 @@ defmodule Authmk.Plugins.AuditLog do
           # Without foreign keys: events outlive what they're about.
           user_id: [type: :string, index: true, input: false],
           actor_id: [type: :string, input: false],
+          # "user", or "service_account" for programs (Authmk.Plugins.ServiceAccount).
+          actor_type: [type: :string, input: false],
           organization_id: [type: :string, index: true, input: false],
           ip_address: [type: :string, input: false],
           user_agent: [type: :string, input: false],
@@ -180,10 +182,13 @@ defmodule Authmk.Plugins.AuditLog do
     opts = Context.plugin_opts(ctx, __MODULE__)
 
     if opts[:events] == :all or name in opts[:events] do
+      {actor_type, actor_id} = actor(ctx, details[:actor])
+
       attrs = %{
         event: name,
         user_id: id(details[:user_id]),
-        actor_id: ctx.user && id(ctx.user.id),
+        actor_id: actor_id,
+        actor_type: actor_type,
         organization_id: id(details[:organization_id]),
         ip_address: ctx.conn && Request.client_ip(ctx),
         user_agent: ctx.conn && truncate(Request.user_agent(ctx)),
@@ -200,6 +205,40 @@ defmodule Authmk.Plugins.AuditLog do
     end
 
     :ok
+  end
+
+  # Who did it: the signed-in user, or the service account behind the
+  # request; `details[:actor]` names one from server code.
+  defp actor(%Context{user: user} = ctx, nil) when not is_nil(user), do: actor(ctx, user)
+
+  defp actor(%Context{private: %{principal: principal}} = ctx, nil) when not is_nil(principal),
+    do: actor(ctx, principal)
+
+  defp actor(_ctx, nil), do: {nil, nil}
+
+  defp actor(ctx, %{__struct__: module, id: id}) do
+    type = if module == Store.module(ctx, :user), do: "user", else: "service_account"
+    {type, id(id)}
+  end
+
+  @doc """
+  Records an event from your own code, outside a request to authmk: like
+  what a service account did through your API.
+
+      AuditLog.log(MyApp.Auth, "report.exported",
+        actor: conn.assigns.current_principal,
+        organization_id: org.id,
+        metadata: %{format: "csv"}
+      )
+
+  `opts`: `:actor` (a user or a service account), `:user_id`,
+  `:organization_id`, `:metadata`, and `:conn` for the address and user
+  agent.
+  """
+  @spec log(module(), String.t(), keyword()) :: :ok
+  def log(auth, name, opts \\ []) do
+    ctx = %{Context.new(auth.config()) | conn: opts[:conn]}
+    record(ctx, name, Map.new(opts))
   end
 
   defp deliver(ctx, opts, event) do
@@ -220,7 +259,7 @@ defmodule Authmk.Plugins.AuditLog do
 
     if opts[:retention_days] && is_nil(ETS.get(table, "audit-log-cleanup")) do
       :ok = ETS.put(table, "audit-log-cleanup", "1", @cleanup_every)
-      Background.run(ctx, fn -> delete_expired(ctx, opts[:retention_days]) end)
+      Background.call(ctx, __MODULE__, :delete_expired, [opts[:retention_days]])
     end
 
     :ok
@@ -240,7 +279,9 @@ defmodule Authmk.Plugins.AuditLog do
     end
   end
 
-  defp delete_expired(ctx, days) do
+  @doc false
+  # Background work: see `Authmk.Background`.
+  def delete_expired(ctx, days) do
     cutoff = DateTime.add(DateTime.utc_now(), -days * 86_400)
     Store.delete_all(ctx, :audit_event, dynamic([e], e.inserted_at < ^cutoff))
   end
@@ -314,6 +355,7 @@ defmodule Authmk.Plugins.AuditLog do
       event: event.event,
       user_id: event.user_id,
       actor_id: event.actor_id,
+      actor_type: event.actor_type,
       organization_id: event.organization_id,
       ip_address: event.ip_address,
       user_agent: event.user_agent,

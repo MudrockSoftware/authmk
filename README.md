@@ -272,11 +272,19 @@ Ecto migrations:
 mix authmk.gen.migration              # write a migration for schema changes
 mix authmk.gen.migration --baseline   # record existing tables, write nothing
 mix authmk.gen.migration --check      # fail in CI if a migration is missing
+mix authmk.gen.migration --existing users   # adopt your own users table
 mix ecto.migrate
 ```
 
-Destructive changes such as drops need `--allow-destructive`. Interactive
-rename detection is planned.
+Destructive changes such as drops need `--allow-destructive`. Likely
+renames are asked about, so data is kept. On SQLite, a changed column
+rebuilds its table, keeping rows, indexes and the foreign keys pointing at
+it.
+
+```sh
+mix authmk.create_admin ada@example.com   # password from AUTHMK_ADMIN_PASSWORD
+mix igniter.upgrade authmk                # runs mix authmk.upgrade between versions
+```
 
 ### Databases
 

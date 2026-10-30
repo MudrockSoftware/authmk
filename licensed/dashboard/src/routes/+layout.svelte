@@ -2,6 +2,7 @@
   import "../app.css";
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
+  import Bot from "@lucide/svelte/icons/bot";
   import Building2 from "@lucide/svelte/icons/building-2";
   import KeyRound from "@lucide/svelte/icons/key-round";
   import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
@@ -30,6 +31,7 @@
       { href: "#/users", label: "Users", icon: UsersIcon, show: true },
       { href: "#/organizations", label: "Organizations", icon: Building2, show: me?.features.organizations },
       { href: "#/sso", label: "SSO and SCIM", icon: KeyRound, show: me?.features.sso || me?.features.scim },
+      { href: "#/service-accounts", label: "Service accounts", icon: Bot, show: me?.features.service_accounts },
       { href: "#/events", label: "Audit log", icon: ScrollText, show: me?.features.audit_log }
     ].filter((link) => link.show)
   );

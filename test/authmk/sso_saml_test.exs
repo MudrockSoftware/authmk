@@ -42,6 +42,7 @@ defmodule Authmk.SSOSAMLTest do
              saml: [
                entity_id: "https://idp.acme.example/saml",
                sso_url: "https://idp.acme.example/sso?app=1",
+               slo_url: "https://idp.acme.example/slo",
                certificates: [File.read!("test/fixtures/saml/idp-rsa.crt")]
              ]
            ],
@@ -155,6 +156,23 @@ defmodule Authmk.SSOSAMLTest do
     refused(response, :replayed, query["RelayState"])
   end
 
+  test "an encrypted assertion signs in like a plain one", %{browser: browser} do
+    {browser, _url, query} = start(browser)
+
+    response =
+      SAMLIdP.response(
+        in_response_to: request_id(query),
+        acs_url: @acs,
+        audience: @audience,
+        encrypt_for: File.read!("test/fixtures/saml/sp-rsa.crt")
+      )
+
+    refute Base.decode64!(response) =~ "ada@acme.example"
+    location = post_to_acs(response, query["RelayState"])
+    {browser, "/done"} = follow(browser, location)
+    assert signed_in_email(browser) == "ada@acme.example"
+  end
+
   test "a response only finishes in the browser that asked for it", %{browser: browser} do
     {_attacker, _url, query} = start(Browser.new(Auth))
 
@@ -253,7 +271,9 @@ defmodule Authmk.SSOSAMLTest do
     assert XML.attr(metadata, "entityID") == @audience
     assert conn.resp_body =~ ~s(Location="#{@acs}")
     assert conn.resp_body =~ ~s(AuthnRequestsSigned="true")
-    assert length(Regex.scan(~r/<ds:X509Certificate>/, conn.resp_body)) == 2
+    # Two keys, each for signing and for encryption.
+    assert length(Regex.scan(~r/<ds:X509Certificate>/, conn.resp_body)) == 4
+    assert conn.resp_body =~ ~s(use="encryption")
 
     {_browser, conn} = get(browser, "/sso/saml2/metadata/nope")
     assert conn.status == 404
@@ -345,5 +365,125 @@ defmodule Authmk.SSOSAMLTest do
                  select: %{name: u.name}
                )
              )
+  end
+
+  describe "single logout" do
+    alias Authmk.Plugins.SSO.SAML.{Certificates, Logout, RedirectBinding}
+
+    @slo @base <> "/sso/saml2/slo/okta"
+
+    defp signed_in(name_id) do
+      {browser, _url, query} = start(Browser.new(Auth))
+
+      response =
+        SAMLIdP.response(
+          in_response_to: request_id(query),
+          acs_url: @acs,
+          audience: @audience,
+          name_id: name_id,
+          attributes: %{"email" => [name_id]}
+        )
+
+      {browser, "/done"} = follow(browser, post_to_acs(response, query["RelayState"]))
+      browser
+    end
+
+    # What the identity provider sends: signed with its key, unless told otherwise.
+    defp from_idp(xml, param, relay_state, key_file \\ "idp-rsa.key") do
+      key = if key_file, do: elem(Certificates.private_key(SAMLIdP.fixture(key_file)), 1)
+      url = RedirectBinding.url(@slo, param, xml, relay_state, key)
+      %URI{path: "/auth" <> path, query: query} = URI.parse(url)
+      {path, query}
+    end
+
+    defp get_query(browser, path, query) do
+      conn =
+        Plug.Test.conn(:get, "/auth" <> path <> "?" <> query)
+        |> then(fn conn ->
+          Enum.reduce(browser.cookies, conn, fn {k, v}, c -> Plug.Test.put_req_cookie(c, k, v) end)
+        end)
+
+      Plug.forward(conn, tl(conn.path_info), Auth, Auth.init([]))
+    end
+
+    defp logout_request(name_id) do
+      Logout.request_xml(%{
+        id: "_idp" <> Integer.to_string(System.unique_integer([:positive])),
+        issuer: SAMLIdP.entity_id(),
+        destination: @slo,
+        name_id: name_id,
+        name_id_format: nil,
+        session_index: nil
+      })
+    end
+
+    defp sp_certificate, do: elem(Certificates.parse(SAMLIdP.fixture("sp-rsa.crt")), 1)
+
+    test "the provider signs a user out of every session its sign-in made" do
+      first = signed_in("ada@acme.example")
+      second = signed_in("ada@acme.example")
+      other = signed_in("grace@acme.example")
+
+      {path, query} = from_idp(logout_request("ada@acme.example"), "SAMLRequest", "back-to-idp")
+      conn = get_query(Browser.new(Auth), path, query)
+
+      # A signed LogoutResponse goes back, answering the request.
+      "https://idp.acme.example/slo?" <> answer = redirected_to(conn)
+
+      {:ok, xml, "back-to-idp"} =
+        RedirectBinding.verify(answer, "SAMLResponse", [sp_certificate()])
+
+      assert xml =~ "LogoutResponse"
+      assert xml =~ "status:Success"
+
+      assert signed_in_email(first) == nil
+      assert signed_in_email(second) == nil
+      assert signed_in_email(other) == "grace@acme.example"
+    end
+
+    test "unsigned, or signed by someone else, signs nobody out" do
+      ada = signed_in("ada@acme.example")
+
+      for key <- [nil, "sp-rsa.key"] do
+        {path, query} = from_idp(logout_request("ada@acme.example"), "SAMLRequest", nil, key)
+
+        capture_log(fn ->
+          assert redirected_to(get_query(Browser.new(Auth), path, query)) =~
+                   "error=invalid_saml_logout"
+        end)
+      end
+
+      assert signed_in_email(ada) == "ada@acme.example"
+    end
+
+    test "signing out here signs out at the provider too" do
+      ada = signed_in("ada@acme.example")
+
+      {ada, conn} = post(ada, "/sso/saml2/logout", %{callback_url: "/bye"})
+      %{"redirect" => true, "url" => "https://idp.acme.example/slo?" <> sent} = json(conn)
+      assert signed_in_email(ada) == nil
+
+      {:ok, request, relay_state} =
+        RedirectBinding.verify(sent, "SAMLRequest", [sp_certificate()])
+
+      assert request =~ "<saml:NameID>ada@acme.example</saml:NameID>"
+      [_, request_id] = Regex.run(~r/ ID="([^"]+)"/, request)
+
+      response =
+        Logout.response_xml(%{
+          id: "_idp-response",
+          issuer: SAMLIdP.entity_id(),
+          destination: @slo,
+          in_response_to: request_id
+        })
+
+      {path, query} = from_idp(response, "SAMLResponse", relay_state)
+      assert redirected_to(get_query(ada, path, query)) == "/bye"
+
+      # Once only.
+      capture_log(fn ->
+        assert redirected_to(get_query(ada, path, query)) =~ "error=invalid_saml_logout"
+      end)
+    end
   end
 end

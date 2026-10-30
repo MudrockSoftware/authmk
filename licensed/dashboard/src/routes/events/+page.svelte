@@ -68,7 +68,13 @@
           <td class="text-sm whitespace-nowrap tabular-nums">{formatDateTime(event.created_at)}</td>
           <td><span class="badge {tone(event.event)} badge-soft font-mono text-xs">{event.event}</span></td>
           <td>{#if event.user_id}<a class="link font-mono text-xs" href="#/users/{event.user_id}">{event.user_id.slice(0, 8)}</a>{:else}—{/if}</td>
-          <td>{#if event.actor_id}<a class="link font-mono text-xs" href="#/users/{event.actor_id}">{event.actor_id.slice(0, 8)}</a>{:else}—{/if}</td>
+          <td>
+            {#if event.actor_type === "service_account"}
+              <span class="inline-flex items-center gap-1"><span class="badge badge-secondary badge-soft badge-sm">Service account</span><span class="font-mono text-xs">{event.actor_id?.slice(0, 8)}</span></span>
+            {:else if event.actor_id}
+              <a class="link font-mono text-xs" href="#/users/{event.actor_id}">{event.actor_id.slice(0, 8)}</a>
+            {:else}—{/if}
+          </td>
           <td class="text-xs">{event.ip_address ?? "—"}<div class="text-base-content/60">{event.user_agent ? device(event.user_agent) : ""}</div></td>
         </tr>
       {/each}

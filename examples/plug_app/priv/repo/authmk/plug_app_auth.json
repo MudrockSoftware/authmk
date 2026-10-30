@@ -252,6 +252,12 @@
           "references": null,
           "type": "string"
         },
+        "actor_type": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "event": {
           "default": null,
           "null": false,
@@ -1399,6 +1405,12 @@
           "references": null,
           "type": "string"
         },
+        "oauth_client_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "organization_id": {
           "default": null,
           "null": true,
@@ -1423,6 +1435,10 @@
         }
       },
       "indexes": {
+        "service_accounts_oauth_client_id_index": {
+          "columns": ["oauth_client_id"],
+          "unique": true
+        },
         "service_accounts_organization_id_index": {
           "columns": ["organization_id"],
           "unique": false
@@ -1465,6 +1481,24 @@
           "references": null,
           "type": "string"
         },
+        "saml_name_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "saml_session_index": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "sso_provider_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "token": {
           "default": null,
           "null": false,
@@ -1489,6 +1523,14 @@
         }
       },
       "indexes": {
+        "sessions_saml_name_id_index": {
+          "columns": ["saml_name_id"],
+          "unique": false
+        },
+        "sessions_sso_provider_id_index": {
+          "columns": ["sso_provider_id"],
+          "unique": false
+        },
         "sessions_token_index": {
           "columns": ["token"],
           "unique": true

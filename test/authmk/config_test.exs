@@ -107,6 +107,22 @@ defmodule Authmk.ConfigTest do
 
       assert message =~ "needs Authmk.Test.GreetingPlugin to be enabled"
     end
+
+    test "a JWKS-signed cookie cache without the JWT plugin" do
+      defmodule NoJWTAuth do
+        use Authmk,
+          otp_app: :authmk,
+          repo: Authmk.Test.Repo,
+          plugins: [Authmk.Plugins.EmailPassword],
+          base_url: "http://localhost:4000",
+          session: [cookie_cache: [enabled: true, strategy: :jwt_jwks]]
+      end
+
+      assert {:error, {{%ArgumentError{message: message}, _stack}, _child}} =
+               start_supervised(NoJWTAuth)
+
+      assert message =~ "needs the Authmk.Plugins.JWT plugin"
+    end
   end
 
   test "using a module that isn't started explains how to fix it" do

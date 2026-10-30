@@ -110,7 +110,7 @@ defmodule Authmk.Endpoints.User do
         URL.endpoint(ctx, "/change-email/confirm", token: token, callback_url: callback_url)
 
       link = %{user: user, new_email: new_email, url: url, token: token}
-      Background.run(ctx, fn -> config.auth.send_change_email_confirmation(link, ctx) end)
+      Background.callback(ctx, :send_change_email_confirmation, link)
     end
   end
 
@@ -142,9 +142,11 @@ defmodule Authmk.Endpoints.User do
           callback_url: ctx.params.callback_url
         )
 
-      Background.run(ctx, fn ->
-        config.auth.send_delete_account_verification(%{user: user, url: url, token: token}, ctx)
-      end)
+      Background.callback(ctx, :send_delete_account_verification, %{
+        user: user,
+        url: url,
+        token: token
+      })
 
       {:ok, %{success: true, message: "Verification email sent"}, ctx}
     end

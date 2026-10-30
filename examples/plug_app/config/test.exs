@@ -17,8 +17,17 @@ config :plug_app, :sso_providers, [
     saml: [
       entity_id: "https://idp.globex.example/saml",
       sso_url: "https://idp.globex.example/saml/sso",
+      slo_url: "https://idp.globex.example/saml/slo",
       certificates: [File.read!("test/fixtures/saml_idp.crt")]
     ]
+  ]
+]
+
+# This app's SAML key pair (test-only), to sign requests and decrypt assertions.
+config :plug_app, :saml_signing_keys, [
+  [
+    private_key: File.read!("test/fixtures/saml_sp.key"),
+    certificate: File.read!("test/fixtures/saml_sp.crt")
   ]
 ]
 

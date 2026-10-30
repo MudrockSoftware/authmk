@@ -89,12 +89,27 @@ defmodule Authmk.Sessions do
 
   defp load_from_cookie(%Context{config: config} = ctx, opts) do
     use_cache = Keyword.get(opts, :cache, false) and CookieCache.enabled?(config)
+    stateless = config.session[:stateless]
 
     case Cookies.session_token(ctx) do
       :none -> drop_orphan_cache(ctx)
       :invalid -> Cookies.clear_session(ctx)
+      {:ok, token} when stateless -> load_stateless(ctx, token)
       {:ok, token} when use_cache -> load_cached(ctx, token)
       {:ok, token} -> load_token(ctx, token)
+    end
+  end
+
+  # Stateless sessions live in the cache cookie alone: no fallback to a store.
+  defp load_stateless(ctx, token) do
+    case CookieCache.read(ctx, token) do
+      {:ok, session, user} ->
+        %{ctx | session: session, user: user}
+        |> maybe_refresh(token)
+        |> refresh_cache()
+
+      :miss ->
+        Cookies.clear_session(ctx)
     end
   end
 

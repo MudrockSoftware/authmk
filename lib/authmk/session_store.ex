@@ -8,6 +8,10 @@ defmodule Authmk.SessionStore do
     * Secondary storage with `session: [store_in_database: true]`: both.
       Lookups try secondary storage first, then the database.
 
+  With `session: [stateless: true]`, nothing is stored: the session lives
+  in the cache cookie alone (see `Authmk.CookieCache`). There's nothing to
+  list or to revoke on the server, beyond changing the cache's `version`.
+
   With `session: [preserve_in_database: true]`, revoking keeps the database
   row and marks it ended (`expires_at` set to now) instead of deleting it.
 
@@ -27,6 +31,13 @@ defmodule Authmk.SessionStore do
     case mode(ctx) do
       :database ->
         Store.insert(ctx, :session, attrs)
+
+      :stateless ->
+        with {:ok, attrs} <- Hooks.before_write(:before_create, :session, attrs, ctx),
+             {:ok, session} <- build(ctx, attrs) do
+          Hooks.after_write(:after_create, :session, session, ctx)
+          {:ok, session}
+        end
 
       :secondary ->
         with {:ok, attrs} <- Hooks.before_write(:before_create, :session, attrs, ctx),
@@ -48,6 +59,7 @@ defmodule Authmk.SessionStore do
   @spec fetch(Context.t(), String.t()) :: struct() | nil
   def fetch(ctx, token_hash) do
     case mode(ctx) do
+      :stateless -> nil
       :database -> fetch_from_database(ctx, token_hash)
       :secondary -> fetch_cached(ctx, token_hash)
       :both -> fetch_cached(ctx, token_hash) || fetch_from_database(ctx, token_hash)
@@ -59,12 +71,13 @@ defmodule Authmk.SessionStore do
   def update(ctx, session, attrs) do
     result =
       case mode(ctx) do
+        :stateless -> {:ok, Ecto.Changeset.apply_changes(Ecto.Changeset.change(session, attrs))}
         :secondary -> update_cached(ctx, session, attrs)
         _database -> Store.update(ctx, :session, session, attrs)
       end
 
     with {:ok, updated} <- result do
-      if mode(ctx) != :database, do: cache(ctx, updated, session.user)
+      if mode(ctx) in [:secondary, :both], do: cache(ctx, updated, session.user)
       {:ok, updated}
     end
   end
@@ -73,6 +86,9 @@ defmodule Authmk.SessionStore do
   @spec list(Context.t(), term()) :: [struct()]
   def list(ctx, user_id) do
     case mode(ctx) do
+      :stateless ->
+        []
+
       :database ->
         list_from_database(ctx, user_id)
 
@@ -116,13 +132,13 @@ defmodule Authmk.SessionStore do
     Hooks.sessions_ended(ctx, user_id, ending)
   end
 
-  defp end_cached(_ctx, :database, _user_id, _cached?), do: :ok
+  defp end_cached(_ctx, mode, _user_id, _cached?) when mode in [:database, :stateless], do: :ok
 
   defp end_cached(ctx, _mode, user_id, cached?) do
     ctx |> list(user_id) |> Enum.filter(cached?) |> Enum.each(&uncache(ctx, &1))
   end
 
-  defp end_stored(_ctx, :secondary, _user_id, _database), do: :ok
+  defp end_stored(_ctx, mode, _user_id, _database) when mode in [:secondary, :stateless], do: :ok
 
   defp end_stored(ctx, _mode, user_id, database) do
     _count = end_in_database(ctx, dynamic([s], s.user_id == ^user_id and ^database))
@@ -132,7 +148,7 @@ defmodule Authmk.SessionStore do
   @doc "Rewrites the user in every cached session, after the user changed."
   @spec refresh_user(Context.t(), struct()) :: :ok
   def refresh_user(ctx, user) do
-    if mode(ctx) != :database do
+    if mode(ctx) in [:secondary, :both] do
       Enum.each(list(ctx, user.id), &cache(ctx, &1, user))
     end
 
@@ -142,7 +158,7 @@ defmodule Authmk.SessionStore do
   @doc "Drops every cached session of a deleted user."
   @spec forget_user(Context.t(), term()) :: :ok
   def forget_user(ctx, user_id) do
-    if mode(ctx) != :database do
+    if mode(ctx) in [:secondary, :both] do
       ctx |> cached_hashes(user_id) |> Enum.each(&Storage.delete(ctx.config, session_key(&1)))
       Storage.delete(ctx.config, list_key(user_id))
     end
@@ -152,6 +168,7 @@ defmodule Authmk.SessionStore do
 
   defp mode(%Context{config: config}) do
     cond do
+      config.session[:stateless] -> :stateless
       not Storage.configured?(config) -> :database
       config.session[:store_in_database] -> :both
       true -> :secondary

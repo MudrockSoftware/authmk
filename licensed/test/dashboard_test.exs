@@ -18,7 +18,9 @@ defmodule Authmk.DashboardTest do
         Authmk.Plugins.Organization,
         Authmk.Plugins.AuditLog,
         Authmk.Plugins.SSO,
-        Authmk.Plugins.SCIM
+        Authmk.Plugins.SCIM,
+        Authmk.Plugins.APIKey,
+        Authmk.Plugins.ServiceAccount
       ]
   end
 
@@ -75,7 +77,15 @@ defmodule Authmk.DashboardTest do
 
     me = JSON.decode!(api(:get, "me", admin).resp_body)
     assert me["user"]["email"] == "admin@example.com"
-    assert me["can"] == %{"ban" => true, "revoke_sessions" => true, "update_users" => true}
+
+    assert me["can"] == %{
+             "ban" => true,
+             "revoke_sessions" => true,
+             "update_users" => true,
+             "manage_service_accounts" => true
+           }
+
+    assert me["features"]["service_accounts"]
     assert me["features"]["organizations"] and me["features"]["audit_log"]
   end
 
@@ -156,5 +166,33 @@ defmodule Authmk.DashboardTest do
     events = JSON.decode!(api(:get, "events?event=member.added", admin).resp_body)
     assert [%{"event" => "member.added"}] = events["events"]
     assert events["total"] == 1
+  end
+
+  test "service accounts: counted apart from users, listed, disabled, deleted", %{admin: admin} do
+    {:ok, account} =
+      Store.insert(Context.new(Auth.config()), :service_account, %{
+        name: "Nightly export",
+        user_id: admin.id,
+        last_used_at: DateTime.utc_now()
+      })
+
+    totals = JSON.decode!(api(:get, "overview", admin).resp_body)["totals"]
+    assert totals["users"] == 1
+    assert totals["service_accounts"] == 1
+    assert totals["active_service_accounts"] == 1
+
+    %{"service_accounts" => [listed]} =
+      JSON.decode!(api(:get, "service-accounts", admin).resp_body)
+
+    assert %{"name" => "Nightly export", "disabled" => false, "oauth_client" => false} = listed
+
+    path = "service-accounts/#{account.id}"
+    assert api(:post, path <> "/disable", admin).status == 403
+    assert api(:post, path <> "/disable", admin, from_dashboard()).status == 200
+    assert Store.get_by(Context.new(Auth.config()), :service_account, id: account.id).disabled
+
+    assert api(:post, path <> "/delete", admin, from_dashboard()).status == 200
+    assert Store.get_by(Context.new(Auth.config()), :service_account, id: account.id) == nil
+    assert api(:post, path <> "/enable", admin, from_dashboard()).status == 404
   end
 end

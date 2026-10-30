@@ -7,7 +7,7 @@ defmodule Authmk.Migration do
   difference and writes the new snapshot. Commit both files.
   """
 
-  alias Authmk.Migration.{Diff, Renames, Render, Snapshot}
+  alias Authmk.Migration.{Diff, Renames, Render, Snapshot, SQLiteRebuild}
 
   @doc "The adapter of a repo: `:sqlite`, `:postgres` or `:mysql`."
   @spec adapter(module()) :: :sqlite | :postgres | :mysql
@@ -38,7 +38,18 @@ defmodule Authmk.Migration do
     up = Renames.ops(renames) ++ Diff.diff(renamed, current)
     down = Diff.diff(current, renamed) ++ Renames.ops(Renames.reverse(renames))
 
-    Render.migration(module_name, up, down, adapter(repo))
+    case adapter(repo) do
+      :sqlite ->
+        Render.migration(
+          module_name,
+          SQLiteRebuild.apply(up, renamed, current),
+          SQLiteRebuild.apply(down, current, renamed),
+          :sqlite
+        )
+
+      adapter ->
+        Render.migration(module_name, up, down, adapter)
+    end
   end
 
   @doc """

@@ -114,7 +114,7 @@ defmodule Authmk.Endpoints.Social do
          {:ok, account} <- refresh_if_expired(ctx, account),
          tokens = %Tokens{
            access_token: Accounts.read_token(ctx, account.access_token),
-           id_token: account.id_token
+           id_token: Accounts.read_token(ctx, account.id_token)
          },
          {:ok, profile} <- fetch_profile(ctx, provider, tokens),
          {:ok, info} <- map_profile(ctx, provider, profile, tokens) do
@@ -169,7 +169,7 @@ defmodule Authmk.Endpoints.Social do
 
     {:ok,
      URL.append_query(provider.end_session_url,
-       id_token_hint: account && account.id_token,
+       id_token_hint: account && Accounts.read_token(ctx, account.id_token),
        client_id: provider.client_id,
        post_logout_redirect_uri: callback_url && absolute(ctx, callback_url)
      )}
@@ -451,7 +451,7 @@ defmodule Authmk.Endpoints.Social do
       access_token: Accounts.read_token(ctx, account.access_token),
       access_token_expires_at: account.access_token_expires_at,
       scopes: if(account.scope, do: String.split(account.scope, ","), else: []),
-      id_token: account.id_token
+      id_token: Accounts.read_token(ctx, account.id_token)
     }
   end
 end

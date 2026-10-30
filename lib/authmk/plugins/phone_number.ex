@@ -192,7 +192,7 @@ defmodule Authmk.Plugins.PhoneNumber do
 
     with {:ok, code} <- OTP.issue(ctx, purpose, number, otp_opts) do
       message = %{phone_number: number, code: code, purpose: kind}
-      Background.run(ctx, fn -> opts[:send_otp].(message, ctx) end)
+      Background.plugin_callback(ctx, __MODULE__, :send_otp, message)
       {:ok, %{status: true}, ctx}
     end
   end

@@ -17,10 +17,13 @@ defmodule Authmk.Plug.RequireAccessToken do
   behind a proxy that changes the scheme or host (`fn conn -> url end`).
 
   With a valid token, the conn gets `:access_token` (what
-  `Authmk.Plugins.OAuthProvider.verify_access_token/3` returns) and
-  `:current_user` (or `nil` for client credentials tokens). Otherwise it
-  halts with 401 (no or bad token) or 403 (missing scope), and a
-  `WWW-Authenticate` header saying why (RFC 6750).
+  `Authmk.Plugins.OAuthProvider.verify_access_token/3` returns),
+  `:current_user` (`nil` for client credentials tokens) and
+  `:current_principal`: the user, or the service account whose OAuth client
+  got the token (`Authmk.Plugins.ServiceAccount`), which must be enabled,
+  unexpired and used from an allowed address. Otherwise it halts with 401
+  (no or bad token) or 403 (missing scope), and a `WWW-Authenticate` header
+  saying why (RFC 6750).
   """
 
   @behaviour Plug
@@ -28,7 +31,7 @@ defmodule Authmk.Plug.RequireAccessToken do
   import Plug.Conn
 
   alias Authmk.Context
-  alias Authmk.Plugins.OAuthProvider
+  alias Authmk.Plugins.{OAuthProvider, ServiceAccount}
   alias Authmk.Plugins.OAuthProvider.DPoP
 
   @impl true
@@ -44,10 +47,14 @@ defmodule Authmk.Plug.RequireAccessToken do
     with {:ok, scheme, token} <- access_token(conn),
          {:ok, jkt} <- dpop(conn, auth, scheme, token, opts),
          verify_opts = [dpop_jkt: jkt] ++ Keyword.take(opts, [:scopes, :resource]),
-         {:ok, access} <- OAuthProvider.verify_access_token(auth, token, verify_opts) do
+         {:ok, access} <- OAuthProvider.verify_access_token(auth, token, verify_opts),
+         {:ok, principal} <- principal(conn, auth, access) do
+      user = if access.user_id, do: principal
+
       conn
       |> assign(:access_token, access)
-      |> assign(:current_user, user(auth, access.user_id))
+      |> assign(:current_user, user)
+      |> assign(:current_principal, principal)
     else
       :missing -> refuse(conn, 401, nil, opts)
       :invalid_proof -> refuse(conn, 401, "invalid_token", opts)
@@ -75,10 +82,21 @@ defmodule Authmk.Plug.RequireAccessToken do
     end
   end
 
-  defp user(_auth, nil), do: nil
+  defp principal(_conn, auth, %{user_id: user_id}) when not is_nil(user_id),
+    do: {:ok, Authmk.Store.get_by(Context.new(auth.config()), :user, id: user_id)}
 
-  defp user(auth, user_id),
-    do: Authmk.Store.get_by(Context.new(auth.config()), :user, id: user_id)
+  # A client credentials token: maybe a service account's.
+  defp principal(conn, auth, %{client_id: client_id}) do
+    if ServiceAccount in Enum.map(auth.config().plugins, &elem(&1, 0)) do
+      case ServiceAccount.for_oauth_client(auth, client_id, conn) do
+        nil -> {:ok, nil}
+        {:ok, service_account} -> {:ok, service_account}
+        {:error, _unusable} -> {:error, :unusable}
+      end
+    else
+      {:ok, nil}
+    end
+  end
 
   defp refuse(conn, status, error, opts) do
     challenge =

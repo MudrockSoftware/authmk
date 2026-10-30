@@ -30,6 +30,7 @@ defmodule Authmk.SocialTest.StrictAuth do
     ],
     account: [
       encrypt_oauth_tokens: true,
+      update_account_on_sign_in: false,
       store_state: :database,
       account_linking: [trusted_providers: [:github]]
     ],
@@ -41,7 +42,7 @@ defmodule Authmk.SocialTest do
 
   import Ecto.Query
 
-  alias Authmk.Test.{FakeProvider, Repo}
+  alias Authmk.Test.{Browser, FakeProvider, Repo}
 
   @moduletag auth: Authmk.SocialTest.Auth
 
@@ -265,6 +266,30 @@ defmodule Authmk.SocialTest do
       assert "refreshed-" <> _ = json(conn)["access_token"]
     end
 
+    test "each sign-in stores the provider's latest tokens", %{browser: browser} do
+      FakeProvider.stub(Authmk.SocialTest.Provider,
+        profile: @profile,
+        emails: @emails,
+        access_token: "first"
+      )
+
+      {_browser, _conn} = sign_in_with_github(browser)
+
+      FakeProvider.stub(Authmk.SocialTest.Provider,
+        profile: @profile,
+        emails: @emails,
+        access_token: "second"
+      )
+
+      {again, conn} = sign_in_with_github(Browser.new(Authmk.SocialTest.Auth))
+      assert redirected_to(conn) == "/dashboard"
+
+      assert Repo.aggregate(from(a in "accounts", where: a.provider_id == "github"), :count) == 1
+
+      {_again, conn} = post(again, "/get-access-token", %{provider_id: "github"})
+      assert json(conn)["access_token"] == "second"
+    end
+
     test "account-info returns the provider's profile", %{browser: browser} do
       {browser, _conn} = sign_in_with_github(browser)
       {browser, conn} = get(browser, "/list-accounts")
@@ -296,13 +321,25 @@ defmodule Authmk.SocialTest do
 
       {browser, url} = start_github(browser)
       assert Repo.aggregate("verifications", :count) == 1
-      {_browser, conn} = get(browser, "/callback/github", FakeProvider.approve(url))
+      {browser, conn} = get(browser, "/callback/github", FakeProvider.approve(url))
       assert redirected_to(conn) == "/dashboard"
 
       [token] =
         Repo.all(from(a in "accounts", where: a.provider_id == "github", select: a.access_token))
 
       assert "enc:" <> _ = token
+      refute token =~ "gho_"
+
+      # Read back in the clear; and with update_account_on_sign_in: false,
+      # signing in again keeps the stored tokens.
+      {browser, conn} = post(browser, "/get-access-token", %{provider_id: "github"})
+      first = json(conn)["access_token"] || flunk(inspect(json(conn)))
+      refute first =~ "enc:"
+
+      {browser, url} = start_github(browser)
+      {_browser, _conn} = get(browser, "/callback/github", FakeProvider.approve(url))
+      {_browser, conn} = post(browser, "/get-access-token", %{provider_id: "github"})
+      assert json(conn)["access_token"] == first
     end
   end
 

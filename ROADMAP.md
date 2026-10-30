@@ -21,7 +21,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] `on_api_error/2` callback, crash handling (`errors: [rescue: ...]`) and an `/error` page for redirect flows
 - [x] Logger integration: every message carries `domain: [:authmk]` for standard Logger filters
 - [x] Background tasks: run non-critical work (emails) on a `Task.Supervisor`, or inline
-- [ ] Oban adapter for background tasks
+- [x] Oban adapter for background tasks
 
 ### Plugin system
 - [x] `Authmk.Plugin` behaviour: `init/1`, `schema/1`, `endpoints/1`, `trusted_origins/1`, `depends_on/0`
@@ -65,12 +65,12 @@ Legend: `[ ]` planned, `[x]` done
 - [x] `mix authmk.gen.migration --check` for CI
 - [x] Destructive changes need `--allow-destructive`
 - [x] Interactive rename detection for tables and columns; indexes renamed in place
-- [ ] Table rebuild for SQLite when a column changes (today the generator refuses with a clear message)
+- [x] Table rebuild for SQLite when a column changes (foreign keys off on one connection, in a transaction, checked after)
 - [x] Run migrations from code (for releases): standard Ecto release migrator, documented in the deployment guide
 - [x] `mix authmk.gen.secret`
-- [ ] `mix authmk.create_admin`
+- [x] `mix authmk.create_admin`
 - [x] `mix authmk.info`: versions, enabled plugins, resolved schema and config problems
-- [ ] `mix authmk.upgrade`: guided upgrades between authmk versions
+- [x] `mix authmk.upgrade`: guided upgrades between authmk versions
 
 ### Secondary storage
 - [x] `Authmk.Storage` behaviour: get, get-and-delete, put with TTL, delete, atomic increment
@@ -121,10 +121,10 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Get, list and sign out sessions; sign out other sessions; sign out all sessions
 - [x] Update session (custom session fields)
 - [x] Cookie cache to skip database lookups on reads, as signed or encrypted cookies, bound to the session token
-- [ ] Cookie cache as JWT cookies
-- [ ] Cookie-cache JWTs signed with keys from a JWKS endpoint
+- [x] Cookie cache as JWT cookies
+- [x] Cookie-cache JWTs signed with keys from a JWKS endpoint
 - [x] Sessions in secondary storage, optionally also kept in the database, with revoked rows optionally preserved
-- [ ] Stateless sessions (no database), with cache refresh and versioning for revocation
+- [x] Stateless sessions (no database), with cache refresh and versioning for revocation
 - [x] Custom session response (`customize_session/2`)
 
 ### Users and accounts
@@ -133,8 +133,8 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Change email: also confirm from the current address
 - [x] Delete a user, with a password or a fresh session, optional email confirmation, and database hooks before and after
 - [x] List linked accounts
-- [ ] Encrypt OAuth tokens stored in the database
-- [ ] Update account data on each sign-in
+- [x] Encrypt OAuth tokens stored in the database (on by default)
+- [x] Update account data on each sign-in
 
 ### Cookies
 - [x] Cookie prefix
@@ -150,11 +150,11 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Trusted origins: fixed list
 - [x] Trusted origins: wildcards, custom schemes (for mobile apps), dynamic list per request
 - [x] Redirect targets limited to relative paths and trusted origins (open-redirect protection, fuzz tested)
-- [ ] OAuth state and PKCE on every OAuth flow
+- [x] OAuth state and PKCE on every OAuth flow (PKCE wherever the provider takes it; tested across all built-in providers)
 - [x] Protection against revealing which emails are registered, across all current endpoints
 - [x] Trusted proxy headers and configurable IP address headers
 - [x] Option to turn off IP tracking
-- [ ] Outbound HTTP requests don't follow redirects (protects against server-side request forgery)
+- [x] Outbound HTTP requests don't follow redirects (protects against server-side request forgery)
 - [x] Security policy and vulnerability reporting process (`SECURITY.md`)
 
 ### Rate limiting
@@ -342,14 +342,14 @@ Legend: `[ ]` planned, `[x]` done
 ### Service accounts
 - [x] `service_account` model: a non-human identity owned by a user or an organization, with no email, no password and no interactive sign-in
 - [x] Authenticates with API keys
-- [ ] Authenticates with the client credentials grant, when the OAuth provider plugin is enabled
+- [x] Authenticates with the client credentials grant, when the OAuth provider plugin is enabled
 - [x] Roles and permissions through the shared access-control system, including organization roles
 - [x] Create, list, update, disable and delete; rotate credentials without downtime (overlapping keys)
 - [x] Optional expiry and IP allow-list
 - [x] Unified principal: plugs assign `current_principal` (a user or a service account), alongside `current_user`
-- [ ] Service accounts appear as the actor in audit logs and are counted separately in admin analytics
+- [x] Service accounts appear as the actor in audit logs and are counted separately in admin analytics
 - [x] Organization endpoints to manage them
-- [ ] Admin endpoints and UI to manage them
+- [x] Admin endpoints and UI to manage them
 
 ---
 
@@ -361,7 +361,7 @@ Legend: `[ ]` planned, `[x]` done
 - [x] **One-time tokens**: generate and verify single-use tokens (for cross-domain hand-off)
 - [x] **Device authorization** (RFC 8628): device code, user code, polling, approve and deny, client validation, custom code generation, binding to a user in advance, choice of token type
 - [x] **Captcha**: Cloudflare Turnstile, Google reCAPTCHA (v2 and v3 with score threshold), hCaptcha, CaptchaFox; per-endpoint
-- [ ] **Captcha**: Vercel BotID
+- [ ] **Captcha**: Vercel BotID (blocked: BotID is verified only by Vercel's JavaScript SDK on Vercel; there's no API an Elixir server can call)
 - [x] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
 - [x] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
 - [x] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
@@ -411,8 +411,8 @@ Legend: `[ ]` planned, `[x]` done
 - [x] Signed SAML authentication requests; rotating signing certificates
 - [x] SAML attribute mapping
 - [x] SAML protections: request/response matching, replay protection, timestamp checks, algorithm allow-list, size limits
-- [ ] SAML encrypted assertions
-- [ ] SAML single logout
+- [x] SAML encrypted assertions
+- [x] SAML single logout
 - [x] Default SSO provider; shared redirect URI
 - [x] Domain verification (DNS TXT record)
 - [x] User and organization provisioning on sign-in

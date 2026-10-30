@@ -390,6 +390,60 @@ defmodule Authmk.Plugins.Admin do
   end
 
   @doc """
+  Creates an admin, or makes an existing user one: for `mix
+  authmk.create_admin` and your own setup code.
+
+  `attrs`: `:email` (required), `:name`, `:password` (optional, 8 to 128
+  characters; without one, the admin sets it with a password reset). The
+  user gets the first of `admin_roles`, alongside any roles they have. New
+  admins' emails count as verified. An existing user keeps their password.
+
+  Returns `{:ok, user, :created | :promoted | :unchanged}`.
+  """
+  @spec create_admin(module(), map() | keyword()) ::
+          {:ok, struct(), :created | :promoted | :unchanged} | {:error, Error.t()}
+  def create_admin(auth, attrs) do
+    attrs = Map.new(attrs)
+    config = auth.config()
+
+    if __MODULE__ not in Enum.map(config.plugins, &elem(&1, 0)),
+      do: raise(ArgumentError, "#{inspect(auth)} doesn't use Authmk.Plugins.Admin")
+
+    ctx = Context.new(config)
+    opts = Context.plugin_opts(ctx, __MODULE__)
+
+    role = hd(opts[:admin_roles])
+    email = Email.normalize(attrs[:email] || "")
+
+    with :ok <- check(Email.valid?(email), Error.new(:invalid_email)),
+         :ok <- valid_password(attrs[:password]) do
+      case Store.get_by(ctx, :user, email: email) do
+        nil -> create_new_admin(ctx, email, attrs, role)
+        user -> promote(ctx, user, role)
+      end
+    end
+  end
+
+  defp create_new_admin(ctx, email, attrs, role) do
+    name = attrs[:name] || email |> String.split("@") |> hd()
+    user = %{email: email, name: name, role: role, email_verified: true}
+
+    with {:ok, user} <- create_with_password(ctx, user, attrs[:password]),
+         do: {:ok, user, :created}
+  end
+
+  defp promote(ctx, user, role) do
+    roles = AccessControl.parse_roles(user.role)
+
+    if role in roles do
+      {:ok, user, :unchanged}
+    else
+      with {:ok, user} <- Store.update(ctx, :user, user, %{role: Enum.join(roles ++ [role], ",")}),
+           do: {:ok, user, :promoted}
+    end
+  end
+
+  @doc """
   Whether `user` may do `permissions` (`%{user: [:ban]}`): by being in
   `admin_user_ids`, or by role. For your own server-side checks.
   """

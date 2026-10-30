@@ -5,12 +5,12 @@
   <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
   <saml:Assertion ID="_assertion1" Version="2.0" IssueInstant="2026-01-01T10:00:00Z">
     <saml:Issuer>https://idp.acme.example/saml</saml:Issuer>
-    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"><ec:InclusiveNamespaces xmlns:ec="http://www.w3.org/2001/10/xml-exc-c14n#" PrefixList="xs"/></ds:CanonicalizationMethod><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_assertion1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"><ec:InclusiveNamespaces xmlns:ec="http://www.w3.org/2001/10/xml-exc-c14n#" PrefixList="xs"/></ds:Transform></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>iD1x/q/zDcx0dFM1ToiWDi7WFzVvWmmRGSpNVpJnojU=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>fDnY/8grIvxMhWuaUPUgadOm/eeiW7A2pFcRow1ynoAsiUiO6uwOOdGCFRcVyURT
-DGQwbj1DmHGDNbXHvCPUAbAEYWmceob/bQvC66ZC5Gs3ysl5EOGbsXdif6k8zr/c
-bI7Xo5Fi1NTumkWqIquGt4wUcf5gnebhyvPonKzsyuJ7p/IOx7GmL43+Iz3ucMhK
-8ranTXP9GExBelO7xE6QK0Y1idQXRZBOu2W38ZJ/4TTaGVFbtVZawd+Nrhjv0YEd
-SZ3/Hls4zqcTMbI9GJDwMyM/DWg90ohPrASt4l6m6aEhXsohfVPL9bXPv8tN4dnD
-Ll/iMMXC1efpltEJal1UVg==</ds:SignatureValue></ds:Signature>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"><ec:InclusiveNamespaces xmlns:ec="http://www.w3.org/2001/10/xml-exc-c14n#" PrefixList="xs"/></ds:CanonicalizationMethod><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_assertion1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"><ec:InclusiveNamespaces xmlns:ec="http://www.w3.org/2001/10/xml-exc-c14n#" PrefixList="xs"/></ds:Transform></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>iD1x/q/zDcx0dFM1ToiWDi7WFzVvWmmRGSpNVpJnojU=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>kMtkyYr/ZkxGudjQAmy0OfPVWUdgdIIRaco5sCv0g5Z64LJxsoC7fCevG+JoDqnR
+gnUzmz3sjVOLihhk+rhg9cdFQSozRv/P+YOiw2KSHk9uc5IJJEI0EqO8gL0kdQMz
+W+7ys6QEEQCa7VyO6xPoYLvlB1U9qvCr24Dl6ASobytIJh7UQxpbKAiQge01g8pp
+nk5HB/rKZUD9XeXbwBTiH+i9s4KH5G+19XIxYR9idiRV5UGWFeOf42LQkr8Hi+Or
+k/gdu3+6Uz4jmBo+OJXfJaq4nvBVsNhUFD9P5NU5fIdLIejFvsZTK3sYet/4uqRH
+gPFFxsGEpd9dQPE/wuhA/A==</ds:SignatureValue></ds:Signature>
     <saml:Subject>
       <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">ada@acme.example</saml:NameID>
       <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">

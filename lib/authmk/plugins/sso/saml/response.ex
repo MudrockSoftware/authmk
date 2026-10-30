@@ -4,7 +4,8 @@ defmodule Authmk.Plugins.SSO.SAML.Response do
   # and returns who it vouches for. Everything below must hold:
   #
   #   * it's under the size limit, and safe XML (Authmk.Plugins.SSO.SAML.XML);
-  #   * a Response with one Assertion (encrypted ones aren't supported);
+  #   * a Response with one Assertion, or one EncryptedAssertion that our
+  #     keys decrypt (Authmk.Plugins.SSO.SAML.Decrypt);
   #   * the Assertion is signed, or the Response around it, with the
   #     provider's certificate, and any signature present is valid;
   #   * status Success; issuer, audience, destination and recipient are ours;
@@ -13,7 +14,7 @@ defmodule Authmk.Plugins.SSO.SAML.Response do
   #
   # Values are read only from the elements that were checked.
 
-  alias Authmk.Plugins.SSO.SAML.{Signature, XML}
+  alias Authmk.Plugins.SSO.SAML.{Decrypt, Signature, XML}
 
   @protocol "urn:oasis:names:tc:SAML:2.0:protocol"
   @assertion "urn:oasis:names:tc:SAML:2.0:assertion"
@@ -25,7 +26,8 @@ defmodule Authmk.Plugins.SSO.SAML.Response do
   @doc """
   `{:ok, identity}` or `{:error, reason}`. `expected`: `:issuer`,
   `:certificates`, `:audience`, `:recipient` (the ACS URL), `:now`,
-  `:clock_skew`.
+  `:clock_skew`; for encrypted assertions, `:decryption_keys` (the service
+  provider's) and `:allow_aes_cbc`.
   """
   def validate(encoded, expected) when is_binary(encoded) and byte_size(encoded) <= @max_size do
     with {:ok, xml} <- decode(encoded),
@@ -35,7 +37,7 @@ defmodule Authmk.Plugins.SSO.SAML.Response do
          :ok <- destination(response, expected),
          :ok <- status(response),
          :ok <- issuer(response, expected, false),
-         {:ok, assertion} <- assertion(response),
+         {:ok, assertion} <- assertion(response, expected),
          :ok <- signatures(response, assertion, expected),
          :ok <- issuer(assertion, expected, true),
          {:ok, expires_at} <- conditions(assertion, expected),
@@ -90,23 +92,38 @@ defmodule Authmk.Plugins.SSO.SAML.Response do
     end
   end
 
-  defp assertion(response) do
-    cond do
-      XML.children(response, @assertion, "EncryptedAssertion") != [] ->
+  defp assertion(response, expected) do
+    encrypted = XML.children(response, @assertion, "EncryptedAssertion")
+    plain = XML.children(response, @assertion, "Assertion")
+
+    case {encrypted, plain} do
+      {[encrypted], []} -> decrypted(encrypted, expected)
+      {[], [assertion]} -> checked(assertion)
+      {[], []} -> {:error, :no_assertion}
+      _several -> {:error, :no_assertion}
+    end
+  end
+
+  defp decrypted(encrypted, expected) do
+    case Map.get(expected, :decryption_keys, []) do
+      [] ->
         {:error, :encrypted_assertion}
 
-      assertion = XML.child(response, @assertion, "Assertion") ->
-        with :ok <- check(XML.attr(assertion, "Version") == "2.0", :unsupported_version),
-             :ok <-
-               check(
-                 XML.children(assertion, @assertion, "AuthnStatement") != [],
-                 :no_authn_statement
-               ),
-             do: {:ok, assertion}
-
-      true ->
-        {:error, :no_assertion}
+      keys ->
+        with {:ok, assertion} <-
+               Decrypt.assertion(encrypted, keys, Map.get(expected, :allow_aes_cbc, false)),
+             do: checked(assertion)
     end
+  end
+
+  defp checked(assertion) do
+    with :ok <- check(XML.attr(assertion, "Version") == "2.0", :unsupported_version),
+         :ok <-
+           check(
+             XML.children(assertion, @assertion, "AuthnStatement") != [],
+             :no_authn_statement
+           ),
+         do: {:ok, assertion}
   end
 
   # Every signature present must be valid, and one must cover the Assertion.

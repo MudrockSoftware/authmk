@@ -144,6 +144,8 @@ defmodule Authmk.MixProject do
       # For Authmk.Plugins.SIWE.
       {:ex_secp256k1, "~> 0.8", optional: true},
       {:ex_keccak, "~> 0.7", optional: true},
+      # Background work as Oban jobs (Authmk.Background).
+      {:oban, "~> 2.19", optional: true},
       # Ready-made emails (Authmk.Emails).
       {:swoosh, "~> 1.17", optional: true},
       # LiveView hooks and components (Authmk.LiveView, Authmk.Components).

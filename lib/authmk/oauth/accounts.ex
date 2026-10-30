@@ -13,7 +13,10 @@ defmodule Authmk.OAuth.Accounts do
       account by registering its email elsewhere.
     * Otherwise a new user is created, unless sign-up is disabled.
 
-  OAuth tokens are encrypted at rest with `account: [encrypt_oauth_tokens: true]`.
+  OAuth tokens (access, refresh and ID tokens) are encrypted at rest with
+  `account: [encrypt_oauth_tokens: true]` (AES-GCM, with a key derived
+  from the secret for this purpose). Tokens stored before it was turned on
+  stay readable.
   """
 
   import Ecto.Query, only: [dynamic: 2]
@@ -196,7 +199,8 @@ defmodule Authmk.OAuth.Accounts do
       do: %{
         attrs
         | access_token: encrypt(ctx, attrs.access_token),
-          refresh_token: encrypt(ctx, attrs.refresh_token)
+          refresh_token: encrypt(ctx, attrs.refresh_token),
+          id_token: encrypt(ctx, attrs.id_token)
       },
       else: attrs
   end

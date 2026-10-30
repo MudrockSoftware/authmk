@@ -4,10 +4,8 @@ defmodule Authmk.Plugins.SSO.SAML.Request do
   # binding): deflated, base64'd, in the query string, and signed when the
   # service provider has a signing key.
 
-  alias Authmk.Plugins.SSO.SAML.Certificates
+  alias Authmk.Plugins.SSO.SAML.RedirectBinding
   alias Authmk.Token
-
-  @rsa_sha256 "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 
   @doc "A new request ID. IDs are xs:ID: they must not start with a digit."
   def new_id, do: "_" <> Token.generate()
@@ -20,13 +18,13 @@ defmodule Authmk.Plugins.SSO.SAML.Request do
   def redirect_url(request) do
     xml = authn_request(request.id, request)
 
-    query =
-      [{"SAMLRequest", deflate(xml)}, {"RelayState", request.relay_state}]
-      |> sign(request.signing_key)
-      |> Enum.map_join("&", fn {name, value} -> name <> "=" <> URI.encode_www_form(value) end)
-
-    separator = if String.contains?(request.sso_url, "?"), do: "&", else: "?"
-    request.sso_url <> separator <> query
+    RedirectBinding.url(
+      request.sso_url,
+      "SAMLRequest",
+      xml,
+      request.relay_state,
+      request.signing_key
+    )
   end
 
   defp authn_request(id, request) do
@@ -43,27 +41,6 @@ defmodule Authmk.Plugins.SSO.SAML.Request do
       ~s(<samlp:NameIDPolicy Format="#{escape(request.name_id_format)}" AllowCreate="true"/>),
       ~s(</samlp:AuthnRequest>)
     ])
-  end
-
-  # The redirect binding signs the query string itself, in this order.
-  defp sign(params, nil), do: params
-
-  defp sign(params, key) do
-    params = params ++ [{"SigAlg", @rsa_sha256}]
-
-    signed =
-      Enum.map_join(params, "&", fn {name, value} -> name <> "=" <> URI.encode_www_form(value) end)
-
-    params ++ [{"Signature", Base.encode64(Certificates.sign(signed, key))}]
-  end
-
-  defp deflate(xml) do
-    z = :zlib.open()
-    :ok = :zlib.deflateInit(z, :default, :deflated, -15, 8, :default)
-    compressed = :zlib.deflate(z, xml, :finish)
-    :zlib.deflateEnd(z)
-    :zlib.close(z)
-    compressed |> IO.iodata_to_binary() |> Base.encode64()
   end
 
   @doc false

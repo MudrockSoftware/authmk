@@ -22,7 +22,10 @@ defmodule Authmk.Plugins.SSO.SAML.Metadata do
       ~s(<md:SPSSODescriptor AuthnRequestsSigned="#{sp.signs_requests}" ),
       ~s(WantAssertionsSigned="true" ),
       ~s(protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">),
-      Enum.map(sp.certificates, &key_descriptor/1),
+      Enum.map(sp.certificates, &key_descriptor(&1, "signing")),
+      Enum.map(sp.certificates, &key_descriptor(&1, "encryption")),
+      ~s(<md:SingleLogoutService Binding="#{@redirect}" Location="#{Request.escape(sp.slo_url)}"/>),
+      ~s(<md:SingleLogoutService Binding="#{@post}" Location="#{Request.escape(sp.slo_url)}"/>),
       ~s(<md:NameIDFormat>#{Request.escape(sp.name_id_format)}</md:NameIDFormat>),
       ~s(<md:AssertionConsumerService Binding="#{@post}" ),
       ~s(Location="#{Request.escape(sp.acs_url)}" index="0" isDefault="true"/>),
@@ -30,9 +33,9 @@ defmodule Authmk.Plugins.SSO.SAML.Metadata do
     ])
   end
 
-  defp key_descriptor(certificate) do
+  defp key_descriptor(certificate, use) do
     [
-      ~s(<md:KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="#{@ds}"><ds:X509Data>),
+      ~s(<md:KeyDescriptor use="#{use}"><ds:KeyInfo xmlns:ds="#{@ds}"><ds:X509Data>),
       ~s(<ds:X509Certificate>#{Certificates.base64(certificate)}</ds:X509Certificate>),
       ~s(</ds:X509Data></ds:KeyInfo></md:KeyDescriptor>)
     ]
@@ -47,9 +50,15 @@ defmodule Authmk.Plugins.SSO.SAML.Metadata do
     with {:ok, %{ns: @md, name: "EntityDescriptor"} = entity} <- XML.parse(xml),
          entity_id when is_binary(entity_id) <- XML.attr(entity, "entityID"),
          %{} = idp <- XML.child(entity, @md, "IDPSSODescriptor"),
-         sso_url when is_binary(sso_url) <- redirect_service(idp),
+         sso_url when is_binary(sso_url) <- redirect_service(idp, "SingleSignOnService"),
          [_ | _] = certificates <- signing_certificates(idp) do
-      {:ok, %{entity_id: entity_id, sso_url: sso_url, certificates: certificates}}
+      {:ok,
+       %{
+         entity_id: entity_id,
+         sso_url: sso_url,
+         slo_url: redirect_service(idp, "SingleLogoutService"),
+         certificates: certificates
+       }}
     else
       _invalid ->
         {:error,
@@ -57,9 +66,9 @@ defmodule Authmk.Plugins.SSO.SAML.Metadata do
     end
   end
 
-  defp redirect_service(idp) do
+  defp redirect_service(idp, service) do
     idp
-    |> XML.children(@md, "SingleSignOnService")
+    |> XML.children(@md, service)
     |> Enum.find_value(&(XML.attr(&1, "Binding") == @redirect and XML.attr(&1, "Location")))
   end
 

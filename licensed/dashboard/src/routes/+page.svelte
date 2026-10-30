@@ -1,6 +1,7 @@
 <script lang="ts">
   import Activity from "@lucide/svelte/icons/activity";
   import BadgeCheck from "@lucide/svelte/icons/badge-check";
+  import Bot from "@lucide/svelte/icons/bot";
   import Building2 from "@lucide/svelte/icons/building-2";
   import ShieldCheck from "@lucide/svelte/icons/shield-check";
   import UsersIcon from "@lucide/svelte/icons/users";
@@ -33,6 +34,14 @@
     <StatCard title="Active sessions" value={totals.active_sessions.toLocaleString("en-GB")} icon={Activity} />
     {#if totals.organizations !== null}
       <StatCard title="Organizations" value={totals.organizations.toLocaleString("en-GB")} icon={Building2} />
+    {/if}
+    {#if totals.service_accounts !== null}
+      <StatCard
+        title="Service accounts"
+        value={totals.service_accounts.toLocaleString("en-GB")}
+        detail="{(totals.active_service_accounts ?? 0).toLocaleString('en-GB')} used in 30 days"
+        icon={Bot}
+      />
     {/if}
   </div>
 

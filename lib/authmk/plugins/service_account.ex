@@ -21,6 +21,16 @@ defmodule Authmk.Plugins.ServiceAccount do
   comes from outside its `allowed_ips` (addresses or CIDR ranges). Keys
   rotate without downtime: create the new key, switch over, revoke the old.
 
+  With `Authmk.Plugins.OAuthProvider`, a service account can have OAuth
+  client credentials instead (`/service-account/create-oauth-client`): a
+  confidential client limited to the `client_credentials` grant. Tokens it
+  gets authenticate the service account in `Authmk.Plug.RequireAccessToken`
+  (as `current_principal`), with the same checks.
+
+  Admins (`Authmk.Plugins.Admin`, with the `service_account` permissions)
+  list, disable and delete every service account through
+  `/service-account/admin/*`, and the admin dashboard.
+
   Roles: an organization's service accounts take the organization's roles;
   a user's take roles from `access_control`. Either way a service account
   may only get what its creator may do themselves.
@@ -35,6 +45,10 @@ defmodule Authmk.Plugins.ServiceAccount do
   | POST | `/service-account/create-key` | `update` |
   | GET | `/service-account/list-keys` | `read` |
   | POST | `/service-account/revoke-key` | `update` |
+  | POST | `/service-account/create-oauth-client` | `update` |
+  | GET | `/service-account/admin/list` | admin `service_account: list` |
+  | POST | `/service-account/admin/update` | admin `service_account: update` |
+  | POST | `/service-account/admin/delete` | admin `service_account: delete` |
 
   ## Options
 
@@ -44,7 +58,9 @@ defmodule Authmk.Plugins.ServiceAccount do
   use Authmk.Plugin
 
   alias Authmk.{AccessControl, Context, Endpoint, Error, Request, Serializer, Store}
-  alias Authmk.Plugins.APIKey
+  import Ecto.Query, only: [from: 2]
+
+  alias Authmk.Plugins.{Admin, APIKey, OAuthProvider}
   alias Authmk.Plugins.Organization.Access
   alias Authmk.Plugins.ServiceAccount.{IPAllowList, Options}
 
@@ -73,7 +89,9 @@ defmodule Authmk.Plugins.ServiceAccount do
           expires_at: [type: :datetime, input: false],
           # Comma-separated addresses and CIDR ranges. Empty: anywhere.
           allowed_ips: [type: :text, input: false],
-          last_used_at: [type: :datetime, input: false]
+          last_used_at: [type: :datetime, input: false],
+          # Its OAuth client (Authmk.Plugins.OAuthProvider), for client credentials.
+          oauth_client_id: [type: :string, unique: true, input: false]
         ]
       ],
       api_key: [
@@ -128,6 +146,31 @@ defmodule Authmk.Plugins.ServiceAccount do
         id ++ [name: [type: :string], expires_in: [type: :integer], config_id: [type: :string]]
       ),
       endpoint(:list_service_account_keys, :get, "/service-account/list-keys", :list_keys, id),
+      endpoint(
+        :create_service_account_oauth_client,
+        :post,
+        "/service-account/create-oauth-client",
+        :create_oauth_client,
+        id ++ [scope: [type: :string]]
+      ),
+      endpoint(:admin_list_service_accounts, :get, "/service-account/admin/list", :admin_list,
+        limit: [type: :integer],
+        offset: [type: :integer]
+      ),
+      endpoint(
+        :admin_update_service_account,
+        :post,
+        "/service-account/admin/update",
+        :admin_update,
+        id ++ [disabled: [type: :boolean, required: true]]
+      ),
+      endpoint(
+        :admin_delete_service_account,
+        :post,
+        "/service-account/admin/delete",
+        :admin_delete,
+        id
+      ),
       endpoint(
         :revoke_service_account_key,
         :post,
@@ -218,10 +261,119 @@ defmodule Authmk.Plugins.ServiceAccount do
   @doc false
   def delete(%Context{params: params} = ctx) do
     with {:ok, service_account, _owner} <- own(ctx, params.id, :delete),
-         {:ok, _deleted} <- Store.delete(ctx, :service_account, service_account) do
+         :ok <- remove(ctx, service_account) do
       {:ok, %{success: true}, ctx}
     end
   end
+
+  @doc false
+  # Deletes a service account with its OAuth client, so its tokens stop
+  # working with it (the admin dashboard too).
+  def remove(ctx, service_account) do
+    _deleted =
+      if service_account.oauth_client_id && model?(ctx, :oauth_client),
+        do: Store.delete_all(ctx, :oauth_client, client_id: service_account.oauth_client_id)
+
+    with {:ok, _deleted} <- Store.delete(ctx, :service_account, service_account), do: :ok
+  end
+
+  @doc false
+  # Client credentials, shown once. One client per service account.
+  def create_oauth_client(%Context{params: params, config: config} = ctx) do
+    with :ok <- check(model?(ctx, :oauth_client), Error.new(:feature_disabled)),
+         {:ok, service_account, _owner} <- own(ctx, params.id, :update),
+         :ok <- check(is_nil(service_account.oauth_client_id), error(:oauth_client_exists)),
+         {:ok, client} <-
+           OAuthProvider.create_client(config.auth, client_metadata(service_account, params)),
+         {:ok, _linked} <-
+           Store.update(ctx, :service_account, service_account, %{
+             oauth_client_id: client.client_id
+           }) do
+      {:ok, Map.take(client, [:client_id, :client_secret, :scope, :grant_types]), ctx}
+    end
+  end
+
+  defp client_metadata(service_account, params) do
+    %{
+      "client_name" => service_account.name,
+      "grant_types" => ["client_credentials"],
+      "token_endpoint_auth_method" => "client_secret_basic"
+    }
+    |> then(&if(params.scope, do: Map.put(&1, "scope", params.scope), else: &1))
+  end
+
+  @doc """
+  The service account behind an OAuth client, when the request may use it
+  (enabled, not expired, from an allowed address): for
+  `Authmk.Plug.RequireAccessToken` with client credentials tokens. `nil`
+  for clients of no service account.
+  """
+  @spec for_oauth_client(module(), String.t(), Plug.Conn.t()) ::
+          {:ok, struct()} | {:error, Error.t()} | nil
+  def for_oauth_client(auth, client_id, conn) do
+    ctx = %{Context.new(auth.config()) | conn: conn}
+
+    case Store.get_by(ctx, :service_account, oauth_client_id: client_id) do
+      nil ->
+        nil
+
+      service_account ->
+        with :ok <- usable(ctx, service_account), do: {:ok, touch(ctx, service_account)}
+    end
+  end
+
+  @doc false
+  def admin_list(%Context{params: params} = ctx) do
+    limit = min(params.limit || 50, 100)
+    offset = max(params.offset || 0, 0)
+
+    with :ok <- admin(ctx, :list) do
+      query = Store.module(ctx, :service_account)
+      ordered = from(s in query, order_by: [desc: s.inserted_at], limit: ^limit, offset: ^offset)
+
+      {:ok,
+       %{
+         service_accounts:
+           ctx |> Store.list(:service_account, ordered) |> Enum.map(&serialize(ctx, &1)),
+         total: Store.count(ctx, :service_account, query),
+         limit: limit,
+         offset: offset
+       }, ctx}
+    end
+  end
+
+  @doc false
+  def admin_update(%Context{params: params} = ctx) do
+    with :ok <- admin(ctx, :update),
+         {:ok, service_account} <- fetch(ctx, params.id),
+         {:ok, service_account} <-
+           Store.update(ctx, :service_account, service_account, %{disabled: params.disabled}) do
+      {:ok, serialize(ctx, service_account), ctx}
+    end
+  end
+
+  @doc false
+  def admin_delete(%Context{params: params} = ctx) do
+    with :ok <- admin(ctx, :delete),
+         {:ok, service_account} <- fetch(ctx, params.id),
+         :ok <- remove(ctx, service_account) do
+      {:ok, %{success: true}, ctx}
+    end
+  end
+
+  # Admins, by Authmk.Plugins.Admin's rules; without it, nobody.
+  defp admin(%Context{config: config, user: user} = ctx, action) do
+    allowed =
+      Admin in Enum.map(config.plugins, &elem(&1, 0)) and
+        Admin.allowed?(ctx, user, %{service_account: [action]})
+
+    check(allowed, Error.new(:forbidden))
+  end
+
+  defp model?(%Context{config: config}, model), do: Map.has_key?(config.schema.models, model)
+
+  defp check(true, _error), do: :ok
+  defp check(false, error), do: {:error, error}
 
   @doc false
   # A new key next to the old ones, so callers switch over before the old is revoked.
@@ -417,6 +569,7 @@ defmodule Authmk.Plugins.ServiceAccount do
 
   @errors %{
     service_account_not_found: {404, "Service account not found"},
+    oauth_client_exists: {409, "This service account already has OAuth client credentials"},
     service_account_disabled: {401, "This service account is disabled"},
     service_account_expired: {401, "This service account has expired"},
     ip_not_allowed: {403, "This service account may not be used from here"},

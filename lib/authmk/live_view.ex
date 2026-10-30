@@ -45,9 +45,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     import Phoenix.Component, only: [assign_new: 3]
 
-    alias Authmk.{ConnContext, Cookies, Sessions, Token}
+    alias Authmk.{ConnContext, CookieCache, Cookies, Sessions, Token}
 
     @session_key "authmk_session"
+    @data_key "authmk_session_data"
 
     @doc """
     For `live_session`'s `session:` option: the session token's hash, from
@@ -58,7 +59,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       with {:ok, ctx} <- ConnContext.new(conn, auth),
            {:ok, token} <- Cookies.session_token(ctx) do
         hash = Token.hash(token)
-        %{@session_key => hash, "live_socket_id" => socket_id(hash)}
+        session = %{@session_key => hash, "live_socket_id" => socket_id(hash)}
+
+        # Stateless sessions are in the cache cookie: LiveViews get its value.
+        if ctx.config.session[:stateless],
+          do: Map.put(session, @data_key, Cookies.session_data(ctx)),
+          else: session
       else
         _signed_out -> %{}
       end
@@ -93,14 +99,25 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     # assigned on the conn; the connected mount reads the store.
     defp assign_current(socket, auth, session) do
       socket
-      |> assign_new(:current_session, fn -> load(auth, session[@session_key]) end)
+      |> assign_new(:current_session, fn -> load(auth, session) end)
       |> assign_new(:current_user, fn %{current_session: session} -> session && session.user end)
       |> assign_new(:current_principal, fn %{current_user: user} -> user end)
     end
 
-    defp load(_auth, nil), do: nil
+    defp load(auth, session) do
+      config = auth.config()
+      ctx = Authmk.Context.new(config)
 
-    defp load(auth, hash),
-      do: Sessions.fetch_by_token_hash(Authmk.Context.new(auth.config()), hash)
+      if config.session[:stateless],
+        do: stateless(ctx, session),
+        else: Sessions.fetch_by_token_hash(ctx, session[@session_key])
+    end
+
+    defp stateless(ctx, session) do
+      case CookieCache.read_value(ctx, session[@data_key], session[@session_key]) do
+        {:ok, session, user} -> %{session | user: user}
+        :miss -> nil
+      end
+    end
   end
 end

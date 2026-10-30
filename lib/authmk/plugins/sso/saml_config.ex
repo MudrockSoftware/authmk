@@ -15,11 +15,14 @@ defmodule Authmk.Plugins.SSO.SAMLConfig do
     do: URL.endpoint(ctx, "/sso/saml2/metadata/" <> provider.provider_id)
 
   def acs_url(ctx, provider), do: URL.endpoint(ctx, "/sso/saml2/acs/" <> provider.provider_id)
+  def slo_url(ctx, provider), do: URL.endpoint(ctx, "/sso/saml2/slo/" <> provider.provider_id)
 
   @doc "Checks registration params; `{:ok, json_map}` to store, or `{:error, error}`."
   def from_params(params) do
     with {:ok, idp} <- idp(params),
          :ok <- check(https?(idp.sso_url), "sso_url must be an HTTPS URL"),
+         :ok <-
+           check(is_nil(idp[:slo_url]) or https?(idp[:slo_url]), "slo_url must be an HTTPS URL"),
          :ok <- check(valid_entity_id?(idp.entity_id), "entity_id is missing or too long"),
          {:ok, certificates} <- certificates(idp.certificates),
          {:ok, mapping} <- mapping(params["mapping"]),
@@ -32,6 +35,7 @@ defmodule Authmk.Plugins.SSO.SAMLConfig do
        %{
          "entity_id" => idp.entity_id,
          "sso_url" => idp.sso_url,
+         "slo_url" => idp[:slo_url],
          "certificates" => Enum.map(certificates, &Certificates.base64/1),
          "mapping" => mapping,
          "allow_idp_initiated" => params["allow_idp_initiated"] == true
@@ -56,7 +60,12 @@ defmodule Authmk.Plugins.SSO.SAMLConfig do
       end
 
     {:ok,
-     %{entity_id: params["entity_id"], sso_url: params["sso_url"], certificates: certificates}}
+     %{
+       entity_id: params["entity_id"],
+       sso_url: params["sso_url"],
+       slo_url: params["slo_url"],
+       certificates: certificates
+     }}
   end
 
   defp certificates(texts) when texts != [] and length(texts) <= @max_certificates do
@@ -91,6 +100,7 @@ defmodule Authmk.Plugins.SSO.SAMLConfig do
     %{
       entity_id: saml[:entity_id],
       sso_url: saml[:sso_url],
+      slo_url: saml[:slo_url],
       certificates: saml[:certificates],
       mapping: Map.new(saml[:mapping] || %{}, fn {key, value} -> {to_string(key), value} end),
       allow_idp_initiated: saml[:allow_idp_initiated] == true
@@ -104,6 +114,7 @@ defmodule Authmk.Plugins.SSO.SAMLConfig do
     %{
       entity_id: saml["entity_id"],
       sso_url: saml["sso_url"],
+      slo_url: saml["slo_url"],
       certificates:
         for(
           text <- saml["certificates"],

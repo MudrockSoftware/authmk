@@ -13,6 +13,8 @@ defmodule Authmk.Plugins.SSO do
   | POST | `/sso/saml2/acs/:provider_id` | none |
   | GET | `/sso/saml2/finish` | none |
   | GET | `/sso/saml2/metadata/:provider_id` | none |
+  | POST | `/sso/saml2/logout` | required |
+  | GET, POST | `/sso/saml2/slo/:provider_id` | none |
   | POST | `/sso/register` | required |
   | GET | `/sso/providers` | required |
   | POST | `/sso/delete-provider` | required |
@@ -52,9 +54,19 @@ defmodule Authmk.Plugins.SSO do
       within its time limits (`saml: [clock_skew: 120]` seconds);
     * not have been used before: each assertion signs in once.
 
-  Encrypted assertions aren't supported yet. XML is read with OTP's
-  `xmerl_sax_parser`, refusing DTDs and entities, and signatures are
-  checked with OTP's `public_key`.
+  Encrypted assertions are decrypted with the signing keys (published for
+  encryption too): RSA-OAEP and AES-GCM, or AES-CBC with `saml:
+  [allow_aes_cbc: true]`. XML is read with OTP's `xmerl_sax_parser`,
+  refusing DTDs and entities, and signatures are checked with OTP's
+  `public_key`.
+
+  Single logout, for providers with an `slo_url` (from their metadata's
+  HTTP-Redirect SingleLogoutService, or `saml_config`): `POST
+  /sso/saml2/logout` ends the session and answers with the provider's URL
+  to send the user to, so they're signed out there too; and a provider's
+  signed LogoutRequest ends every session its sign-in made for that user
+  (sessions must be stored in the database), with a signed LogoutResponse
+  back.
 
   Who the user is comes from the assertion's NameID, and their email and
   name from its attributes. Common attribute names (`email`, `mail`,
@@ -78,7 +90,7 @@ defmodule Authmk.Plugins.SSO do
   use Authmk.Plugin
 
   alias Authmk.Endpoint
-  alias Authmk.Plugins.SSO.{Management, Options, SAMLSignIn, SignIn}
+  alias Authmk.Plugins.SSO.{Management, Options, SAMLLogout, SAMLSignIn, SignIn}
   alias Authmk.Plugins.SSO.SAML.Certificates
 
   @impl true
@@ -158,6 +170,14 @@ defmodule Authmk.Plugins.SSO do
           saml_config: [type: :text, returned: false, input: false]
         ]
       ],
+      # Which SAML sign-in made a session, for single logout.
+      session: [
+        fields: [
+          sso_provider_id: [type: :string, index: true, input: false, returned: false],
+          saml_name_id: [type: :string, index: true, input: false, returned: false],
+          saml_session_index: [type: :string, input: false, returned: false]
+        ]
+      ],
       # SAML assertions used, until they expire: each signs in once.
       saml_assertion: [
         plural: "saml_assertions",
@@ -194,6 +214,15 @@ defmodule Authmk.Plugins.SSO do
         rate_limit: [window: 10, max: 10]
       ),
       endpoint(:sso_saml_finish, :get, "/sso/saml2/finish", {SAMLSignIn, :finish}, []),
+      endpoint(:sso_saml_logout, :post, "/sso/saml2/logout", {SAMLLogout, :start},
+        session: :required,
+        params: [callback_url: [type: :string]]
+      ),
+      endpoint(:sso_saml_slo, :get, "/sso/saml2/slo/:provider_id", {SAMLLogout, :slo}, []),
+      # The identity provider's page may post here, from its own origin.
+      endpoint(:sso_saml_slo_post, :post, "/sso/saml2/slo/:provider_id", {SAMLLogout, :slo},
+        origin_check: false
+      ),
       endpoint(
         :sso_saml_metadata,
         :get,

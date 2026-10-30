@@ -74,7 +74,12 @@ defmodule Authmk.Options.Schemas do
                           doc:
                             "Where in-progress social sign-ins are kept. See `Authmk.OAuth.State`."
                         ],
-                        encrypt_oauth_tokens: [type: :boolean, default: false],
+                        encrypt_oauth_tokens: [
+                          type: :boolean,
+                          default: true,
+                          doc:
+                            "Encrypt stored OAuth tokens (AES-GCM). Tokens stored in the clear before still read."
+                        ],
                         update_account_on_sign_in: [type: :boolean, default: true],
                         account_linking: [
                           type: :keyword_list,
@@ -144,9 +149,12 @@ defmodule Authmk.Options.Schemas do
                       doc: "Endpoint paths to turn off."
                     ],
                     background: [
-                      type: {:in, [:task, :inline]},
+                      type:
+                        {:or,
+                         [{:in, [:task, :inline]}, {:tuple, [{:in, [:oban]}, :keyword_list]}]},
                       default: :task,
-                      doc: "Run emails and other side work in a supervised task, or inline."
+                      doc:
+                        "Run emails and other side work in a supervised task, inline, or as Oban jobs (`{:oban, name: Oban, queue: :default}`). See `Authmk.Background`."
                     ],
                     password_hasher: [type: :atom, default: Authmk.Password.Argon2],
                     find_many_limit: [type: :pos_integer, default: 100],
@@ -172,6 +180,12 @@ defmodule Authmk.Options.Schemas do
                           doc: "`0` disables the check."
                         ],
                         disable_refresh: [type: :boolean, default: false],
+                        stateless: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Keep sessions nowhere on the server: the cache cookie is the session. See `Authmk.SessionStore`."
+                        ],
                         store_in_database: [
                           type: :boolean,
                           default: false,
@@ -196,11 +210,16 @@ defmodule Authmk.Options.Schemas do
                           keys: [
                             enabled: [type: :boolean, default: false],
                             max_age: [type: :pos_integer, default: 300, doc: "Seconds."],
-                            strategy: [type: {:in, [:signed, :encrypted]}, default: :signed],
+                            strategy: [
+                              type: {:in, [:signed, :encrypted, :jwt, :jwt_jwks]},
+                              default: :signed,
+                              doc: "See `Authmk.CookieCache`."
+                            ],
                             version: [
-                              type: :string,
+                              type: {:or, [:string, {:fun, 1}]},
                               default: "1",
-                              doc: "Change it to invalidate every cache."
+                              doc:
+                                "Change it to invalidate every cache (and every stateless session). A function of the user returns that user's version, to invalidate theirs."
                             ]
                           ]
                         ]

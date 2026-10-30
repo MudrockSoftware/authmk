@@ -42,7 +42,12 @@ defmodule PlugApp.Auth do
       # Customers' directories provision their people (SCIM 2.0 at /auth/scim/v2).
       {Authmk.Plugins.SCIM, can_manage: &__MODULE__.organization_admin?/3},
       # Single sign-on with customers' identity providers; see config.
-      {Authmk.Plugins.SSO, default_providers: &__MODULE__.sso_providers/0},
+      {
+        Authmk.Plugins.SSO,
+        # Keys to sign SAML requests and decrypt assertions, from config.
+        default_providers: &__MODULE__.sso_providers/0,
+        saml: [signing_keys: &__MODULE__.saml_signing_keys/0]
+      },
       # Who did what, when: the user's own history at /auth/audit-log/list.
       {Authmk.Plugins.AuditLog, can_view_all: &__MODULE__.admin?/1},
       # Credential-stuffing blocking and disposable-email refusal by default.
@@ -69,6 +74,8 @@ defmodule PlugApp.Auth do
       nil -> false
     end
   end
+
+  def saml_signing_keys, do: Application.get_env(:plug_app, :saml_signing_keys, [])
 
   def sso_providers, do: Application.get_env(:plug_app, :sso_providers, [])
 

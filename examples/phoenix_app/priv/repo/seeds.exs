@@ -12,14 +12,15 @@
 
 # An admin to try the dashboard at /admin/auth (development only):
 # admin@example.com / "correct horse battery".
-if Mix.env() == :dev and
-     is_nil(Authmk.Testing.get_user_by(PhoenixApp.Auth, email: "admin@example.com")) do
-  Authmk.Testing.create_user(PhoenixApp.Auth,
-    email: "admin@example.com",
-    name: "Admin",
-    password: "correct horse battery",
-    role: "admin"
-  )
+# (In other environments: `mix authmk.create_admin EMAIL`.)
+if Mix.env() == :dev do
+  {:ok, _admin, status} =
+    Authmk.Plugins.Admin.create_admin(PhoenixApp.Auth, %{
+      email: "admin@example.com",
+      name: "Admin",
+      password: "correct horse battery"
+    })
 
-  IO.puts("Created admin@example.com with the password \"correct horse battery\"")
+  if status == :created,
+    do: IO.puts("Created admin@example.com with the password \"correct horse battery\"")
 end

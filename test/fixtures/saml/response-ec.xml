@@ -5,8 +5,8 @@
   <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
   <saml:Assertion ID="_assertion1" Version="2.0" IssueInstant="2026-01-01T10:00:00Z">
     <saml:Issuer>https://idp.acme.example/saml</saml:Issuer>
-    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/><ds:Reference URI="#_assertion1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>yV1DLsU7Suci6esf4+x/NzLXXPYNJ12tdPyJfOcHILY=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>hjlzq/n68N9Zf047POyLwo/Bts4G5FFgBAcHiG592457yzPuXFXv5tRxuvxR895L
-kWaxxeWccTyArjbIv2hLwg==</ds:SignatureValue></ds:Signature>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/><ds:Reference URI="#_assertion1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>yV1DLsU7Suci6esf4+x/NzLXXPYNJ12tdPyJfOcHILY=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>Bt8SfU5EgT3KaGfJokGS/i8eJX9tcj/VzmStdOIRnz7KzLJE40Ahk7e1GB0oby0p
+gk+To59tPNMmDWCPprGoBg==</ds:SignatureValue></ds:Signature>
     <saml:Subject>
       <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">ada@acme.example</saml:NameID>
       <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">

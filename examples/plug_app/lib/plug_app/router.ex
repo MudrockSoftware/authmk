@@ -121,7 +121,8 @@ defmodule PlugApp.Router do
     if conn.halted do
       conn
     else
-      body = JSON.encode!(%{name: conn.assigns.current_user.name})
+      # A user's token, or a service account's (client credentials): both have a name.
+      body = JSON.encode!(%{name: conn.assigns.current_principal.name})
       conn |> put_resp_content_type("application/json") |> send_resp(200, body)
     end
   end

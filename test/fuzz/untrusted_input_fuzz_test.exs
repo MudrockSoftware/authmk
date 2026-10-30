@@ -610,6 +610,21 @@ defmodule Authmk.UntrustedInputFuzzTest do
     assert json(conn) == nil
   end
 
+  property "garbled single logout messages never crash" do
+    pieces =
+      member_of(~w(SAMLRequest= SAMLResponse= RelayState= SigAlg= Signature= & %3D %2B fZ 3J +
+                   http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256 AAAA ====))
+
+    check all(parts <- list_of(pieces, max_length: 20)) do
+      query = Enum.join(parts)
+      conn = Plug.Test.conn(:get, "/auth/sso/saml2/slo/okta?" <> query)
+      conn = Plug.forward(conn, ["sso", "saml2", "slo", "okta"], Authmk.Fuzz.Auth, [])
+
+      assert conn.status in [302, 400]
+      if conn.status == 302, do: assert(redirected_to(conn) =~ "/auth/error?error=")
+    end
+  end
+
   property "the XML reader never crashes, and never takes a DTD" do
     tokens =
       member_of(

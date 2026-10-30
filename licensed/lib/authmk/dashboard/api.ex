@@ -8,7 +8,7 @@ defmodule Authmk.Dashboard.API do
 
   alias Authmk.{Context, Origin, SessionStore, Store}
   alias Authmk.Dashboard.{Access, Data}
-  alias Authmk.Plugins.{AuditLog, Organization, SCIM, SSO, TwoFactor}
+  alias Authmk.Plugins.{AuditLog, Organization, SCIM, ServiceAccount, SSO, TwoFactor}
 
   @doc "Handles `api/*`: `path` is what follows `api/`."
   def call(conn, path, opts) do
@@ -73,6 +73,17 @@ defmodule Authmk.Dashboard.API do
 
   defp route(conn, "GET", ["sso"], ctx, _admin), do: json(conn, 200, Data.sso(ctx))
 
+  defp route(conn, "GET", ["service-accounts"], ctx, _admin),
+    do: page(conn, Data.service_accounts(ctx, offset(conn)), :service_accounts)
+
+  defp route(conn, "POST", ["service-accounts", id, action], ctx, admin)
+       when action in ~w(disable enable delete) do
+    case Data.find_service_account(ctx, id) do
+      nil -> error(conn, 404, "not_found", "No such service account.")
+      account -> service_account_action(conn, ctx, admin, account, action)
+    end
+  end
+
   defp route(conn, "GET", ["events"], ctx, _admin) do
     filters = [
       event: blank(conn.query_params["event"]),
@@ -117,6 +128,19 @@ defmodule Authmk.Dashboard.API do
     end)
   end
 
+  defp service_account_action(conn, ctx, admin, account, "delete") do
+    permitted(conn, ctx, admin, %{service_account: [:delete]}, fn ->
+      :ok = ServiceAccount.remove(ctx, account)
+    end)
+  end
+
+  defp service_account_action(conn, ctx, admin, account, action) do
+    permitted(conn, ctx, admin, %{service_account: [:update]}, fn ->
+      {:ok, _account} =
+        Store.update(ctx, :service_account, account, %{disabled: action == "disable"})
+    end)
+  end
+
   defp permitted(conn, ctx, admin, permissions, fun) do
     if Access.can?(ctx, admin, permissions) do
       _done = fun.()
@@ -140,14 +164,16 @@ defmodule Authmk.Dashboard.API do
       can: %{
         ban: Access.can?(ctx, admin, %{user: [:ban]}),
         revoke_sessions: Access.can?(ctx, admin, %{session: [:revoke]}),
-        update_users: Access.can?(ctx, admin, %{user: [:update]})
+        update_users: Access.can?(ctx, admin, %{user: [:update]}),
+        manage_service_accounts: Access.can?(ctx, admin, %{service_account: [:update, :delete]})
       },
       features: %{
         organizations: Data.enabled?(ctx, Organization),
         audit_log: Data.enabled?(ctx, AuditLog),
         sso: Data.enabled?(ctx, SSO),
         scim: Data.enabled?(ctx, SCIM),
-        two_factor: Data.enabled?(ctx, TwoFactor)
+        two_factor: Data.enabled?(ctx, TwoFactor),
+        service_accounts: Data.enabled?(ctx, ServiceAccount)
       }
     }
   end

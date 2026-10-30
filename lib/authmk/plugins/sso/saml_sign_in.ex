@@ -16,7 +16,7 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
 
   require Logger
 
-  alias Authmk.{Context, Error, Origin, URL, Verification}
+  alias Authmk.{Context, Error, Origin, SessionStore, URL, Verification}
   alias Authmk.OAuth.State
   alias Authmk.Plugins.SSO.{Config, Outcome, Providers, SAMLConfig, Users}
   alias Authmk.Plugins.SSO.SAML.{Metadata, Profile, Replay, Request, Response}
@@ -79,7 +79,9 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
       audience: SAMLConfig.entity_id(ctx, provider),
       recipient: SAMLConfig.acs_url(ctx, provider),
       now: DateTime.utc_now(),
-      clock_skew: saml_opts(ctx)[:clock_skew]
+      clock_skew: saml_opts(ctx)[:clock_skew],
+      decryption_keys: saml_opts(ctx)[:signing_keys],
+      allow_aes_cbc: saml_opts(ctx)[:allow_aes_cbc]
     }
   end
 
@@ -101,6 +103,7 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
       "in_response_to" => identity.in_response_to,
       "name_id" => identity.name_id,
       "name_id_format" => identity.name_id_format,
+      "session_index" => identity.session_index,
       "attributes" => identity.attributes
     }
 
@@ -147,10 +150,33 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
     {info, profile} = Profile.from_identity(data, provider.saml.mapping)
 
     case Users.resolve(ctx, provider, info, profile) do
-      {:ok, user, status} -> Outcome.complete(ctx, user, status, state)
-      {:error, error} -> Outcome.redirect_error(ctx, state["error_callback_url"], error.code)
+      {:ok, user, status} ->
+        ctx |> Outcome.complete(user, status, state) |> remember_saml_session(provider, data)
+
+      {:error, error} ->
+        Outcome.redirect_error(ctx, state["error_callback_url"], error.code)
     end
   end
+
+  # The session notes its IdP session, so single logout can find it.
+  defp remember_saml_session(
+         {:redirect, url, %Context{session: %{} = session} = ctx},
+         provider,
+         data
+       ) do
+    attrs = %{
+      sso_provider_id: provider.provider_id,
+      saml_name_id: data["name_id"],
+      saml_session_index: data["session_index"]
+    }
+
+    case SessionStore.update(ctx, session, attrs) do
+      {:ok, session} -> {:redirect, url, %{ctx | session: session}}
+      {:error, _error} -> {:redirect, url, ctx}
+    end
+  end
+
+  defp remember_saml_session(result, _provider, _data), do: result
 
   @doc "GET /sso/saml2/metadata/:provider_id"
   def metadata(%Context{raw_params: params} = ctx) do
@@ -162,6 +188,7 @@ defmodule Authmk.Plugins.SSO.SAMLSignIn do
           Metadata.service_provider(%{
             entity_id: SAMLConfig.entity_id(ctx, provider),
             acs_url: SAMLConfig.acs_url(ctx, provider),
+            slo_url: SAMLConfig.slo_url(ctx, provider),
             certificates: Enum.map(keys, & &1.certificate),
             signs_requests: keys != [],
             name_id_format: @name_id_format

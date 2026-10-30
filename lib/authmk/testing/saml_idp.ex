@@ -22,7 +22,7 @@ defmodule Authmk.Testing.SAMLIdP do
   `sign: :response`). Use this module in tests only.
   """
 
-  alias Authmk.Plugins.SSO.SAML.{C14N, XML}
+  alias Authmk.Plugins.SSO.SAML.{C14N, Certificates, XML}
 
   @doc """
   The Response to the AuthnRequest in `sign_in_url` (the `url` that
@@ -55,7 +55,8 @@ defmodule Authmk.Testing.SAMLIdP do
   `:in_response_to`). Options: `:issuer`, `:private_key`, `:acs_url`,
   `:audience` (required); `:in_response_to`, `:name_id`, `:attributes`,
   `:sign` (`:assertion`, `:response` or `:none`), `:not_on_or_after`,
-  `:assertion_id`, `:status`.
+  `:assertion_id`, `:status`, and `:encrypt_for` (the service provider's
+  certificate, PEM) to send the assertion encrypted (RSA-OAEP, AES-256-GCM).
   """
   @spec build(keyword()) :: String.t()
   def build(opts) do
@@ -65,9 +66,9 @@ defmodule Authmk.Testing.SAMLIdP do
 
     xml =
       case opts[:sign] do
-        :assertion -> document(opts, signed_assertion(opts, key), "")
+        :assertion -> document(opts, encrypted(signed_assertion(opts, key), opts), "")
         :response -> signed_response(opts, key)
-        :none -> document(opts, assertion(opts, ""), "")
+        :none -> document(opts, encrypted(assertion(opts, ""), opts), "")
       end
 
     Base.encode64(xml)
@@ -84,6 +85,40 @@ defmodule Authmk.Testing.SAMLIdP do
       status: "urn:oasis:names:tc:SAML:2.0:status:Success",
       now: now
     ]
+  end
+
+  defp encrypted(assertion, opts) do
+    case opts[:encrypt_for] do
+      nil -> assertion
+      certificate -> encrypt(assertion, certificate)
+    end
+  end
+
+  # XML Encryption: the assertion with AES-256-GCM, its key with RSA-OAEP.
+  defp encrypt(assertion, certificate) do
+    {:ok, %{key: {:rsa, public_key}}} = Certificates.parse(certificate)
+    content_key = :crypto.strong_rand_bytes(32)
+    iv = :crypto.strong_rand_bytes(12)
+
+    {ciphertext, tag} =
+      :crypto.crypto_one_time_aead(:aes_256_gcm, content_key, iv, assertion, "", 16, true)
+
+    wrapped =
+      :public_key.encrypt_public(content_key, public_key, [
+        {:rsa_padding, :rsa_pkcs1_oaep_padding},
+        {:rsa_oaep_md, :sha},
+        {:rsa_mgf1_md, :sha}
+      ])
+
+    ~s(<saml:EncryptedAssertion><xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#" ) <>
+      ~s(Type="http://www.w3.org/2001/04/xmlenc#Element">) <>
+      ~s(<xenc:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm"/>) <>
+      ~s(<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><xenc:EncryptedKey>) <>
+      ~s(<xenc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>) <>
+      ~s(<xenc:CipherData><xenc:CipherValue>#{Base.encode64(wrapped)}</xenc:CipherValue></xenc:CipherData>) <>
+      ~s(</xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue>) <>
+      Base.encode64(iv <> ciphertext <> tag) <>
+      ~s(</xenc:CipherValue></xenc:CipherData></xenc:EncryptedData></saml:EncryptedAssertion>)
   end
 
   defp private_key(pem) do

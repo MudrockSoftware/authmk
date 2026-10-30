@@ -114,6 +114,38 @@ defmodule Authmk.SAMLSignatureTest do
     assert validate(sha1_digest) == {:error, :invalid_signature}
   end
 
+  test "assertions xmlsec1 encrypted: AES-GCM, and AES-CBC only when allowed" do
+    {:ok, key} = Certificates.private_key(SAMLIdP.fixture("sp-rsa.key"))
+    {:ok, certificate} = Certificates.parse(SAMLIdP.fixture("sp-rsa.crt"))
+    keys = [%{key: key, certificate: certificate}]
+    with_keys = Map.put(expected(), :decryption_keys, keys)
+
+    gcm = SAMLIdP.fixture("response-encrypted-gcm.xml")
+    assert {:ok, %{name_id: "ada@acme.example"}} = validate(gcm, with_keys)
+
+    cbc = SAMLIdP.fixture("response-encrypted-cbc.xml")
+    assert validate(cbc, with_keys) == {:error, :undecryptable}
+    assert {:ok, _identity} = validate(cbc, Map.put(with_keys, :allow_aes_cbc, true))
+
+    # Without our keys, or with another's, or changed in transit: nothing.
+    assert validate(gcm) == {:error, :encrypted_assertion}
+
+    {:ok, other} = Certificates.private_key(SAMLIdP.fixture("idp-rsa.key"))
+
+    assert validate(gcm, Map.put(expected(), :decryption_keys, [%{key: other}])) ==
+             {:error, :undecryptable}
+
+    # The assertion's own cipher value (not the wrapped key's).
+    content =
+      ~r{<xenc:CipherValue>([^<]+)</xenc:CipherValue>\s*</xenc:CipherData>\s*</xenc:EncryptedData>}
+
+    [value] = Regex.run(content, gcm, capture: :all_but_first)
+
+    <<first, rest::binary>> = Base.decode64!(String.replace(value, ~r/\s/, ""))
+    flipped = String.replace(gcm, value, Base.encode64(<<Bitwise.bxor(first, 1), rest::binary>>))
+    assert validate(flipped, with_keys) == {:error, :undecryptable}
+  end
+
   test "encrypted assertions are refused plainly" do
     xml = SAMLIdP.fixture("response-rsa.xml")
     [signed] = Regex.run(~r{<saml:Assertion .*</saml:Assertion>}s, xml)

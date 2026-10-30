@@ -49,6 +49,22 @@ defmodule Authmk.Dashboard.Data do
           ctx,
           :session,
           from(s in Store.module(ctx, :session), where: s.expires_at > ^now)
+        ),
+      # Programs, counted apart from people.
+      service_accounts:
+        if(model?(ctx, :service_account),
+          do: Store.count(ctx, :service_account, from(s in Store.module(ctx, :service_account)))
+        ),
+      active_service_accounts:
+        if(model?(ctx, :service_account),
+          do:
+            Store.count(
+              ctx,
+              :service_account,
+              from(s in Store.module(ctx, :service_account),
+                where: s.last_used_at > ^DateTime.add(now, -30 * 86_400)
+              )
+            )
         )
     }
   end
@@ -342,6 +358,43 @@ defmodule Authmk.Dashboard.Data do
       status: connection.status,
       last_used_at: connection.last_used_at,
       created_at: connection.inserted_at
+    }
+  end
+
+  ## Service accounts
+
+  def service_accounts(ctx, offset) do
+    if model?(ctx, :service_account) do
+      query =
+        from(s in Store.module(ctx, :service_account),
+          order_by: [desc: s.inserted_at, desc: s.id],
+          limit: @page + 1,
+          offset: ^offset
+        )
+
+      ctx |> Store.list(:service_account, query) |> Enum.map(&service_account/1)
+    else
+      []
+    end
+  end
+
+  def find_service_account(ctx, id) do
+    if model?(ctx, :service_account), do: safe_get(ctx, :service_account, id)
+  end
+
+  defp service_account(account) do
+    %{
+      id: to_string(account.id),
+      name: account.name,
+      description: account.description,
+      user_id: account.user_id && to_string(account.user_id),
+      organization_id: account.organization_id,
+      role: account.role,
+      disabled: account.disabled,
+      expires_at: account.expires_at,
+      last_used_at: account.last_used_at,
+      oauth_client: not is_nil(account.oauth_client_id),
+      created_at: account.inserted_at
     }
   end
 

@@ -125,7 +125,7 @@ defmodule Authmk.Plugins.OAuthProvider.Logout do
   defp notify_all(ctx, user_id, pairs) do
     case Store.get_by(ctx, :user, id: user_id) do
       nil -> :ok
-      user -> Background.run(ctx, fn -> Enum.each(pairs, &notify(ctx, user, &1)) end)
+      user -> Background.call(ctx, __MODULE__, :notify_clients, [user, pairs])
     end
   end
 
@@ -142,6 +142,10 @@ defmodule Authmk.Plugins.OAuthProvider.Logout do
 
     Store.list(ctx, :oauth_client, query)
   end
+
+  @doc false
+  # Background work: see `Authmk.Background`.
+  def notify_clients(ctx, user, pairs), do: Enum.each(pairs, &notify(ctx, user, &1))
 
   defp notify(ctx, user, {client, session_id}) do
     now = System.system_time(:second)
