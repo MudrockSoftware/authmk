@@ -528,10 +528,6 @@ Lower-risk issues found while writing the 1.0 guides, for the next minor release
 - [ ] Bcrypt: refuse passwords over 72 bytes instead of truncating
 - [ ] Log every message through `Authmk.Log`, so `domain: [:authmk]` filters catch them all
 
-### Captcha
-
-- [ ] Vercel BotID (blocked: BotID is verified only by Vercel's JavaScript SDK on Vercel; there's no API an Elixir server can call)
-
 ---
 
 ## Not planned
