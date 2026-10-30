@@ -319,5 +319,6 @@ MIT © Mudrock Software LTD. See [LICENSE](https://github.com/MudrockSoftware/au
 
 The admin dashboard and its analytics, in `licensed/`, aren't MIT licensed:
 see [licensed/LICENSE.md](https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md).
-They run freely in development and tests; elsewhere they need a licence key
-in `AUTHMK_LICENCE_KEY` (keys: https://license.mudrock.dev).
+They ship in the Hex package and run freely in development and tests;
+elsewhere the dashboard refuses every request until `AUTHMK_LICENCE_KEY` holds
+a valid licence key (keys: https://license.mudrock.dev).

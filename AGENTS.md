@@ -28,21 +28,20 @@ completed.
   need `AUTHMK_LICENCE_KEY` outside development (`Authmk.License`). Keep
   licensed code here, and keep `lib/` free of dependencies on it. The
   dashboard's UI is a SvelteKit app in `licensed/dashboard` (bun); after
-  changing it, run `bun run check` and `bun run build` there, and commit the
-  build in `priv/licensed/dashboard`. Follow Mudrock's design guide (colours,
+  changing it, run `bun run check` there. Follow Mudrock's design guide (colours,
   British English, sentence case).
 - `assets/pages`: the user-facing pages authmk serves itself (the sign-in
   error page), a SvelteKit app (bun, MIT). After changing it, run
-  `bun run check` and `bun run build` there and commit the build in
-  `priv/pages`. Its theme in `src/app.css` copies the dashboard's: change
+  `bun run check` there. Its theme in `src/app.css` copies the dashboard's: change
   both together.
+- `priv/pages` and `priv/licensed`: built from those two apps by `mix compile`
+  (a compiler in `mix.exs` runs bun when their sources change). Not in git;
+  the Hex package ships them, and `licensed/lib`, without the app sources.
+  Building from a checkout needs bun (`mise.toml`).
 - `test/`: emulation tests for the library (see Testing)
 - `examples/plug_app`: a plain Plug + Bandit + Ecto (SQLite) app that uses authmk
 - `examples/phoenix_app`: a Phoenix 1.8 + LiveView + Ecto (SQLite) app that uses authmk.
   Its own `AGENTS.md` applies to code inside that directory.
-- `example/`: a reference implementation (TypeScript), used only to check feature
-  parity. Read-only. Never edit it, copy code from it verbatim, or mention it in
-  docs, the roadmap or user-facing text.
 - `ROADMAP.md`: feature plan to 1.0
 
 ## Commands
