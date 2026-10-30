@@ -23,7 +23,7 @@ completed.
 ## Project Structure
 
 - `lib/`: the library (MIT)
-- `licensed/`: features under Mudrock's commercial licence, not MIT: the admin
+- `licensed/`: features under Mudrock's source-available licence, not MIT: the admin
   dashboard and its analytics (`licensed/lib`, tests in `licensed/test`). They
   need `AUTHMK_LICENCE_KEY` outside development (`Authmk.License`). Keep
   licensed code here, and keep `lib/` free of dependencies on it. The

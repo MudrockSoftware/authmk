@@ -357,7 +357,8 @@ Authmk is an independent project and is not affiliated with Better Auth.
 MIT © Mudrock Software LTD. See [LICENSE](https://github.com/MudrockSoftware/authmk/blob/main/LICENSE).
 
 The admin dashboard and its analytics, in `licensed/`, aren't MIT licensed:
-see [licensed/LICENSE.md](https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md).
-They ship in the Hex package and run freely in development and tests;
-elsewhere the dashboard refuses every request until `AUTHMK_LICENCE_KEY` holds
-a valid licence key (keys: https://license.mudrock.dev).
+they're source available, under [licensed/LICENSE.md](https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md).
+You may read and change them, and use them free in development and tests.
+They ship in the Hex package, but production use needs a licence key
+(https://license.mudrock.dev). Without a valid key in `AUTHMK_LICENCE_KEY`,
+the dashboard refuses every request outside development and tests.

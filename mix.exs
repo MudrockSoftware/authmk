@@ -137,7 +137,7 @@ defmodule Authmk.MixProject do
     end
   end
 
-  # licensed/ holds the features under the commercial licence (see
+  # licensed/ holds the features under the source-available licence (see
   # licensed/LICENSE.md); it builds with the rest.
   defp elixirc_paths(:test), do: ["lib", "licensed/lib", "test/support", "licensed/test/support"]
   defp elixirc_paths(_), do: ["lib", "licensed/lib"]
@@ -238,7 +238,7 @@ defmodule Authmk.MixProject do
   defp package do
     [
       # lib/ is MIT; licensed/ and priv/licensed/ are under licensed/LICENSE.md.
-      licenses: ["MIT", "LicenseRef-Mudrock-Commercial"],
+      licenses: ["MIT", "LicenseRef-Mudrock-Source-Available"],
       links: %{"Website" => @homepage_url, "GitHub" => @source_url},
       files:
         ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed priv/js guides .formatter.exs
