@@ -23,7 +23,9 @@ defmodule Mix.Tasks.Compile.AuthmkPages do
 
   defp sources(source) do
     Path.wildcard(Path.join(source, "{src,static,scripts}/**")) ++
-      Path.wildcard(Path.join(source, "{package.json,bun.lock,vite.config.ts,tsconfig.json}"))
+      Path.wildcard(
+        Path.join(source, "{package.json,bun.lock,bunfig.toml,vite.config.ts,tsconfig.json}")
+      )
   end
 
   defp mtime(path), do: File.stat!(path, time: :posix).mtime
