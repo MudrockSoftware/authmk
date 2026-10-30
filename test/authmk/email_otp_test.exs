@@ -165,8 +165,9 @@ defmodule Authmk.EmailOTPTest do
 
   describe "passwords" do
     test "reset with a code, then sign in with the new password", %{browser: browser} do
-      {browser, _user} = sign_up(browser)
-      {browser, _conn} = post(browser, "/sign-out")
+      # Someone who knew the old password, signed in elsewhere.
+      {intruder, _user} = sign_up(Browser.new(Auth))
+      {browser, _conn} = get(browser, "/get-session")
 
       {browser, conn} = post(browser, "/forget-password/email-otp", %{email: "ada@example.com"})
       assert json(conn) == %{"success" => true}
@@ -180,6 +181,10 @@ defmodule Authmk.EmailOTPTest do
         })
 
       assert json(conn) == %{"success" => true}
+
+      # The reset ended their session.
+      {_intruder, conn} = get(intruder, "/get-session")
+      assert json(conn) == nil
 
       {_browser, conn} =
         post(browser, "/sign-in/email", %{email: "ada@example.com", password: "a new password"})
@@ -260,7 +265,8 @@ defmodule Authmk.EmailOTPTest do
       {_browser, conn} =
         post(browser, "/email-otp/request-email-change", %{new_email: "grace@example.com"})
 
-      assert json(conn)["error"]["code"] == "user_already_exists"
+      # The same answer as for a free email, so this can't find accounts.
+      assert json(conn) == %{"success" => true}
       refute_received {:otp, _email, _type, _otp}
     end
   end

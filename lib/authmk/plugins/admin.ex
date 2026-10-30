@@ -68,7 +68,7 @@ defmodule Authmk.Plugins.Admin do
     Token
   }
 
-  alias Authmk.Plugins.Admin.{Options, UserQuery}
+  alias Authmk.Plugins.Admin.{Options, Permissions, UserQuery}
 
   @admin_cookie_purpose "admin-session"
 
@@ -234,6 +234,7 @@ defmodule Authmk.Plugins.Admin do
     with :ok <- authorize(ctx, user: [:update]),
          {:ok, data} <- updatable(params.data),
          {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user),
          {:ok, user} <- Store.update(ctx, :user, user, data) do
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
     end
@@ -243,7 +244,9 @@ defmodule Authmk.Plugins.Admin do
   def set_role(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, user: [:set_role]),
          :ok <- valid_role(ctx, params.role),
+         :ok <- within_reach(ctx, params.role),
          {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user),
          {:ok, user} <- Store.update(ctx, :user, user, %{role: params.role}) do
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
     end
@@ -254,6 +257,7 @@ defmodule Authmk.Plugins.Admin do
     with :ok <- authorize(ctx, user: [:set_password]),
          :ok <- valid_password(params.new_password),
          {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
       {:ok, %{status: true}, ctx}
     end
@@ -277,6 +281,7 @@ defmodule Authmk.Plugins.Admin do
              user.id != admin.id,
              Error.custom(:cannot_ban_yourself, 400, "You can't ban yourself")
            ),
+         :ok <- may_manage(ctx, user),
          {:ok, user} <- Store.update(ctx, :user, user, attrs) do
       :ok = Sessions.revoke_all(ctx, user.id)
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
@@ -287,6 +292,7 @@ defmodule Authmk.Plugins.Admin do
   def unban(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, user: [:ban]),
          {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user),
          {:ok, user} <- Store.update(ctx, :user, user, unbanned()) do
       {:ok, %{user: Serializer.user(ctx, user)}, ctx}
     end
@@ -303,7 +309,8 @@ defmodule Authmk.Plugins.Admin do
   @doc false
   def revoke_session(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, session: [:revoke]),
-         {:ok, user} <- fetch_user(ctx, params.user_id) do
+         {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user) do
       :ok = Sessions.revoke(ctx, user.id, params.session_id)
       {:ok, %{status: true}, ctx}
     end
@@ -312,7 +319,8 @@ defmodule Authmk.Plugins.Admin do
   @doc false
   def revoke_sessions(%Context{params: params} = ctx) do
     with :ok <- authorize(ctx, session: [:revoke]),
-         {:ok, user} <- fetch_user(ctx, params.user_id) do
+         {:ok, user} <- fetch_user(ctx, params.user_id),
+         :ok <- may_manage(ctx, user) do
       :ok = Sessions.revoke_all(ctx, user.id)
       {:ok, %{status: true}, ctx}
     end
@@ -327,6 +335,7 @@ defmodule Authmk.Plugins.Admin do
              user.id != admin.id,
              Error.custom(:cannot_remove_yourself, 400, "You can't remove yourself")
            ),
+         :ok <- may_manage(ctx, user),
          :ok <- Sessions.revoke_all(ctx, user.id),
          {:ok, _user} <- Store.delete(ctx, :user, user) do
       {:ok, %{status: true}, ctx}
@@ -341,6 +350,7 @@ defmodule Authmk.Plugins.Admin do
     with :ok <- authorize(ctx, user: [:impersonate]),
          {:ok, user} <- fetch_user(ctx, params.user_id),
          :ok <- may_impersonate(ctx, user, opts),
+         :ok <- may_manage(ctx, user),
          {:ok, admin_token} <- Cookies.session_token(ctx) |> session_token(),
          expires_at = DateTime.add(DateTime.utc_now(), opts[:impersonation_session_duration]),
          {:ok, ctx} <-
@@ -457,6 +467,43 @@ defmodule Authmk.Plugins.Admin do
 
   defp authorize(%Context{user: user} = ctx, permissions) do
     check(allowed?(ctx, user, permissions), Error.new(:forbidden))
+  end
+
+  @doc """
+  Whether `actor` may change `target`, or sign in as them: only when the
+  actor holds every admin permission (`user`, `session` and
+  `service_account` actions) the target's roles grant. A limited role, like
+  support, can't take over a stronger account this way. Users in
+  `admin_user_ids` can only be managed by others in that list.
+  """
+  @spec can_manage?(Context.t(), struct(), struct()) :: boolean()
+  def can_manage?(ctx, actor, target) do
+    ids = opts(ctx)[:admin_user_ids]
+
+    if to_string(target.id) in ids and to_string(actor.id) not in ids,
+      do: false,
+      else: within_reach?(ctx, actor, target.role)
+  end
+
+  defp may_manage(ctx, target),
+    do: check(can_manage?(ctx, ctx.user, target), Error.new(:forbidden))
+
+  # Handing out a role is limited the same way.
+  defp within_reach(ctx, roles),
+    do: check(within_reach?(ctx, ctx.user, roles), Error.new(:forbidden))
+
+  defp within_reach?(ctx, actor, roles) do
+    access_control = opts(ctx)[:access_control].access_control()
+
+    admin_resources =
+      Enum.map(Permissions.statements(), fn {resource, _} -> to_string(resource) end)
+
+    grants =
+      for {resource, actions} <- AccessControl.granted(access_control, roles),
+          resource in admin_resources and MapSet.size(actions) > 0,
+          do: {resource, MapSet.to_list(actions)}
+
+    grants == [] or allowed?(ctx, actor, grants)
   end
 
   # Admins can only be impersonated with `impersonate_admins`.

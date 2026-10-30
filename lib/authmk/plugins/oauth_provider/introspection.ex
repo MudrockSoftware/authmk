@@ -3,7 +3,7 @@ defmodule Authmk.Plugins.OAuthProvider.Introspection do
   # POST /oauth2/introspect (RFC 7662) and POST /oauth2/revoke (RFC 7009).
 
   alias Authmk.{Context, Store}
-  alias Authmk.Plugins.OAuthProvider.{Clients, Config, Errors, Tokens}
+  alias Authmk.Plugins.OAuthProvider.{Claims, Clients, Config, Errors, Tokens}
 
   # Resource servers authenticate as confidential clients to ask.
   def introspect(%Context{raw_params: params} = ctx) do
@@ -52,7 +52,7 @@ defmodule Authmk.Plugins.OAuthProvider.Introspection do
       cnf: record.dpop_jkt && %{jkt: record.dpop_jkt},
       scope: record.scopes,
       client_id: client.client_id,
-      sub: if(record.user_id, do: to_string(record.user_id), else: client.client_id),
+      sub: subject(ctx, record, client),
       iss: Config.issuer(ctx),
       iat: DateTime.to_unix(record.inserted_at),
       exp: DateTime.to_unix(record.expires_at),
@@ -60,6 +60,13 @@ defmodule Authmk.Plugins.OAuthProvider.Introspection do
     }
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
+
+  # The subject the token's client knows the user by: pairwise clients
+  # never learn the user's id.
+  defp subject(_ctx, %{user_id: nil}, client), do: client.client_id
+
+  defp subject(ctx, record, client),
+    do: Claims.subject(%{id: record.user_id}, client, Config.opts(ctx))
 
   # Only the client a token was issued to can revoke it. Unknown tokens are
   # fine: the answer is the same, so it reveals nothing.

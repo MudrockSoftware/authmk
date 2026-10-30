@@ -1,19 +1,19 @@
 defmodule Authmk.Migration.SQLiteRebuild do
-  @moduledoc """
-  SQLite can't change a column in place, so a table with a changed column
-  is rebuilt: every change to that table becomes one `{:rebuild_table, name,
-  old, new}` operation, which `Authmk.Migration.Render` writes as SQLite's
-  documented procedure (https://www.sqlite.org/lang_altertable.html):
+  @moduledoc false
 
-    1. foreign keys off, on one connection, then a transaction;
-    2. a new table with the new definition, and the rows copied into it
-       (the columns both definitions have);
-    3. the old table dropped (with foreign keys off, no `ON DELETE` action
-       runs on the tables pointing at it) and the new one renamed to its name;
-    4. its indexes created again, and `PRAGMA foreign_key_check` must pass,
-       or everything rolls back;
-    5. foreign keys on again.
-  """
+  # SQLite can't change a column in place, so a table with a changed column
+  # is rebuilt: every change to that table becomes one `{:rebuild_table, name,
+  # old, new}` operation, which `Authmk.Migration.Render` writes as SQLite's
+  # documented procedure (https://www.sqlite.org/lang_altertable.html):
+  #
+  #   1. foreign keys off, on one connection, then a transaction;
+  #   2. a new table with the new definition, and the rows copied into it
+  #      (the columns both definitions have);
+  #   3. the old table dropped (with foreign keys off, no `ON DELETE` action
+  #      runs on the tables pointing at it) and the new one renamed to its name;
+  #   4. its indexes created again, and `PRAGMA foreign_key_check` must pass,
+  #      or everything rolls back;
+  #   5. foreign keys on again.
 
   alias Authmk.Migration.Diff
 

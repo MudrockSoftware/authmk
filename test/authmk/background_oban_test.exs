@@ -29,6 +29,11 @@ defmodule Authmk.BackgroundObanTest do
 
   @moduletag auth: Auth
 
+  # Oban's MySQL migrations look tables up by the repo's configured
+  # `:database`, and these tests give each case a database of its own.
+  if Repo.__adapter__() == Ecto.Adapters.MyXQL,
+    do: @moduletag(skip: "Oban's MySQL migrations need a static :database")
+
   setup %{repo: repo} do
     Ecto.Migrator.run(Repo, [{2, ObanTables}], :up, all: true, dynamic_repo: repo, log: false)
 
@@ -38,7 +43,8 @@ defmodule Authmk.BackgroundObanTest do
       Oban.start_link(
         name: Authmk.BackgroundObanTest.Oban,
         repo: Repo,
-        engine: Oban.Engines.Lite,
+        engine: engine(),
+        prefix: prefix(),
         get_dynamic_repo: fn -> repo end,
         testing: :manual
       )
@@ -48,7 +54,17 @@ defmodule Authmk.BackgroundObanTest do
     :ok
   end
 
-  defp jobs, do: Oban.Testing.all_enqueued(Repo, worker: ObanWorker, prefix: false)
+  defp jobs, do: Oban.Testing.all_enqueued(Repo, worker: ObanWorker, prefix: prefix())
+
+  # Each database has its own Oban engine; only PostgreSQL has schemas.
+  defp engine do
+    case Repo.__adapter__() do
+      Ecto.Adapters.SQLite3 -> Oban.Engines.Lite
+      Ecto.Adapters.Postgres -> Oban.Engines.Basic
+    end
+  end
+
+  defp prefix, do: if(Repo.__adapter__() == Ecto.Adapters.Postgres, do: "public", else: false)
 
   test "a magic link waits as a job, encrypted, and works once it runs", %{browser: browser} do
     {browser, _user} = sign_up(browser)

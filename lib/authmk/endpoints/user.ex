@@ -35,11 +35,14 @@ defmodule Authmk.Endpoints.User do
 
     with :ok <- enabled(config.user[:change_email][:enabled]),
          :ok <- Origin.check_redirect(ctx, callback_url),
-         :ok <- valid_email(new_email),
-         :ok <- email_available(ctx, new_email) do
-      if user.email_verified,
-        do: change_verified_email(ctx, new_email, callback_url),
-        else: change_unverified_email(ctx, new_email, callback_url)
+         :ok <- valid_email(new_email) do
+      cond do
+        # Same answer as a change that goes ahead, so this can't find
+        # registered emails. Nothing changes and nothing is sent.
+        email_available(ctx, new_email) != :ok -> {:ok, %{status: true}, ctx}
+        user.email_verified -> change_verified_email(ctx, new_email, callback_url)
+        true -> change_unverified_email(ctx, new_email, callback_url)
+      end
     end
   end
 

@@ -8,7 +8,7 @@ defmodule Authmk.Dashboard.API do
 
   alias Authmk.{Context, Origin, SessionStore, Store}
   alias Authmk.Dashboard.{Access, Data}
-  alias Authmk.Plugins.{AuditLog, Organization, SCIM, ServiceAccount, SSO, TwoFactor}
+  alias Authmk.Plugins.{Admin, AuditLog, Organization, SCIM, ServiceAccount, SSO, TwoFactor}
 
   @doc "Handles `api/*`: `path` is what follows `api/`."
   def call(conn, path, opts) do
@@ -55,7 +55,7 @@ defmodule Authmk.Dashboard.API do
 
   defp route(conn, "POST", ["users", id, "sessions", session_id, "revoke"], ctx, admin) do
     with_user(conn, ctx, id, fn user ->
-      permitted(conn, ctx, admin, %{session: [:revoke]}, fn ->
+      managed(conn, ctx, admin, user, %{session: [:revoke]}, fn ->
         :ok = SessionStore.delete_by_id(ctx, user.id, session_id)
       end)
     end)
@@ -97,7 +97,7 @@ defmodule Authmk.Dashboard.API do
     do: error(conn, 404, "not_found", "No such page.")
 
   defp act(conn, ctx, admin, user, "ban") do
-    permitted(conn, ctx, admin, %{user: [:ban]}, fn ->
+    managed(conn, ctx, admin, user, %{user: [:ban]}, fn ->
       {:ok, _user} =
         Store.update(ctx, :user, user, %{banned: true, ban_reason: "Banned from the dashboard"})
 
@@ -106,21 +106,21 @@ defmodule Authmk.Dashboard.API do
   end
 
   defp act(conn, ctx, admin, user, "unban") do
-    permitted(conn, ctx, admin, %{user: [:ban]}, fn ->
+    managed(conn, ctx, admin, user, %{user: [:ban]}, fn ->
       {:ok, _user} =
         Store.update(ctx, :user, user, %{banned: false, ban_reason: nil, ban_expires: nil})
     end)
   end
 
   defp act(conn, ctx, admin, user, "revoke-sessions") do
-    permitted(conn, ctx, admin, %{session: [:revoke]}, fn ->
+    managed(conn, ctx, admin, user, %{session: [:revoke]}, fn ->
       :ok = SessionStore.delete_all(ctx, user.id)
     end)
   end
 
   # For a user who lost their device: two-factor off, its secrets gone.
   defp act(conn, ctx, admin, user, "disable-two-factor") do
-    permitted(conn, ctx, admin, %{user: [:update]}, fn ->
+    managed(conn, ctx, admin, user, %{user: [:update]}, fn ->
       _removed =
         if Data.model?(ctx, :two_factor), do: Store.delete_all(ctx, :two_factor, user_id: user.id)
 
@@ -148,6 +148,15 @@ defmodule Authmk.Dashboard.API do
     else
       error(conn, 403, "forbidden", "Your role doesn't allow this.")
     end
+  end
+
+  # Actions on a user also need the admin to hold every permission that
+  # user has (see Authmk.Plugins.Admin.can_manage?/3).
+  # Access.can?/3 first: it's false without the Admin plugin.
+  defp managed(conn, ctx, admin, user, permissions, fun) do
+    if Access.can?(ctx, admin, permissions) and Admin.can_manage?(ctx, admin, user),
+      do: permitted(conn, ctx, admin, permissions, fun),
+      else: error(conn, 403, "forbidden", "Your role doesn't allow this.")
   end
 
   defp with_user(conn, ctx, id, fun) do

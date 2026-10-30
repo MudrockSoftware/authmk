@@ -33,10 +33,21 @@ defmodule Authmk.UserTest.VerifiedDeleteAuth do
     do: send(self(), {:email, :delete_account, link})
 end
 
+defmodule Authmk.UserTest.ChangeEmailAuth do
+  use Authmk,
+    otp_app: :authmk,
+    repo: Authmk.Test.Repo,
+    plugins: [Authmk.Plugins.EmailPassword],
+    base_url: "http://localhost:4000",
+    background: :inline,
+    rate_limit: [enabled: false],
+    user: [change_email: [enabled: true]]
+end
+
 defmodule Authmk.UserTest do
   use Authmk.EmulationCase, async: true
 
-  alias Authmk.Test.Repo
+  alias Authmk.Test.{Browser, Repo}
 
   @moduletag auth: Authmk.UserTest.Auth
 
@@ -85,6 +96,27 @@ defmodule Authmk.UserTest do
 
     assert conn.status == 404
     assert json(conn)["error"]["code"] == "feature_disabled"
+  end
+
+  @tag auth: Authmk.UserTest.ChangeEmailAuth
+  test "an unverified email changes at once, but not to a taken one", %{browser: browser} do
+    {_bob, _user} =
+      sign_up(Browser.new(Authmk.UserTest.ChangeEmailAuth), %{
+        email: "bob@example.com"
+      })
+
+    {browser, _user} = sign_up(browser)
+
+    # The same answer as a change that goes ahead, so this can't find accounts.
+    {browser, conn} = post(browser, "/change-email", %{new_email: "bob@example.com"})
+    assert json(conn) == %{"status" => true}
+    {browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@example.com"
+
+    {browser, conn} = post(browser, "/change-email", %{new_email: "ada@new.example"})
+    assert json(conn) == %{"status" => true}
+    {_browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@new.example"
   end
 
   describe "delete-user" do

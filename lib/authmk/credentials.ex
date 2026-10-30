@@ -4,7 +4,7 @@ defmodule Authmk.Credentials do
   with `provider_id: "credential"`.
   """
 
-  alias Authmk.{Context, Error, Store}
+  alias Authmk.{Background, Context, Error, Sessions, Store}
 
   @provider_id "credential"
 
@@ -48,5 +48,18 @@ defmodule Authmk.Credentials do
       account ->
         Store.update(ctx, :account, account, %{password: hash})
     end
+  end
+
+  @doc """
+  What follows a password reset, by link or by code: the user's sessions end
+  when `revoke?` (see `Authmk.Plugins.EmailPassword.revoke_sessions_on_reset?/1`),
+  then `on_password_reset` runs. Whoever knew the old password may still be
+  signed in.
+  """
+  @spec password_reset(Context.t(), struct(), boolean()) :: :ok
+  def password_reset(ctx, user, revoke?) do
+    if revoke?, do: :ok = Sessions.revoke_all(ctx, user.id)
+    Background.callback(ctx, :on_password_reset, %{user: user})
+    :ok
   end
 end

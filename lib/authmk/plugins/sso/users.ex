@@ -68,8 +68,11 @@ defmodule Authmk.Plugins.SSO.Users do
       email: info.email,
       name: info.name || info.email |> String.split("@") |> hd(),
       image: info.image,
-      # A verified domain vouches for its addresses.
-      email_verified: info.email_verified or owns_email?(ctx, provider, info.email)
+      # Only a verified domain vouches for its addresses. Anyone can add a
+      # provider, so its own email_verified claim proves nothing: trusting
+      # it would let it plant verified accounts for strangers' emails, which
+      # other sign-in methods then link to.
+      email_verified: owns_email?(ctx, provider, info.email)
     }
 
     result =
@@ -87,7 +90,7 @@ defmodule Authmk.Plugins.SSO.Users do
   # A SCIM connection tied to this provider provisioned the user.
   defp provisioned?(%Context{config: config} = ctx, provider, user) do
     SCIM in Enum.map(config.plugins, &elem(&1, 0)) and
-      SCIM.provisioned_for?(ctx, user, provider.provider_id)
+      SCIM.provisioned_for?(ctx, user, provider)
   end
 
   defp owns_email?(ctx, %{domain: domain} = provider, email) when is_binary(domain) do

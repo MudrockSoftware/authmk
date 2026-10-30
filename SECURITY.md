@@ -15,5 +15,7 @@ prefer otherwise.
 
 ## Supported versions
 
-authmk is in early development (0.x). Security fixes go into the latest
-release only.
+Security fixes go into the latest minor release of the current major
+version (1.x). When the only safe fix changes behaviour, it still ships in a
+patch release, and the release notes say what changed; see the
+[stability guide](guides/stability.md).

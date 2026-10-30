@@ -180,10 +180,13 @@ defmodule Authmk.SSOTest do
     {_anyone, conn} = post(Browser.new(Auth), "/sign-in/sso", %{email: "ada@acme.example"})
     assert json(conn)["error"]["code"] == "sso_provider_not_found"
 
-    # Named outright, it signs in users it creates.
+    # Named outright, it signs in users it creates. Their emails stay
+    # unverified, whatever the provider claims: anyone can add a provider,
+    # and other sign-in methods trust verified emails.
     {ada, location} = sso(Browser.new(Auth), %{provider_id: "acme"}, key)
     assert location == "/done"
     assert signed_in_email(ada) == "ada@acme.example"
+    assert email_verified?("ada@acme.example") == false
 
     # The TXT record proves the domain.
     {owner, conn} = post(owner, "/sso/request-domain-verification", %{provider_id: "acme"})
@@ -198,6 +201,19 @@ defmodule Authmk.SSOTest do
     {ada, location} = sso(Browser.new(Auth), %{email: "ada@acme.example"}, key)
     assert location == "/done"
     assert signed_in_email(ada) == "ada@acme.example"
+
+    # Once the domain is proven, it vouches for the users it creates.
+    {_grace, "/done"} =
+      sso(Browser.new(Auth), %{email: "grace@acme.example"}, key, %{
+        "sub" => "acme-3",
+        "email" => "grace@acme.example"
+      })
+
+    assert email_verified?("grace@acme.example") == true
+  end
+
+  defp email_verified?(email) do
+    Repo.one!(from(u in "users", where: u.email == ^email, select: u.email_verified)) in [true, 1]
   end
 
   test "a provider can't claim existing accounts until it owns their domain", %{

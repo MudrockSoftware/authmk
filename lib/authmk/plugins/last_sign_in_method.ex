@@ -52,7 +52,8 @@ defmodule Authmk.Plugins.LastSignInMethod do
     magic_link_verify: "magic-link",
     passkey_verify_authentication: "passkey",
     siwe_verify: "siwe",
-    one_tap_callback: "google"
+    one_tap_callback: "google",
+    one_tap_redirect: "google"
   }
 
   @impl true

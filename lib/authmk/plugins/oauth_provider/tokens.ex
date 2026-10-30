@@ -69,7 +69,10 @@ defmodule Authmk.Plugins.OAuthProvider.Tokens do
       %{
         "iss" => Config.issuer(ctx),
         "aud" => grant.resource,
-        "sub" => if(grant[:user], do: Claims.subject(grant.user), else: client.client_id),
+        # The client can read this token, so a pairwise client gets its
+        # pairwise subject here too, never the user's id.
+        "sub" =>
+          if(grant[:user], do: Claims.subject(grant.user, client, opts), else: client.client_id),
         "client_id" => client.client_id,
         "scope" => Enum.join(grant.scopes, " "),
         "iat" => now,

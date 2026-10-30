@@ -3,6 +3,7 @@ defmodule Authmk.Request do
   # Facts about the incoming request: client IP and user agent.
 
   alias Authmk.Context
+  alias Authmk.OAuth.PublicHost
 
   @doc """
   The client IP as a string, or `nil`. Proxy headers are only read when
@@ -33,13 +34,25 @@ defmodule Authmk.Request do
     conn |> Plug.Conn.get_req_header("user-agent") |> List.first()
   end
 
+  # Proxies append to headers like X-Forwarded-For, so only the right end is
+  # trustworthy: the left end is whatever the client sent. Walking from the
+  # right, the first public address is the client's; the private ones before
+  # it are your own proxies. With only private addresses, the rightmost wins.
   defp header_ip(conn, header) do
-    with [value | _] <- Plug.Conn.get_req_header(conn, header),
-         first = value |> String.split(",") |> hd() |> String.trim(),
-         {:ok, ip} <- :inet.parse_address(String.to_charlist(first)) do
-      ip
-    else
-      _ -> nil
+    addresses =
+      conn
+      |> Plug.Conn.get_req_header(header)
+      |> Enum.flat_map(&String.split(&1, ","))
+      |> Enum.flat_map(&parse_address/1)
+      |> Enum.reverse()
+
+    Enum.find(addresses, List.first(addresses), &PublicHost.public?/1)
+  end
+
+  defp parse_address(value) do
+    case :inet.parse_address(value |> String.trim() |> String.to_charlist()) do
+      {:ok, ip} -> [ip]
+      {:error, _invalid} -> []
     end
   end
 end

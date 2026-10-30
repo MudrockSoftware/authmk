@@ -2,10 +2,9 @@
 
 Website: <https://authmk.com>
 
-> **Status: early development.** The foundation, email/password, social
-> sign-in, two-factor authentication and the passwordless sign-in methods
-> work and are tested; more plugins are coming (see [ROADMAP.md](ROADMAP.md)).
-> The API will change before 1.0.
+> **Status: 1.0.** The public API, plugin API, endpoints and error codes are
+> stable: see the [stability guide](guides/stability.md). What comes next is
+> in [ROADMAP.md](ROADMAP.md).
 
 ## Why
 
@@ -20,7 +19,7 @@ model to Phoenix and Ecto.
 1. Add the dependency:
 
    ```elixir
-   {:authmk, "~> 0.1.0"}
+   {:authmk, "~> 1.0"}
    ```
 
 2. Define an auth module:
@@ -332,14 +331,15 @@ Authmk is English only. Errors carry a stable `code`, such as
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full feature plan toward 1.0.
+See [ROADMAP.md](ROADMAP.md) for what's planned for 1.x, and
+[CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:authmk, "~> 0.1.0"}
+    {:authmk, "~> 1.0"}
   ]
 end
 ```

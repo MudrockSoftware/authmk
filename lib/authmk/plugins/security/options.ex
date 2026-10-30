@@ -29,7 +29,7 @@ defmodule Authmk.Plugins.Security.Options do
         type: :keyword_list,
         default: [],
         doc:
-          "Sign-up email checks: `block_disposable` (default true), `check_mx` (default false), `unique_canonical` (default true: `a.b+tag@gmail.com` counts as `ab@gmail.com` for uniqueness), `resolve_mx` (`fn domain -> {:ok, [host]} | :error end`)."
+          "Sign-up email checks: `block_disposable` (default true), `check_mx` (default false), `unique_canonical` (default false; when true, `a.b+tag@gmail.com` counts as `ab@gmail.com` for uniqueness), `resolve_mx` (`fn domain -> {:ok, [host]} | :error end`)."
       ],
       geo_lookup: [
         type: {:fun, 1},

@@ -34,7 +34,8 @@ defmodule Authmk.Plugins.SCIM do
 
   A connection may name an `Authmk.Plugins.SSO` provider (`provider_id`):
   the users it provisioned then sign in through that provider, which may
-  link to them without owning their email domain.
+  link to them without owning their email domain. A provider that belongs
+  to an organization only accepts its own organization's connections.
 
   ## Options
 
@@ -248,9 +249,11 @@ defmodule Authmk.Plugins.SCIM do
 
   @doc false
   # For Authmk.Plugins.SSO: whether a connection tied to the SSO provider
-  # provisioned this user, so the provider may sign them in.
-  @spec provisioned_for?(Context.t(), struct(), String.t()) :: boolean()
-  def provisioned_for?(ctx, user, provider_id) do
+  # provisioned this user, so the provider may sign them in. A provider that
+  # belongs to an organization only counts that organization's connections:
+  # naming someone else's provider in a connection gains nothing.
+  @spec provisioned_for?(Context.t(), struct(), %{provider_id: String.t()}) :: boolean()
+  def provisioned_for?(ctx, user, %{provider_id: provider_id} = provider) do
     query =
       from(l in Store.module(ctx, :scim_user),
         join: c in ^Store.module(ctx, :scim_connection),
@@ -259,6 +262,12 @@ defmodule Authmk.Plugins.SCIM do
           l.user_id == ^user.id and c.provider_id == ^provider_id and c.status == "active" and
             l.active
       )
+
+    query =
+      case Map.get(provider, :organization_id) do
+        nil -> query
+        organization_id -> from([_l, c] in query, where: c.organization_id == ^organization_id)
+      end
 
     Store.count(ctx, :scim_user, query) > 0
   end

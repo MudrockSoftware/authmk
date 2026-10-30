@@ -18,6 +18,7 @@ defmodule Authmk.Plugins.Organization.Invitations do
          {:ok, organization, actor} <- Access.authorize(ctx, id, invitation: [:create]),
          :ok <- check(Access.valid_role?(ctx, organization, role), Errors.error(:invalid_role)),
          :ok <- Access.check_owner_change(ctx, actor, role),
+         :ok <- Access.check_within_reach(ctx, organization, actor, role),
          :ok <- not_a_member(ctx, organization, email),
          :ok <- valid_team(ctx, organization, params.team_id),
          {:ok, previous} <- previous_invitation(ctx, organization, email, params.resend, opts),

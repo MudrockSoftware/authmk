@@ -1,12 +1,12 @@
 defmodule Authmk.Migration.Diff do
-  @moduledoc """
-  Compares two snapshots and lists the operations that turn the old database
-  into the new one.
+  @moduledoc false
 
-  Operations come in a safe order: drop changed indexes, create tables
-  (referenced tables first), add, modify and remove columns, create indexes,
-  and finally drop tables (referencing tables first).
-  """
+  # Compares two snapshots and lists the operations that turn the old database
+  # into the new one.
+  #
+  # Operations come in a safe order: drop changed indexes, create tables
+  # (referenced tables first), add, modify and remove columns, create indexes,
+  # and finally drop tables (referencing tables first).
 
   alias Authmk.Migration.{Pairs, Snapshot}
 

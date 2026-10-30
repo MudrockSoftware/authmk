@@ -26,18 +26,21 @@ defmodule Authmk.OAuth.PublicHost do
     end
   end
 
-  defp public?({10, _, _, _}), do: false
-  defp public?({127, _, _, _}), do: false
-  defp public?({169, 254, _, _}), do: false
-  defp public?({172, second, _, _}) when second in 16..31, do: false
-  defp public?({192, 168, _, _}), do: false
-  defp public?({100, second, _, _}) when second in 64..127, do: false
-  defp public?({0, _, _, _}), do: false
-  defp public?({first, _, _, _}) when first >= 224, do: false
-  defp public?({0, 0, 0, 0, 0, 0, 0, _}), do: false
-  defp public?({0, 0, 0, 0, 0, 0xFFFF, _, _}), do: false
-  defp public?({first, _, _, _, _, _, _, _}) when first in 0xFC00..0xFDFF, do: false
-  defp public?({first, _, _, _, _, _, _, _}) when first in 0xFE80..0xFEBF, do: false
-  defp public?({first, _, _, _, _, _, _, _}) when first >= 0xFF00, do: false
-  defp public?(_address), do: true
+  @doc "Whether an `:inet` address is public: not loopback, private, link-local or multicast."
+  def public?(address)
+
+  def public?({10, _, _, _}), do: false
+  def public?({127, _, _, _}), do: false
+  def public?({169, 254, _, _}), do: false
+  def public?({172, second, _, _}) when second in 16..31, do: false
+  def public?({192, 168, _, _}), do: false
+  def public?({100, second, _, _}) when second in 64..127, do: false
+  def public?({0, _, _, _}), do: false
+  def public?({first, _, _, _}) when first >= 224, do: false
+  def public?({0, 0, 0, 0, 0, 0, 0, _}), do: false
+  def public?({0, 0, 0, 0, 0, 0xFFFF, _, _}), do: false
+  def public?({first, _, _, _, _, _, _, _}) when first in 0xFC00..0xFDFF, do: false
+  def public?({first, _, _, _, _, _, _, _}) when first in 0xFE80..0xFEBF, do: false
+  def public?({first, _, _, _, _, _, _, _}) when first >= 0xFF00, do: false
+  def public?(_address), do: true
 end

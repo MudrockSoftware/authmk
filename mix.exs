@@ -53,7 +53,7 @@ defmodule Authmk.MixProject do
   def project do
     [
       app: :authmk,
-      version: "0.1.0",
+      version: "1.0.0",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -72,8 +72,7 @@ defmodule Authmk.MixProject do
         ignore_modules: [~r/^Authmk\.Test\./, Authmk.EmulationCase]
       ],
       dialyzer: dialyzer(),
-      description:
-        "An extensible, plugin-based authentication framework for Elixir, inspired by Better Auth.",
+      description: "An extensible, plugin-based authentication framework for Elixir.",
       package: package(),
       source_url: @source_url,
       homepage_url: @homepage_url,
@@ -81,10 +80,17 @@ defmodule Authmk.MixProject do
         main: "readme",
         extras: [
           "README.md",
+          "guides/email-password-and-sessions.md",
           "guides/social-sign-in.md",
+          "guides/sign-in-methods.md",
+          "guides/organizations-and-access-control.md",
           "guides/phoenix-and-liveview.md",
           "guides/api-clients.md",
           "guides/payments.md",
+          "guides/oauth-provider.md",
+          "guides/enterprise-sso-and-scim.md",
+          "guides/security.md",
+          "guides/testing.md",
           "guides/browser-extensions.md",
           "guides/performance.md",
           "guides/migrating-from-phx-gen-auth.md",
@@ -93,6 +99,9 @@ defmodule Authmk.MixProject do
           "guides/writing-plugins.md",
           "guides/deployment.md",
           "guides/cookies-and-domains.md",
+          "guides/stability.md",
+          "guides/errors.md",
+          "CHANGELOG.md",
           "ROADMAP.md",
           "SECURITY.md"
         ],
@@ -223,7 +232,7 @@ defmodule Authmk.MixProject do
       links: %{"Website" => @homepage_url, "GitHub" => @source_url},
       files:
         ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed priv/js guides .formatter.exs
-           mix.exs README.md ROADMAP.md SECURITY.md LICENSE)
+           mix.exs README.md CHANGELOG.md ROADMAP.md SECURITY.md LICENSE)
     ]
   end
 end

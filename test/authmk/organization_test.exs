@@ -670,6 +670,12 @@ defmodule Authmk.OrganizationRolesTest do
 
     assert json(conn)["status"] == "pending"
 
+    # Nor invite someone stronger than themselves.
+    {grace, conn} =
+      post(grace, "/organization/invite-member", %{email: "eve@example.com", role: "admin"})
+
+    assert json(conn)["error"]["code"] == "forbidden"
+
     {_grace, conn} =
       post(grace, "/organization/create-role", %{
         role: "boss",

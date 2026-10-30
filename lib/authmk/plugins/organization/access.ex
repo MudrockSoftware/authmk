@@ -4,7 +4,7 @@ defmodule Authmk.Plugins.Organization.Access do
   # organization's own) and the active organization.
 
   alias Authmk.{AccessControl, Context, Store}
-  alias Authmk.Plugins.Organization.Config
+  alias Authmk.Plugins.Organization.{Config, Permissions}
   alias Authmk.Plugins.Organization.Errors
 
   @doc "The organization a request is about: the given id, or the session's active one."
@@ -75,6 +75,28 @@ defmodule Authmk.Plugins.Organization.Access do
     if owner?(ctx, roles) and not owner?(ctx, actor.role),
       do: {:error, Errors.error(:owner_required)},
       else: :ok
+  end
+
+  @doc """
+  Fails unless `actor` holds every management action `roles` grant: nobody
+  can give a role stronger than their own, or change a member stronger than
+  them. Only the plugin's own resources count, and not `read`: those are
+  what someone could escalate with.
+  """
+  def check_within_reach(ctx, organization, actor, roles) do
+    access_control = access_control(ctx, organization)
+    managed = Enum.map(Permissions.statements(), fn {resource, _} -> to_string(resource) end)
+
+    grants =
+      for {resource, actions} <- AccessControl.granted(access_control, roles),
+          resource in managed,
+          actions = actions |> MapSet.delete("read") |> MapSet.to_list(),
+          actions != [],
+          do: {resource, actions}
+
+    if grants == [] or AccessControl.has_permission?(access_control, actor.role, grants),
+      do: :ok,
+      else: {:error, Authmk.Error.new(:forbidden)}
   end
 
   @doc "Fails when `member` is the organization's last owner."

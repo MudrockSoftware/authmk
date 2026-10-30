@@ -1,6 +1,6 @@
 # Roadmap
 
-This is the full feature plan for authmk 1.0. Items are grouped into
+This is the feature plan for authmk 1.0 and the 1.x releases after it. Items are grouped into
 milestones; each milestone builds on the previous ones. Everything ships as
 core functionality or as a plugin built on the public plugin API.
 
@@ -56,7 +56,6 @@ Legend: `[ ]` planned, `[x]` done
 ### Databases
 - [x] SQLite, PostgreSQL, MySQL and MariaDB through Ecto, chosen automatically from the repo's adapter; the full suite passes on all four
 - [x] Schemas only use features all three databases share: portable field types checked at compile time, new columns on existing tables must be nullable or have a default
-- [ ] CI test matrix across all four databases (GitHub Actions workflow written; not run on GitHub yet)
 
 ### Mix tasks
 - [x] `mix authmk.install`: auth module, supervision tree, config and secrets, Phoenix or Plug router, first migration (Igniter); both example apps are built with it
@@ -361,7 +360,6 @@ Legend: `[ ]` planned, `[x]` done
 - [x] **One-time tokens**: generate and verify single-use tokens (for cross-domain hand-off)
 - [x] **Device authorization** (RFC 8628): device code, user code, polling, approve and deny, client validation, custom code generation, binding to a user in advance, choice of token type
 - [x] **Captcha**: Cloudflare Turnstile, Google reCAPTCHA (v2 and v3 with score threshold), hCaptcha, CaptchaFox; per-endpoint
-- [ ] **Captcha**: Vercel BotID (blocked: BotID is verified only by Vercel's JavaScript SDK on Vercel; there's no API an Elixir server can call)
 - [x] **Compromised passwords**: Have I Been Pwned k-anonymity check; custom message; applies to custom password flows
 - [x] **Last sign-in method**: cookie and optional database field; cross-domain support; can be turned off for GDPR
 - [x] **OAuth proxy**: OAuth sign-in on preview deployments and localhost through a production callback
@@ -492,7 +490,22 @@ Legend: `[ ]` planned, `[x]` done
 
 ---
 
-## AI agents
+## 1.0
+
+- [x] Every milestone above complete (AI agents and Vercel BotID moved to 1.x)
+- [x] Stable public API and plugin API, with a deprecation policy (`guides/stability.md`)
+- [x] Full HexDocs guides and a complete error reference (`guides/errors.md`, checked against the source by a test)
+- [ ] Independent security review
+- [ ] Test suite passing on SQLite, PostgreSQL and MySQL
+- [ ] CI test matrix across all four databases green on GitHub (workflow written; runs on the first push)
+
+---
+
+## 1.x
+
+Planned after 1.0, as minor releases. None of these change existing APIs.
+
+### AI agents
 
 - [ ] Agent identity, registration and discovery
 - [ ] Capability-based authorization for agents
@@ -500,15 +513,24 @@ Legend: `[ ]` planned, `[x]` done
 - [ ] OpenAPI adapter that turns existing endpoints into agent capabilities
 - [ ] Agent events and auditing
 
----
+### Hardening
 
-## 1.0
+Lower-risk issues found while writing the 1.0 guides, for the next minor releases.
 
-- [ ] Every milestone above complete
-- [ ] Stable public API and plugin API, with a deprecation policy
-- [ ] Full HexDocs guides and a complete error reference
-- [ ] Independent security review
-- [ ] Test suite passing on SQLite, PostgreSQL and MySQL
+- [ ] SIWE: asking for a nonce replaces the address's pending one, so others can keep a wallet's sign-in failing
+- [ ] Passkey and SIWE sign-up with an email: the address isn't verified, so it can block its real owner's sign-up
+- [ ] Google One Tap: send and check a nonce, so a captured credential can't be replayed
+- [ ] Phone number: `send-otp` texts any number; add a guard against SMS pumping besides the rate limit
+- [ ] SSRF guards: pin the checked address for the connection (DNS rebinding) when fetching client metadata documents and SSO discovery
+- [ ] Device authorization: check the scope before the device code is used up; validate `client_id` by default
+- [ ] SCIM: provisioning someone again after `DELETE` (with `on_delete: :deactivate`)
+- [ ] Password reset links when `redirect_to` is left out
+- [ ] Bcrypt: refuse passwords over 72 bytes instead of truncating
+- [ ] Log every message through `Authmk.Log`, so `domain: [:authmk]` filters catch them all
+
+### Captcha
+
+- [ ] Vercel BotID (blocked: BotID is verified only by Vercel's JavaScript SDK on Vercel; there's no API an Elixir server can call)
 
 ---
 

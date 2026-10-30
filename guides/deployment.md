@@ -59,7 +59,11 @@ config :my_app, MyApp.Auth, advanced: [ip_address_headers: ["x-forwarded-for"]]
 ```
 
 Only do this behind a proxy that sets the header; otherwise clients can set
-it and dodge rate limits.
+it and dodge rate limits. Proxies append to `x-forwarded-for`, so authmk reads
+it from the right: the first public address it finds is the client's, and
+private addresses (your own proxies) are skipped. If your clients reach you
+over a private network, use a header your proxy overwrites instead, such as
+`x-real-ip`.
 
 ## Several nodes
 

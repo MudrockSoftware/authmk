@@ -114,7 +114,7 @@ defmodule Authmk.Dashboard.Data do
     query =
       from(u in Store.module(ctx, :user),
         order_by: [desc: u.inserted_at, desc: u.id],
-        limit: @page + 1,
+        limit: ^(@page + 1),
         offset: ^offset
       )
 
@@ -235,7 +235,7 @@ defmodule Authmk.Dashboard.Data do
       query =
         from(o in Store.module(ctx, :organization),
           order_by: [desc: o.inserted_at, desc: o.id],
-          limit: @page + 1,
+          limit: ^(@page + 1),
           offset: ^offset
         )
 
@@ -368,7 +368,7 @@ defmodule Authmk.Dashboard.Data do
       query =
         from(s in Store.module(ctx, :service_account),
           order_by: [desc: s.inserted_at, desc: s.id],
-          limit: @page + 1,
+          limit: ^(@page + 1),
           offset: ^offset
         )
 

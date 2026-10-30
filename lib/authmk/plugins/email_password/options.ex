@@ -16,7 +16,7 @@ defmodule Authmk.Plugins.EmailPassword.Options do
             min_password_length: [type: :pos_integer, default: 8],
             max_password_length: [type: :pos_integer, default: 128],
             reset_password_token_expires_in: [type: :pos_integer, default: 3600, doc: "Seconds."],
-            revoke_sessions_on_password_reset: [type: :boolean, default: false]
+            revoke_sessions_on_password_reset: [type: :boolean, default: true]
           )
 
   def schema, do: @schema

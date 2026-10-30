@@ -112,10 +112,10 @@ defmodule Authmk.Plugins.Security do
 
     cond do
       IP.member?(address, opts[:blocked_ips]) ->
-        refuse(ctx, opts, :blocked_ip, :ip_blocked, 403)
+        refuse(ctx, opts, :blocked_ip, :ip_blocked)
 
       opts[:ip_reputation] && address && opts[:ip_reputation].(Request.client_ip(ctx)) == :block ->
-        refuse(ctx, opts, :suspicious_ip, :ip_blocked, 403)
+        refuse(ctx, opts, :suspicious_ip, :ip_blocked)
 
       true ->
         :ok
@@ -129,7 +129,7 @@ defmodule Authmk.Plugins.Security do
     case (allowed || blocked) && location(ctx, opts) do
       %{country: country} when is_binary(country) ->
         if (allowed && country not in allowed) || (blocked && country in blocked),
-          do: refuse(ctx, opts, :region_blocked, :region_blocked, 403, %{country: country}),
+          do: refuse(ctx, opts, :region_blocked, :region_blocked, %{country: country}),
           else: :ok
 
       _unknown ->
@@ -144,7 +144,7 @@ defmodule Authmk.Plugins.Security do
 
     if opts[:block_bots] and endpoint in (@sign_up ++ Options.sign_in_endpoints()) and
          (agent in [nil, ""] or Regex.match?(@bots, agent)),
-       do: refuse(ctx, opts, :bot, :bot_blocked, 403, %{user_agent: agent}),
+       do: refuse(ctx, opts, :bot, :bot_blocked, %{user_agent: agent}),
        else: :ok
   end
 
@@ -163,7 +163,7 @@ defmodule Authmk.Plugins.Security do
     with true <- limit != false and endpoint in @sign_up,
          count when is_binary(count) <- Counters.get(ctx, sign_up_key(ctx, limit)),
          true <- String.to_integer(count) >= limit[:max] do
-      refuse(ctx, opts, :sign_up_limit, :too_many_sign_ups, 429)
+      refuse(ctx, opts, :sign_up_limit, :too_many_sign_ups)
     else
       _under_limit -> :ok
     end
@@ -178,7 +178,7 @@ defmodule Authmk.Plugins.Security do
       )
 
     case String.contains?(email, "@") && email_problem(ctx, email, rules) do
-      {type, code, status} -> refuse(ctx, opts, type, code, status)
+      {type, code} -> refuse(ctx, opts, type, code)
       _fine -> :ok
     end
   end
@@ -188,13 +188,13 @@ defmodule Authmk.Plugins.Security do
   defp email_problem(ctx, email, rules) do
     cond do
       rules[:block_disposable] and Email.disposable?(email) ->
-        {:disposable_email, :disposable_email, 400}
+        {:disposable_email, :disposable_email}
 
       rules[:check_mx] and not Email.receives_mail?(email, rules[:resolve_mx]) ->
-        {:undeliverable_email, :email_cannot_receive_mail, 400}
+        {:undeliverable_email, :email_cannot_receive_mail}
 
       rules[:unique_canonical] and canonical_taken?(ctx, email) ->
-        {:duplicate_mailbox, :email_already_used, 422}
+        {:duplicate_mailbox, :email_already_used}
 
       true ->
         nil
@@ -214,7 +214,7 @@ defmodule Authmk.Plugins.Security do
         count = Counters.increment(ctx, "velocity:#{endpoint}:#{id}", limit[:window])
 
         if count > limit[:max],
-          do: refuse(ctx, opts, :velocity, :velocity_limited, 429, %{endpoint: endpoint}),
+          do: refuse(ctx, opts, :velocity, :velocity_limited, %{endpoint: endpoint}),
           else: :ok
 
       _no_limit ->
@@ -409,19 +409,22 @@ defmodule Authmk.Plugins.Security do
     Store.list(ctx, :user, query)
   end
 
-  defp refuse(ctx, opts, type, code, status, details \\ %{}) do
-    :ok = Events.emit(ctx, opts, type, details)
-    {:error, Error.custom(code, status, message(code))}
-  end
+  @errors %{
+    ip_blocked: {403, "Requests from this address aren't accepted"},
+    region_blocked: {403, "This service isn't available in your region"},
+    bot_blocked: {403, "Automated requests aren't accepted"},
+    too_many_sign_ups: {429, "Too many sign-ups from here. Try later"},
+    disposable_email: {400, "Use a permanent email address"},
+    email_cannot_receive_mail: {400, "This email domain can't receive mail"},
+    email_already_used: {422, "This mailbox already has an account"},
+    velocity_limited: {429, "You've done this too often. Try later"}
+  }
 
-  defp message(:ip_blocked), do: "Requests from this address aren't accepted"
-  defp message(:region_blocked), do: "This service isn't available in your region"
-  defp message(:bot_blocked), do: "Automated requests aren't accepted"
-  defp message(:too_many_sign_ups), do: "Too many sign-ups from here. Try later"
-  defp message(:disposable_email), do: "Use a permanent email address"
-  defp message(:email_cannot_receive_mail), do: "This email domain can't receive mail"
-  defp message(:email_already_used), do: "This mailbox already has an account"
-  defp message(:velocity_limited), do: "You've done this too often. Try later"
+  defp refuse(ctx, opts, type, code, details \\ %{}) do
+    :ok = Events.emit(ctx, opts, type, details)
+    {status, message} = Map.fetch!(@errors, code)
+    {:error, Error.custom(code, status, message)}
+  end
 
   defp sign_up_key(ctx, limit),
     do: "sign-ups:#{ip(ctx)}:#{div(System.system_time(:second), limit[:window])}"

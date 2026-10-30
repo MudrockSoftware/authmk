@@ -71,11 +71,14 @@ defmodule Authmk.Endpoints.EmailVerification do
   defp refresh_signed_in_user(%{user: nil} = ctx, _user), do: ctx
   defp refresh_signed_in_user(ctx, user), do: %{ctx | user: user}
 
-  # A change-email token moves the user to the new address.
-  defp apply_verification(ctx, user, %{"new_email" => new_email}) do
-    if Store.get_by(ctx, :user, email: new_email),
-      do: {:error, Error.new(:email_cannot_be_updated)},
-      else: Store.update(ctx, :user, user, %{email: new_email, email_verified: true})
+  # A change-email token moves the user to the new address, but only from
+  # the address it was issued for: a later change makes older links useless.
+  defp apply_verification(ctx, user, %{"new_email" => new_email, "email" => email}) do
+    cond do
+      user.email != email -> invalid_token()
+      Store.get_by(ctx, :user, email: new_email) -> {:error, Error.new(:email_cannot_be_updated)}
+      true -> Store.update(ctx, :user, user, %{email: new_email, email_verified: true})
+    end
   end
 
   # A plain token only counts while the user still has the address it was sent to.

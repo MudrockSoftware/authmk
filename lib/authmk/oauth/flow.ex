@@ -1,8 +1,8 @@
 defmodule Authmk.OAuth.Flow do
-  @moduledoc """
-  The OAuth 2.0 authorization code flow: the authorization URL (with PKCE),
-  the code exchange, and refreshing tokens.
-  """
+  @moduledoc false
+
+  # The OAuth 2.0 authorization code flow: the authorization URL (with PKCE),
+  # the code exchange, and refreshing tokens.
 
   alias Authmk.{Context, Error, Log, URL}
   alias Authmk.OAuth.{Provider, Tokens}
@@ -89,10 +89,20 @@ defmodule Authmk.OAuth.Flow do
 
       # Never shown to users: providers explain their errors in detail.
       response ->
-        Log.warning("#{provider.name} token request failed: #{inspect(response, limit: 5)}")
+        Log.warning("#{provider.name} token request failed: #{describe(response)}")
         {:error, Error.new(error_code)}
     end
   end
+
+  # Only the status and the OAuth error fields: a body in an unexpected shape
+  # may still hold tokens, and those never go in logs.
+  defp describe({:ok, status, %{} = body}),
+    do: "status #{status}, #{inspect(Map.take(body, ["error", "error_description"]))}"
+
+  defp describe({:ok, status, _body}), do: "status #{status}"
+  defp describe({:error, %{__exception__: true} = exception}), do: Exception.message(exception)
+  defp describe({:error, reason}) when is_atom(reason), do: inspect(reason)
+  defp describe(_error), do: "the request failed"
 
   @reserved ~w(state client_id redirect_uri response_type code_challenge code_challenge_method nonce scope)
 

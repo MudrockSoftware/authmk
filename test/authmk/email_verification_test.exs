@@ -164,13 +164,35 @@ defmodule Authmk.EmailVerificationTest do
     assert json(conn)["user"]["email"] == "ada@new.example"
   end
 
-  test "can't change to an email that's taken", %{browser: browser} do
+  test "a taken email gets the same answer, and nothing changes", %{browser: browser} do
     {_browser, _conn} = post(browser, "/sign-up/email", %{@sign_up | email: "bob@example.com"})
     _link = assert_email(:verification)
     browser = verified_user(browser)
 
-    {_browser, conn} = post(browser, "/change-email", %{new_email: "bob@example.com"})
-    assert json(conn)["error"]["code"] == "email_cannot_be_updated"
+    {browser, conn} = post(browser, "/change-email", %{new_email: "bob@example.com"})
+    assert json(conn) == %{"status" => true}
+    refute_received {:email, :change_email, _}
+
+    {_browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@example.com"
+  end
+
+  test "a change link stops working once the email changes again", %{browser: browser} do
+    browser = verified_user(browser)
+
+    # A typo: the link goes to someone else's mailbox.
+    {browser, _conn} = post(browser, "/change-email", %{new_email: "ada@typo.example"})
+    typo = assert_email(:change_email)
+
+    {browser, _conn} = post(browser, "/change-email", %{new_email: "ada@new.example"})
+    right = assert_email(:change_email)
+    {browser, _conn} = get(browser, "/verify-email", %{token: right.token})
+
+    {_other, conn} = get(%{browser | cookies: %{}}, "/verify-email", %{token: typo.token})
+    assert json(conn)["error"]["code"] == "invalid_token"
+
+    {_browser, conn} = get(browser, "/get-session")
+    assert json(conn)["user"]["email"] == "ada@new.example"
   end
 
   defp verified_user(browser) do

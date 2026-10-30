@@ -51,6 +51,7 @@ defmodule Authmk.Plugins.PhoneNumber do
     Store
   }
 
+  alias Authmk.Plugins.EmailPassword
   alias Authmk.Plugins.PhoneNumber.Options
 
   @verify_purpose "phone-number"
@@ -171,7 +172,9 @@ defmodule Authmk.Plugins.PhoneNumber do
     with :ok <- valid_password(params.new_password, opts),
          :ok <- check_code(ctx, @reset_purpose, opts),
          %{} = user <- Store.get_by(ctx, :user, phone_number: params.phone_number),
-         {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
+         {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password),
+         :ok <-
+           Credentials.password_reset(ctx, user, EmailPassword.revoke_sessions_on_reset?(ctx)) do
       {:ok, %{status: true}, ctx}
     else
       nil -> {:error, Error.new(:invalid_otp)}

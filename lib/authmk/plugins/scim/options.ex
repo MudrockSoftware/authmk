@@ -18,7 +18,7 @@ defmodule Authmk.Plugins.SCIM.Options do
         type: :boolean,
         default: false,
         doc:
-          "Link a provisioned user to an existing user with the same email. Off by default: provisioning then fails with `uniqueness`, so no connection takes over accounts it doesn't own."
+          "Link a provisioned user to an existing user with the same email, with `Authmk.Plugins.Organization`, only when that user is already a member of the connection's organization. Off by default: provisioning then fails with `uniqueness`, so no connection takes over accounts it doesn't own."
       ],
       resolve_user: [
         type: {:fun, 3},

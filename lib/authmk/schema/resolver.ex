@@ -1,9 +1,9 @@
 defmodule Authmk.Schema.Resolver do
-  @moduledoc """
-  Merges core models, plugin schemas and user config into one
-  `Authmk.Schema.Definition`. Runs at compile time; every problem raises an
-  `ArgumentError` that points at the `use Authmk` line.
-  """
+  @moduledoc false
+
+  # Merges core models, plugin schemas and user config into one
+  # `Authmk.Schema.Definition`. Runs at compile time; every problem raises an
+  # `ArgumentError` that points at the `use Authmk` line.
 
   alias Authmk.Schema.{Core, Definition, Field, Model, PrimaryKey}
 

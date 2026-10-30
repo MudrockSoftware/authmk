@@ -587,7 +587,7 @@ defmodule Authmk.UntrustedInputFuzzTest do
                 binary(max_length: 400),
                 map({integer(0..(byte_size(xml) - 1)), binary(min_length: 1, max_length: 8)}, fn
                   {at, bytes} ->
-                    <<before::binary-size(at), _::binary-size(1), rest::binary>> = xml
+                    <<before::binary-size(^at), _::binary-size(1), rest::binary>> = xml
                     Base.encode64(before <> bytes <> rest)
                 end)
               ])

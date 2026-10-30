@@ -435,6 +435,7 @@ defmodule Authmk.AdminAccessControlTest do
       roles: [
         admin: AdminPermissions.statements(),
         support: [user: [:list, :get], session: [:list]],
+        helpdesk: [user: [:list, :get, :set_password, :set_role, :update], session: [:revoke]],
         member: [project: [:create]]
       ]
   end
@@ -475,5 +476,48 @@ defmodule Authmk.AdminAccessControlTest do
       })
 
     assert json(conn) == %{"success" => true}
+  end
+
+  # A limited admin role can't take over a stronger account, or hand out a
+  # stronger role, its own included.
+  test "a helpdesk role manages members, not admins", %{browser: browser} do
+    {helpdesk, helper} = sign_up(browser)
+    {_admin, admin} = sign_up(Browser.new(Auth), %{email: "root@example.com"})
+    {_member, member} = sign_up(Browser.new(Auth), %{email: "grace@example.com"})
+
+    module = Authmk.Store.module(Authmk.Context.new(Auth.config()), :user)
+    Repo.update_all(where(module, id: ^helper["id"]), set: [role: "helpdesk"])
+    Repo.update_all(where(module, id: ^admin["id"]), set: [role: "admin"])
+
+    {helpdesk, conn} =
+      post(helpdesk, "/admin/set-user-password", %{
+        user_id: member["id"],
+        new_password: "a new password"
+      })
+
+    assert json(conn) == %{"status" => true}
+
+    for {path, params} <- [
+          {"/admin/set-user-password", %{new_password: "a new password"}},
+          {"/admin/update-user", %{data: %{email: "mine@example.com"}}},
+          {"/admin/revoke-user-sessions", %{}},
+          {"/admin/set-role", %{role: "member"}}
+        ] do
+      {_helpdesk, conn} = post(helpdesk, path, Map.put(params, :user_id, admin["id"]))
+      assert json(conn)["error"]["code"] == "forbidden", path
+    end
+
+    for user_id <- [helper["id"], member["id"]] do
+      {_helpdesk, conn} = post(helpdesk, "/admin/set-role", %{user_id: user_id, role: "admin"})
+      assert json(conn)["error"]["code"] == "forbidden"
+    end
+
+    {_browser, conn} =
+      Browser.post(Browser.new(Auth), "/sign-in/email", %{
+        email: "root@example.com",
+        password: "correct horse"
+      })
+
+    assert conn.status == 200
   end
 end

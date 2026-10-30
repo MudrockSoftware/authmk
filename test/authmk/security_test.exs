@@ -208,6 +208,20 @@ defmodule Authmk.SecurityTest do
       assert json(conn)["session"]["ip_address"] == "203.0.113.7"
     end
 
+    test "ignores addresses a client puts in front of the proxy's", %{browser: browser} do
+      # The client sent "198.51.100.1"; the proxy appended the real address.
+      browser = %{
+        browser
+        | origin: "https://example.com",
+          headers: [{"x-forwarded-for", "198.51.100.1, 203.0.113.7"}]
+      }
+
+      {browser, _user} = sign_up(browser)
+
+      {_browser, conn} = get(browser, "/get-session")
+      assert json(conn)["session"]["ip_address"] == "203.0.113.7"
+    end
+
     test "uses secure, prefixed cookies on HTTPS", %{browser: browser} do
       {_browser, conn} =
         post(

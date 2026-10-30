@@ -15,7 +15,8 @@ defmodule Authmk.OneTapTest do
         Authmk.Plugins.EmailPassword,
         {Authmk.Plugins.TwoFactor,
          skip_verification_on_enable: true, allow_passwordless: true, two_factor_page: "/2fa"},
-        {Authmk.Plugins.OneTap, redirect_url: "/dashboard", error_url: "/sign-in"}
+        {Authmk.Plugins.OneTap, redirect_url: "/dashboard", error_url: "/sign-in"},
+        Authmk.Plugins.LastSignInMethod
       ],
       advanced: [http_options: [plug: {Req.Test, __MODULE__}]]
   end
@@ -95,6 +96,7 @@ defmodule Authmk.OneTapTest do
       {browser, conn} = google_post(browser, credential(jwk))
       assert redirected_to(conn) == "/dashboard"
       assert signed_in_user(browser)["email"] == "ada@example.com"
+      assert cookie(browser, "authmk.last_sign_in_method") == "google"
     end
 
     test "needs Google's double-submit token", %{browser: browser, jwk: jwk} do

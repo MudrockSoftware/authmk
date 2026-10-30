@@ -135,7 +135,7 @@ defmodule Authmk.MigratingTest do
   test "phx.gen.auth users sign in with their passwords, ids and data kept", %{repo: repo} do
     migrate(repo, [{1, PhxGenAuthTables}])
 
-    {1, [%{id: ada_id}]} =
+    {1, _rows} =
       Repo.insert_all(
         "users",
         [
@@ -146,10 +146,11 @@ defmodule Authmk.MigratingTest do
             inserted_at: DateTime.utc_now() |> DateTime.truncate(:second),
             updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
           }
-        ],
-        returning: [:id]
+        ]
       )
 
+    # Read back rather than `returning:`, which MySQL doesn't have.
+    ada_id = Repo.one!(from(u in "users", where: u.email == "ada@example.com", select: u.id))
     Repo.insert_all("posts", [%{title: "Notes", user_id: ada_id}])
 
     migrate(repo, [{2, AddAuthmkUserColumns}, {3, generated_migration()}, {4, MoveUsersToAuthmk}])

@@ -1,8 +1,8 @@
 defmodule Authmk.Migration.Render do
-  @moduledoc """
-  Renders diff operations as an Ecto migration with `up/0` and `down/0`.
-  `down/0` comes from diffing in the other direction, so it is exact.
-  """
+  @moduledoc false
+
+  # Renders diff operations as an Ecto migration with `up/0` and `down/0`.
+  # `down/0` comes from diffing in the other direction, so it is exact.
 
   alias Authmk.Migration.{Diff, SQLiteRebuild}
 

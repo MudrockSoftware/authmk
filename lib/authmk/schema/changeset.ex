@@ -1,11 +1,11 @@
 defmodule Authmk.Schema.Changeset do
-  @moduledoc """
-  Builds Ecto changesets from a model's field specs.
+  @moduledoc false
 
-  In `:input` mode only fields with `input: true` are cast, so request params
-  can never set fields like `email_verified`. `:internal` mode casts every
-  field and is used by authmk itself.
-  """
+  # Builds Ecto changesets from a model's field specs.
+  #
+  # In `:input` mode only fields with `input: true` are cast, so request params
+  # can never set fields like `email_verified`. `:internal` mode casts every
+  # field and is used by authmk itself.
 
   import Ecto.Changeset
 

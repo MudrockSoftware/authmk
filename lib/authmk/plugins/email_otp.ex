@@ -62,6 +62,7 @@ defmodule Authmk.Plugins.EmailOTP do
   }
 
   alias Authmk.Plugins.EmailOTP.Options
+  alias Authmk.Plugins.EmailPassword
 
   @types %{
     "sign-in" => :sign_in,
@@ -216,7 +217,9 @@ defmodule Authmk.Plugins.EmailOTP do
          %{} = user <- Store.get_by(ctx, :user, email: email),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.password),
          # Getting the code proved the address too.
-         {:ok, _user} <- mark_verified(ctx, user) do
+         {:ok, _user} <- mark_verified(ctx, user),
+         :ok <-
+           Credentials.password_reset(ctx, user, EmailPassword.revoke_sessions_on_reset?(ctx)) do
       {:ok, %{success: true}, ctx}
     else
       nil -> {:error, Error.new(:invalid_otp)}
@@ -229,9 +232,10 @@ defmodule Authmk.Plugins.EmailOTP do
     opts = Context.plugin_opts(ctx, __MODULE__)
     new_email = Email.normalize(params.new_email)
 
+    # A taken email gets the same answer, so this can't find registered
+    # ones; it just gets no code.
     with :ok <- valid_email(new_email),
-         :ok <- available(ctx, new_email),
-         :ok <- deliver(ctx, new_email, :change_email, opts, change_key(user, new_email)) do
+         :ok <- deliver_unless_taken(ctx, new_email, opts, change_key(user, new_email)) do
       {:ok, %{success: true}, ctx}
     end
   end
@@ -299,8 +303,15 @@ defmodule Authmk.Plugins.EmailOTP do
       else: :ok
   end
 
-  # A change code is bound to the user who asked.
-  defp change_key(user, new_email), do: "#{user.id}:#{new_email}"
+  defp deliver_unless_taken(ctx, new_email, opts, key) do
+    if available(ctx, new_email) == :ok,
+      do: deliver(ctx, new_email, :change_email, opts, key),
+      else: :ok
+  end
+
+  # A change code is bound to the user who asked, from the address they had:
+  # a later change makes older codes useless.
+  defp change_key(user, new_email), do: "#{user.id}:#{user.email}:#{new_email}"
 
   defp type(type) do
     case Map.fetch(@types, type) do

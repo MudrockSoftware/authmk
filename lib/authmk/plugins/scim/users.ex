@@ -142,9 +142,17 @@ defmodule Authmk.Plugins.SCIM.Users do
   defp update_user(ctx, user, attrs) do
     email = attrs.email && Email.normalize(attrs.email)
 
-    if email != user.email and Store.get_by(ctx, :user, email: email),
-      do: {:scim_error, 409, "uniqueness", "Another user has this email"},
-      else: Store.update(ctx, :user, user, %{email: email, name: attrs.name})
+    cond do
+      email == user.email ->
+        Store.update(ctx, :user, user, %{name: attrs.name})
+
+      Store.get_by(ctx, :user, email: email) ->
+        {:scim_error, 409, "uniqueness", "Another user has this email"}
+
+      # Nobody has proven the new address yet.
+      true ->
+        Store.update(ctx, :user, user, %{email: email, name: attrs.name, email_verified: false})
+    end
   end
 
   @doc "A user's SCIM id lookup, within the connection."
@@ -262,12 +270,24 @@ defmodule Authmk.Plugins.SCIM.Users do
       is_nil(existing) ->
         Store.insert(ctx, :user, %{email: email, name: attrs.name, email_verified: false})
 
-      opts[:link_existing_users] ->
+      opts[:link_existing_users] and member?(ctx, connection, existing) ->
         {:ok, existing}
 
       true ->
         {:scim_error, 409, "uniqueness", "A user with this email exists"}
     end
+  end
+
+  # Linking takes over an account (its email, its sessions), so with
+  # organizations a connection only links people already in its own.
+  # Otherwise anyone who could make an organization and a connection could
+  # claim any email. Without organizations, only the app makes connections.
+  defp member?(%Context{config: config} = ctx, connection, user) do
+    if Organization in Enum.map(config.plugins, &elem(&1, 0)),
+      do:
+        Store.get_by(ctx, :member, organization_id: connection.organization_id, user_id: user.id) !=
+          nil,
+      else: true
   end
 
   defp insert_link(ctx, connection, user, attrs) do

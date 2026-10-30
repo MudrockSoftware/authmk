@@ -1,8 +1,8 @@
 defmodule Authmk.Serializer do
-  @moduledoc """
-  Turns records into JSON-ready maps. Only fields with `returned: true` are
-  included, so password hashes and tokens never reach a response.
-  """
+  @moduledoc false
+
+  # Turns records into JSON-ready maps. Only fields with `returned: true` are
+  # included, so password hashes and tokens never reach a response.
 
   alias Authmk.Context
   alias Authmk.Schema.Definition

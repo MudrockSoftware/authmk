@@ -450,3 +450,53 @@ defmodule Authmk.SCIMLinkingTest do
     assert Authmk.Testing.get_user_by(Auth, email: "ada@acme.example") == nil
   end
 end
+
+defmodule Authmk.SCIMOrganizationLinkingTest do
+  # With organizations, anyone may run one and connect a directory to it, so
+  # linking existing users can't reach past the organization's own members.
+  use Authmk.EmulationCase, async: true
+
+  alias Authmk.Plugins.SCIM
+  alias Authmk.Test.Browser
+
+  defmodule Auth do
+    use Authmk,
+      otp_app: :authmk,
+      repo: Authmk.Test.Repo,
+      base_url: "http://localhost:4000",
+      background: :inline,
+      rate_limit: [enabled: false],
+      plugins: [
+        Authmk.Plugins.EmailPassword,
+        Authmk.Plugins.Organization,
+        {Authmk.Plugins.SCIM, link_existing_users: true}
+      ]
+  end
+
+  @moduletag auth: Auth
+
+  test "only the organization's own members are linked", %{browser: browser} do
+    {owner, _user} = sign_up(browser, %{email: "owner@acme.example"})
+    {_owner, conn} = post(owner, "/organization/create", %{name: "Acme", slug: "acme"})
+    {:ok, connection} = SCIM.create_connection(Auth, organization_id: json(conn)["id"])
+
+    {_victim, _user} = sign_up(Browser.new(Auth), %{email: "victim@example.com"})
+
+    directory = %{
+      Browser.new(Auth)
+      | origin: nil,
+        headers: [{"authorization", "Bearer " <> connection.token}]
+    }
+
+    {directory, conn} =
+      Browser.request(directory, :post, "/scim/v2/Users", %{"userName" => "victim@example.com"})
+
+    assert conn.status == 409
+    assert json(conn)["scimType"] == "uniqueness"
+
+    {_directory, conn} =
+      Browser.request(directory, :post, "/scim/v2/Users", %{"userName" => "owner@acme.example"})
+
+    assert conn.status == 201
+  end
+end

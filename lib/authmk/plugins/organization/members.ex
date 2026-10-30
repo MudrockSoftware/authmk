@@ -22,6 +22,7 @@ defmodule Authmk.Plugins.Organization.Members do
          {:ok, organization, actor} <- Access.authorize(ctx, id, member: [:delete]),
          {:ok, member} <- find_member(ctx, organization, params.member_id_or_email),
          :ok <- Access.check_owner_change(ctx, actor, member.role),
+         :ok <- Access.check_within_reach(ctx, organization, actor, member.role),
          :ok <- Access.check_not_last_owner(ctx, member),
          {:ok, member} <- remove_member(ctx, member) do
       {:ok, %{member: Serializer.record(ctx, :member, member)}, ctx}
@@ -38,6 +39,8 @@ defmodule Authmk.Plugins.Organization.Members do
          # Taking or giving the owner role takes an owner.
          :ok <- Access.check_owner_change(ctx, actor, member.role),
          :ok <- Access.check_owner_change(ctx, actor, role),
+         :ok <- Access.check_within_reach(ctx, organization, actor, member.role),
+         :ok <- Access.check_within_reach(ctx, organization, actor, role),
          :ok <- not_demoting_last_owner(ctx, member, role),
          {:ok, attrs} <- Hooks.before_event(ctx, :update_member_role, %{role: role}),
          {:ok, member} <- Store.update(ctx, :member, member, attrs) do

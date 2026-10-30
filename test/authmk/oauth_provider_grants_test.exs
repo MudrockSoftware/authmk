@@ -296,7 +296,16 @@ defmodule Authmk.OAuthProviderGrantsTest do
           basic
         )
 
-      JOSE.JWT.peek_payload(tokens["id_token"]).fields["sub"]
+      sub = JOSE.JWT.peek_payload(tokens["id_token"]).fields["sub"]
+
+      # Introspection tells the client the same subject, not the user's id.
+      {_client, conn} =
+        post(%{Browser.new(Auth) | origin: nil, headers: basic}, "/oauth2/introspect", %{
+          token: tokens["access_token"]
+        })
+
+      assert json(conn)["sub"] == sub
+      sub
     end
 
     one = subject.(pairwise.("one.example"), "one.example")

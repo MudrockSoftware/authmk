@@ -202,6 +202,19 @@ defmodule Authmk.Plugins.EmailPassword do
     end
   end
 
+  @doc """
+  Whether a password reset ends the user's sessions:
+  `revoke_sessions_on_password_reset`, or `true` without this plugin. Resets
+  by code (`Authmk.Plugins.EmailOTP`, `Authmk.Plugins.PhoneNumber`) follow it too.
+  """
+  @spec revoke_sessions_on_reset?(Context.t()) :: boolean()
+  def revoke_sessions_on_reset?(%Context{config: config}) do
+    case List.keyfind(config.plugins, __MODULE__, 0) do
+      {_plugin, opts} -> opts[:revoke_sessions_on_password_reset]
+      nil -> true
+    end
+  end
+
   @doc false
   def reset_password(%Context{params: params} = ctx) do
     opts = Context.plugin_opts(ctx, __MODULE__)
@@ -210,8 +223,7 @@ defmodule Authmk.Plugins.EmailPassword do
          {:ok, %{"user_id" => user_id}} <- Verification.consume(ctx, @reset_purpose, params.token),
          %{} = user <- Store.get_by(ctx, :user, id: user_id),
          {:ok, _account} <- Credentials.set_password(ctx, user, params.new_password) do
-      if opts[:revoke_sessions_on_password_reset], do: Sessions.revoke_all(ctx, user.id)
-      Background.callback(ctx, :on_password_reset, %{user: user})
+      :ok = Credentials.password_reset(ctx, user, revoke_sessions_on_reset?(ctx))
       {:ok, %{status: true}, ctx}
     else
       nil -> {:error, Error.new(:invalid_token)}
