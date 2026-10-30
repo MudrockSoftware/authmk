@@ -42,7 +42,7 @@ completed.
 - `examples/plug_app`: a plain Plug + Bandit + Ecto (SQLite) app that uses authmk
 - `examples/phoenix_app`: a Phoenix 1.8 + LiveView + Ecto (SQLite) app that uses authmk.
   Its own `AGENTS.md` applies to code inside that directory.
-- `ROADMAP.md`: feature plan to 1.0
+- `ROADMAP.md`: feature plan after 1.0
 
 ## Commands
 
