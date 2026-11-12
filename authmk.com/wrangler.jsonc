@@ -2,7 +2,7 @@
 // `wrangler deploy` after `bun run build`. The name must match the Worker in
 // the dashboard.
 {
-  "name": "authmk-com",
+  "name": "authmk",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./build",
