@@ -19,6 +19,15 @@
     { href: resolve("/docs/[slug]", { slug: "security-policy" }), label: "Security policy" },
   ];
 
+  // Mudrock's own pages: authmk's maker, and where licence keys come from.
+  const mudrockLinks = [
+    { href: site.mudrock, label: "Mudrock Software" },
+    { href: `${site.mudrock}/open-source`, label: "Open source at Mudrock" },
+    { href: `${site.mudrock}/about`, label: "About Mudrock" },
+    { href: `${site.mudrock}/contact`, label: "Contact" },
+    { href: site.licence, label: "Licence keys" },
+  ];
+
   const externalLinks = [
     { href: site.hexdocs, label: "API reference" },
     { href: site.hex, label: "Hex package" },
@@ -28,7 +37,7 @@
 
 <footer class="border-base-300 bg-base-200 border-t">
   <div class="site-container py-12">
-    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
       <div class="sm:col-span-2">
         <Logo />
         <p class="text-base-content/70 mt-4 max-w-sm text-sm">
@@ -55,10 +64,18 @@
           {/each}
         </ul>
       </div>
+      <div>
+        <h2 class="text-sm font-semibold">Mudrock</h2>
+        <ul class="mt-4 space-y-2.5">
+          {#each mudrockLinks as link (link.href)}
+            <li><a href={link.href} rel="external" class={linkClass}>{link.label}</a></li>
+          {/each}
+        </ul>
+      </div>
     </div>
 
     <div class="border-base-300 text-base-content/70 mt-10 space-y-1 border-t pt-6 text-xs">
-      <p>© {year} {site.legalName}</p>
+      <p>© {year} <a href={site.mudrock} rel="external" class="link link-hover">{site.legalName}</a></p>
       <p>
         authmk is MIT licensed. The admin dashboard is source available, under
         <a href="https://github.com/MudrockSoftware/authmk/blob/main/licensed/LICENSE.md" rel="external" class="link">its own licence</a>.

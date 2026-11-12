@@ -10,7 +10,8 @@
   import logo from "#lib/assets/logo.svg";
   import GithubIcon from "#lib/components/GithubIcon.svelte";
   import Seo from "#lib/components/Seo.svelte";
-  import { site } from "#lib/site.ts";
+  import StructuredData from "#lib/components/StructuredData.svelte";
+  import { mudrockOrganization, site } from "#lib/site.ts";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -24,9 +25,41 @@
     { icon: KeyRound, title: "Enterprise SSO", body: "Company sign-in with OIDC or SAML, and SCIM.", slug: "enterprise-sso-and-scim" },
     { icon: CreditCard, title: "Payments", body: "Subscriptions with Stripe, Polar and others.", slug: "payments" },
   ];
+
+  // Who makes authmk and where its code lives, for search engines.
+  const structuredData = {
+    "@graph": [
+      mudrockOrganization,
+      {
+        "@type": "WebSite",
+        "@id": `${site.url}/#website`,
+        name: site.name,
+        url: `${site.url}/`,
+        inLanguage: "en-GB",
+        publisher: { "@id": mudrockOrganization["@id"] },
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": `${site.url}/#software`,
+        name: site.name,
+        description: site.description,
+        url: `${site.url}/`,
+        codeRepository: site.github,
+        programmingLanguage: "Elixir",
+        runtimePlatform: "Erlang/OTP",
+        version: site.version,
+        license: "https://opensource.org/license/mit",
+        image: new URL(site.socialImage, site.url).href,
+        author: { "@id": mudrockOrganization["@id"] },
+        publisher: { "@id": mudrockOrganization["@id"] },
+        sameAs: [site.github, site.hex, site.hexdocs],
+      },
+    ],
+  };
 </script>
 
 <Seo />
+<StructuredData data={structuredData} />
 
 <!-- Introduction -->
 <section class="site-container grid items-center gap-12 py-16 lg:grid-cols-2 lg:gap-16 lg:py-28">

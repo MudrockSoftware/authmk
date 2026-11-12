@@ -11,7 +11,21 @@ export const site = {
   hex: "https://hex.pm/packages/authmk",
   licence: "https://license.mudrock.dev",
   mudrock: "https://mudrock.dev",
-  legalName: "MUDROCK SOFTWARE LTD"
+  mudrockName: "Mudrock Software",
+  mudrockGithub: "https://github.com/MudrockSoftware",
+  legalName: "MUDROCK SOFTWARE LTD",
+  /** The picture link previews show (static/og-image.png), 1200 by 630. */
+  socialImage: "/og-image.png"
+} as const;
+
+/** Mudrock as schema.org data. The @id matches mudrock.dev's own, so search engines join the two. */
+export const mudrockOrganization = {
+  "@type": "Organization",
+  "@id": `${site.mudrock}/#organization`,
+  name: site.mudrockName,
+  legalName: site.legalName,
+  url: `${site.mudrock}/`,
+  sameAs: [site.mudrockGithub]
 } as const;
 
 /** A link to a file or directory in the repository on GitHub. */

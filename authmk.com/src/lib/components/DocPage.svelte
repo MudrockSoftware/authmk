@@ -6,7 +6,10 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Pencil from "@lucide/svelte/icons/pencil";
+  import { page } from "$app/state";
+  import { mudrockOrganization, site } from "#lib/site.ts";
   import Seo from "./Seo.svelte";
+  import StructuredData from "./StructuredData.svelte";
 
   type PageLink = { title: string; path: Path } | null;
   type Props = {
@@ -38,6 +41,28 @@
 </script>
 
 <Seo title={doc.title} />
+<StructuredData
+  data={{
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        headline: doc.title,
+        url: new URL(page.url.pathname, site.url).href,
+        inLanguage: "en-GB",
+        about: { "@id": `${site.url}/#software` },
+        author: { "@id": mudrockOrganization["@id"] },
+        publisher: mudrockOrganization,
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Docs", item: `${site.url}/docs` },
+          { "@type": "ListItem", position: 2, name: doc.title, item: new URL(page.url.pathname, site.url).href },
+        ],
+      },
+    ],
+  }}
+/>
 
 <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_16rem] xl:gap-12">
   <article class="mx-auto w-full max-w-[64rem] min-w-0 py-10">
