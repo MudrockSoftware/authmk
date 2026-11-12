@@ -1,54 +1,34 @@
-# sv
+# authmk.com
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+authmk's website: the introduction, the docs, the example apps and search.
+A static SvelteKit site (bun, Tailwind CSS, daisyUI) in Mudrock's theme.
 
-## Creating a project
+The docs aren't written here. At build time the site reads them from the
+repository around it:
 
-If you're seeing this, you've probably already done this step. Congrats!
+- `README.md` is the overview at `/docs`, and `guides/*.md`, `CHANGELOG.md`
+  and `SECURITY.md` are the other pages. Their order and groups are in
+  `src/lib/docs.ts`; a guide missing from there fails the build.
+- `examples/` gives the code on `/examples` (`src/lib/server/content.ts`).
+- `lib/` and `licensed/lib` give the module names that link to HexDocs and
+  appear in search.
 
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-bun x sv@1.3.0 create --template minimal --types ts --add eslint tailwindcss="plugins:typography" sveltekit-adapter="adapter:bun" mdsvex ai-tools="ide:claude-code,other+delivery:plugin+optInSkills:none" --install bun authmk.com
-```
-
-## Adding features
-
-Add features to your project with `sv add`:
-
-```sh
-npx sv add
-```
-
-For example, to add Tailwind CSS:
-
-```sh
-npx sv add tailwindcss
-```
+Code is highlighted with Shiki when the site is built, and search runs in the
+browser with MiniSearch over `/search.json`, built with the pages.
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+bun install
+bun run dev       # http://localhost:5173
+bun run check     # types
+bun run lint
+bun run build     # the site in build/; fails on links to missing pages or anchors
+bun run preview
 ```
 
-## Building
+## Deploying
 
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
+`build/` is plain static files. `wrangler.jsonc` serves it on Cloudflare
+Workers static assets, as for mudrock.dev, with `static/_headers` for
+response headers and `build/404.html` for unknown paths.

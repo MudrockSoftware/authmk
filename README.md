@@ -351,7 +351,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 ```elixir
 def deps do
   [
-    {:authmk, "~> 1.0"}
+    {:authmk, "~> 1.2"}
   ]
 end
 ```

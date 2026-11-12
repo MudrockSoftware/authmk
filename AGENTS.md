@@ -33,7 +33,7 @@ completed.
 - `assets/pages`: the user-facing pages authmk serves itself (the sign-in
   error page), a SvelteKit app (bun, MIT). After changing it, run
   `bun run check` there. Its theme in `src/app.css` copies the dashboard's: change
-  both together.
+  both together, and `authmk.com/src/routes/layout.css`.
 - `priv/pages` and `priv/licensed`: built from those two apps by `mix compile`
   (a compiler in `mix.exs` runs bun when their sources change). Not in git;
   the Hex package ships them, and `licensed/lib`, without the app sources.
@@ -42,6 +42,13 @@ completed.
 - `examples/plug_app`: a plain Plug + Bandit + Ecto (SQLite) app that uses authmk
 - `examples/phoenix_app`: a Phoenix 1.8 + LiveView + Ecto (SQLite) app that uses authmk.
   Its own `AGENTS.md` applies to code inside that directory.
+- `authmk.com`: the website (introduction, docs, examples, search), a static
+  SvelteKit app (bun) that isn't in the Hex package. Its docs pages are
+  built from `README.md`, `guides/`, `CHANGELOG.md`, `SECURITY.md` and
+  `examples/`, so update those, not the site. A new guide also needs a place
+  in `authmk.com/src/lib/docs.ts` (the build fails until it has one). After
+  changing the site, run `bun run check`, `bun run lint` and `bun run build`
+  there; the build fails on broken links between pages.
 - `ROADMAP.md`: feature plan after 1.0
 
 ## Commands

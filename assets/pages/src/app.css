@@ -2,7 +2,8 @@
 @import "@fontsource-variable/inter";
 
 /* Mudrock's themes, as on mudrock.dev (DESIGN_GUIDE.md §3–4). The same
-   theme is in licensed/dashboard/src/app.css: change both together. */
+   theme is in licensed/dashboard/src/app.css and
+   authmk.com/src/routes/layout.css: change all three together. */
 @plugin "daisyui" {
   themes: false;
   logs: false;

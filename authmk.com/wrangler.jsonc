@@ -1,0 +1,12 @@
+// Cloudflare Workers static assets, as for mudrock.dev. Workers Builds runs
+// `wrangler deploy` after `bun run build`. The name must match the Worker in
+// the dashboard.
+{
+  "name": "authmk-com",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./build",
+    // Unknown paths get build/404.html, with a 404 status.
+    "not_found_handling": "404-page"
+  }
+}
