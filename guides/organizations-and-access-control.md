@@ -371,3 +371,132 @@ define. Clients ask `POST /auth/organization/has-permission` with
 
 For a service account, ask
 `Authmk.Plugins.ServiceAccount.has_permission?(MyApp.Auth, conn.assigns.current_principal, %{project: [:create]})`.
+
+## Abilities across organizations and teams
+
+`Authmk.Plugins.Gate` answers one question, in the spirit of Laravel's
+Gate: may this user do this action on this record? Declare the abilities,
+and what each role may do, in code:
+
+```elixir
+plugins: [
+  Authmk.Plugins.EmailPassword,
+  {Authmk.Plugins.Admin, access_control: MyApp.Permissions},
+  {Authmk.Plugins.Organization, teams: [enabled: true]},
+  {Authmk.Plugins.Gate,
+   abilities: [invoice: [:view, :update, :delete], report: [:view, :export], billing: [:refund]],
+   app_roles: [support: [invoice: [:view]]],
+   organization_roles: [member: [report: [:view]]],
+   team_roles: [finance: [invoice: [:view, :update, :delete]]],
+   team_member_roles: [employee: [invoice: [:view]], manager: [invoice: [:view, :update]]],
+   app_only: [billing: [:refund]],
+   default_team_member_role: "employee"}
+]
+```
+
+and check, wherever your code is about to act:
+
+```elixir
+with :ok <- Authmk.Plugins.Gate.authorize(MyApp.Auth, user, {:invoice, :update}, invoice) do
+  Invoices.update(invoice, params)
+end
+```
+
+Only the Admin plugin is needed: the app's roles are the user's `role`, so
+every app role in `app_roles` must be a role of the Admin plugin's
+`access_control` too (authmk refuses to start otherwise). Organizations and
+teams count when the Organization plugin has them.
+
+### Who may do what
+
+1. A banned user may do nothing.
+2. App admins (the Admin plugin's `admin_roles` and `admin_user_ids`) may
+   do everything.
+3. App roles grant what `app_roles` says, in every organization: they're
+   for your own staff.
+4. In the record's organization, its owners and admins
+   (`organization_admin_roles`) may do everything but `app_only`
+   abilities. Other members get what their member role grants, and what
+   each of their teams there grants. A team's access comes from its role,
+   and its members inherit it; a member's role in the team only narrows
+   it: in a `finance` team, an `employee` may view invoices, a `manager`
+   may also update them, and nobody may do what the team itself can't.
+   Members without a role in the team get all it has, which is why
+   `default_team_member_role` exists.
+5. Everything else is denied.
+
+Someone can be an admin of one organization and a member of another: each
+check uses their role in the record's organization. That organization
+comes from the record (`organization_id`, or `team_id` and the team's
+organization), never from the session's active organization. A record
+with a `team_id` counts only that team's grants, plus organization-wide
+ones. A record with neither key raises, rather than guess.
+
+Every check reads the user, their membership and their teams from the
+database, so a role taken away counts at once.
+
+### Giving teams and members their roles
+
+```elixir
+{:ok, team} = Authmk.Plugins.Organization.create_team(MyApp.Auth, org.id, %{name: "Finance"})
+{:ok, _team} = Authmk.Plugins.Gate.set_team_role(MyApp.Auth, team.id, "finance")
+{:ok, _member} = Authmk.Plugins.Organization.add_team_member(MyApp.Auth, team.id, user.id)
+{:ok, _member} = Authmk.Plugins.Gate.set_team_member_role(MyApp.Auth, team.id, user.id, "manager")
+```
+
+Organization admins do the same through `POST /auth/gate/set-team-role`
+and `POST /auth/gate/set-team-member-role`.
+
+### Organizations adjust their access
+
+The roles in code are every organization's defaults. An organization may
+override one, or add its own, at the `organization`, `team` and
+`team_member` levels, within the abilities you declared and never an
+`app_only` one:
+
+```elixir
+# In Acme, employees may only read reports.
+Authmk.Plugins.Gate.put_role(MyApp.Auth, acme.id, :team_member, "employee", %{report: [:view]})
+
+# Acme's own team role.
+Authmk.Plugins.Gate.put_role(MyApp.Auth, acme.id, :team, "auditors", %{invoice: [:view]})
+
+# Back to the code's default.
+Authmk.Plugins.Gate.delete_role(MyApp.Auth, acme.id, :team_member, "employee")
+```
+
+App admins and the organization's admins call the same through
+`GET /auth/gate/list-roles`, `POST /auth/gate/set-role` and
+`POST /auth/gate/delete-role`: enough to build an administration page for
+organization admins in your app. Every change is in the audit log
+(`access_role.*`, `team.updated`, `team_member.updated`) with
+`Authmk.Plugins.AuditLog`.
+
+### Pages and menus
+
+```elixir
+plug Authmk.Plug.RequireAbility,
+  auth: MyApp.Auth,
+  ability: {:invoice, :view},
+  resource: {:param, :organization, "organization_id"}
+```
+
+In LiveViews, the `{:require_ability, auth, ability, redirect_to, resource}`
+hook does the same, and checks again when a patch changes the params:
+
+```elixir
+authmk_live_session :invoices, MyApp.Auth,
+  require: :user,
+  redirect_to: "/sign-in",
+  on_mount: [
+    {Authmk.LiveView,
+     {:require_ability, MyApp.Auth, {:invoice, :view}, "/", {:param, :organization, "organization_id"}}}
+  ] do
+  live "/orgs/:organization_id/invoices", InvoicesLive
+end
+```
+
+To show only the buttons someone can use, ask for everything at once:
+`Authmk.Plugins.Gate.abilities(MyApp.Auth, user, {:organization, org.id})`,
+or from a client, `GET /auth/gate/abilities?organization_id=...`. Still
+check each action when it happens: hiding a button is not authorization.

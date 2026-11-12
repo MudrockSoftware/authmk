@@ -100,6 +100,19 @@ defmodule PlugApp.Router do
     if conn.halted, do: conn, else: send_resp(conn, 200, "admins only")
   end
 
+  # An organization's invoices: for members whose teams may view them, and
+  # its owners and admins (Authmk.Plugins.Gate).
+  get "/orgs/:organization_id/invoices" do
+    conn =
+      guard(conn, Authmk.Plug.RequireAbility,
+        auth: PlugApp.Auth,
+        ability: {:invoice, :view},
+        resource: {:param, :organization, "organization_id"}
+      )
+
+    if conn.halted, do: conn, else: send_resp(conn, 200, "invoices of #{organization_id}")
+  end
+
   # Signs out from the app's own code.
   post "/sign-out" do
     conn

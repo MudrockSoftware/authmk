@@ -51,6 +51,19 @@ defmodule PhoenixAppWeb.Router do
     authmk_live_session :signed_in, PhoenixApp.Auth, require: :user, redirect_to: "/sign-in" do
       live "/settings", SettingsLive
     end
+
+    # An organization's invoices, for those Authmk.Plugins.Gate lets view
+    # them there. Patching to another organization is checked again.
+    authmk_live_session :invoices, PhoenixApp.Auth,
+      require: :user,
+      redirect_to: "/sign-in",
+      on_mount: [
+        {Authmk.LiveView,
+         {:require_ability, PhoenixApp.Auth, {:invoice, :view}, "/settings",
+          {:param, :organization, "organization_id"}}}
+      ] do
+      live "/orgs/:organization_id/invoices", InvoicesLive
+    end
   end
 
   scope "/", PhoenixAppWeb do

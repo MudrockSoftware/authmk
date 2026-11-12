@@ -182,6 +182,24 @@ These come from `Authmk.Error.new/2`; `Authmk.Error.codes/0` lists them at runti
 |---|---|---|
 | `invalid_otp_type` | 400 | Unknown code type |
 
+## `Authmk.Plugins.Gate`
+
+Checks themselves answer `forbidden` (`authorize/4`). Changing an
+organization's access can also answer:
+
+| Code | Status | Message |
+|---|---|---|
+| `invalid_permission` | 422 | The role grants abilities that don't exist or are app-only |
+| `invalid_role` | 422 | Unknown role |
+| `invalid_role_level` | 422 | Role levels are organization, team and team_member |
+| `invalid_role_name` | 422 | Role names are 1 to 64 lowercase letters, digits, underscores or hyphens |
+| `member_not_found` | 404 | Member not found |
+| `organization_not_found` | 404 | Organization not found |
+| `role_assigned` | 409 | Teams or team members still have this role |
+| `role_limit_reached` | 403 | This organization has as many roles as allowed |
+| `role_not_found` | 404 | Role not found |
+| `team_not_found` | 404 | Team not found |
+
 ## `Authmk.Plugins.HaveIBeenPwned`
 
 | Code | Status | Message |

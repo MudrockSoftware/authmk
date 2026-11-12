@@ -49,6 +49,13 @@ defmodule Authmk.Plugin do
   @callback depends_on() :: [module()]
 
   @doc """
+  Checks this plugin's options against the other enabled plugins, at
+  startup, after every plugin's `init/1`. `plugins` are `{plugin, opts}`
+  pairs. Raise when they don't fit together.
+  """
+  @callback check_plugins(opts(), plugins :: [{module(), opts()}]) :: :ok
+
+  @doc """
   Runs for every request to the auth router, before any built-in check
   (origin, rate limit, session). `ctx.endpoint` is set; `ctx.params` and the
   session are not loaded yet. Return `{:halt, error}` to stop the request.
@@ -150,6 +157,7 @@ defmodule Authmk.Plugin do
                       endpoints: 1,
                       trusted_origins: 1,
                       depends_on: 0,
+                      check_plugins: 2,
                       on_request: 1,
                       on_response: 2,
                       before_endpoint: 2,

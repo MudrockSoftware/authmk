@@ -9,7 +9,7 @@ defmodule Authmk.Dashboard.Data.Organizations do
   alias Authmk.{AccessControl, Context, Store}
   alias Authmk.Dashboard.Data
   alias Authmk.Dashboard.Data.Fields
-  alias Authmk.Plugins.Organization
+  alias Authmk.Plugins.{Gate, Organization}
   alias Authmk.Plugins.Organization.Access, as: OrganizationAccess
 
   @doc "Organizations whose name or slug contains `search`, newest first, with member counts."
@@ -97,6 +97,7 @@ defmodule Authmk.Dashboard.Data.Organizations do
       roles: roles(ctx, organization),
       members: members(ctx, organization),
       teams: teams(ctx, organization),
+      access: access(ctx, organization),
       invitations: Enum.map(by_organization(ctx, :invitation, organization), &invitation/1),
       sso_providers:
         Enum.map(by_organization(ctx, :sso_provider, organization), &Data.sso_provider/1),
@@ -147,6 +148,7 @@ defmodule Authmk.Dashboard.Data.Organizations do
       %{
         id: to_string(team.id),
         name: team.name,
+        role: Map.get(team, :role),
         members: Map.get(members, team.id, []),
         created_at: team.inserted_at
       }
@@ -162,13 +164,22 @@ defmodule Authmk.Dashboard.Data.Organizations do
       join: u in ^Store.module(ctx, :user),
       on: u.id == tm.user_id,
       where: tm.team_id in ^ids,
-      select: {tm.team_id, u},
+      select: {tm.team_id, u, tm.role},
       limit: 2000
     )
     |> then(&Store.list(ctx, :team_member, &1))
-    |> Enum.group_by(&elem(&1, 0), fn {_team_id, user} ->
-      %{id: to_string(user.id), email: user.email, name: user.name}
+    |> Enum.group_by(&elem(&1, 0), fn {_team_id, user, role} ->
+      %{id: to_string(user.id), email: user.email, name: user.name, role: role}
     end)
+  end
+
+  # With Authmk.Plugins.Gate: the organization's roles at each level, and
+  # the abilities it may grant them.
+  defp access(ctx, organization) do
+    if Data.enabled?(ctx, Gate) do
+      {:ok, roles} = Gate.list_roles(ctx.config.auth, organization.id)
+      %{roles: roles, abilities: Gate.organization_abilities(ctx.config.auth)}
+    end
   end
 
   defp invitation(invitation) do

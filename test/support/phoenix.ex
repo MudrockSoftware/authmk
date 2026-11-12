@@ -16,7 +16,10 @@ defmodule Authmk.Test.Phoenix do
       plugins: [
         Authmk.Plugins.EmailPassword,
         {Authmk.Plugins.TwoFactor, issuer: "Test"},
-        Authmk.Plugins.Organization
+        Authmk.Plugins.Organization,
+        Authmk.Plugins.Admin,
+        {Authmk.Plugins.Gate,
+         abilities: [report: [:view]], organization_roles: [member: [report: [:view]]]}
       ]
 
     # Requests run in the test process: the test receives the email.
@@ -105,6 +108,22 @@ defmodule Authmk.Test.Phoenix do
     end
   end
 
+  defmodule ReportsLive do
+    @moduledoc false
+    use Phoenix.LiveView
+
+    def mount(_params, _session, socket), do: {:ok, socket}
+
+    def handle_params(params, _uri, socket),
+      do: {:noreply, assign(socket, :organization_id, params["organization_id"])}
+
+    def render(assigns) do
+      ~H"""
+      <p id="reports">Reports of {@organization_id}</p>
+      """
+    end
+  end
+
   defmodule Router do
     @moduledoc false
     use Phoenix.Router
@@ -135,6 +154,17 @@ defmodule Authmk.Test.Phoenix do
 
       authmk_live_session :signed_in, Auth, require: :user, redirect_to: "/sign-in" do
         live("/settings", SettingsLive)
+      end
+
+      authmk_live_session :reports, Auth,
+        require: :user,
+        redirect_to: "/sign-in",
+        on_mount: [
+          {Authmk.LiveView,
+           {:require_ability, Auth, {:report, :view}, "/",
+            {:param, :organization, "organization_id"}}}
+        ] do
+        live("/orgs/:organization_id/reports", ReportsLive)
       end
     end
   end

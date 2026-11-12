@@ -3,14 +3,16 @@ defmodule Authmk.Dashboard.Data.Permissions do
   # What a user can see and do, and where each permission comes from: their
   # app roles (Authmk.Plugins.Admin), `admin_user_ids`, and in each
   # organization their member roles, built in or the organization's own
-  # (Authmk.Plugins.Organization), and the teams they're in. Worked out with
-  # the same access control the plugins check, so it shows what they allow.
+  # (Authmk.Plugins.Organization), and the teams they're in, with their
+  # roles. With Authmk.Plugins.Gate, also the app's abilities they have,
+  # everywhere and in each organization: Gate's own answer, so it shows
+  # exactly what checks allow.
 
   import Ecto.Query
 
   alias Authmk.{AccessControl, Context, Store}
   alias Authmk.Dashboard.Data
-  alias Authmk.Plugins.{Admin, Organization}
+  alias Authmk.Plugins.{Admin, Gate, Organization}
   alias Authmk.Plugins.Organization.Access, as: OrganizationAccess
 
   def of(ctx, user) do
@@ -25,7 +27,8 @@ defmodule Authmk.Dashboard.Data.Permissions do
 
       %{
         roles: Enum.map(roles, &role(access_control, &1, "app role")),
-        all_admin_actions: to_string(user.id) in opts[:admin_user_ids]
+        all_admin_actions: to_string(user.id) in opts[:admin_user_ids],
+        abilities: abilities(ctx, user, nil)
       }
     end
   end
@@ -49,6 +52,7 @@ defmodule Authmk.Dashboard.Data.Permissions do
               role(access_control, name, source)
             end,
           teams: Map.get(teams, to_string(organization.id), []),
+          abilities: abilities(ctx, user, {:organization, organization.id}),
           joined_at: member.inserted_at
         }
       end
@@ -98,16 +102,23 @@ defmodule Authmk.Dashboard.Data.Permissions do
           join: t in ^Store.module(ctx, :team),
           on: t.id == tm.team_id,
           where: tm.user_id == ^user.id,
-          select: t,
+          select: {t, tm.role},
           limit: 500
         )
       )
       |> Enum.group_by(
-        &to_string(&1.organization_id),
-        &%{id: to_string(&1.id), name: &1.name}
+        fn {team, _member_role} -> to_string(team.organization_id) end,
+        fn {team, member_role} ->
+          %{id: to_string(team.id), name: team.name, role: team.role, member_role: member_role}
+        end
       )
     else
       %{}
     end
+  end
+
+  # What Authmk.Plugins.Gate lets them do there, or `nil` without it.
+  defp abilities(ctx, user, resource) do
+    if Data.enabled?(ctx, Gate), do: Gate.abilities(ctx.config.auth, user, resource)
   end
 end

@@ -19,7 +19,18 @@ defmodule PhoenixApp.Auth do
       {Authmk.Plugins.OneTap, require_nonce: true},
       Authmk.Plugins.SIWE,
       Authmk.Plugins.Admin,
-      {Authmk.Plugins.Organization, send_invitation_email: &__MODULE__.send_invitation/2},
+      {Authmk.Plugins.Organization,
+       send_invitation_email: &__MODULE__.send_invitation/2, teams: [enabled: true]},
+      # Who may do what: invoices by team (finance views and updates them;
+      # inside a team, employees only view), reports for every member.
+      # Organization owners and admins may do everything in theirs, and
+      # change these defaults for it at /auth/gate/*.
+      {Authmk.Plugins.Gate,
+       abilities: [invoice: [:view, :update], report: [:view]],
+       organization_roles: [member: [report: [:view]]],
+       team_roles: [finance: [invoice: [:view, :update]]],
+       team_member_roles: [employee: [invoice: [:view]], manager: [invoice: [:view, :update]]],
+       default_team_member_role: "employee"},
       {Authmk.Plugins.APIKey, enable_sessions: true},
       Authmk.Plugins.ServiceAccount,
       Authmk.Plugins.Bearer,

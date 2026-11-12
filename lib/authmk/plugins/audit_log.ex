@@ -8,7 +8,9 @@ defmodule Authmk.Plugins.AuditLog do
   sessions started and ended; failed sign-ins (`sign_in.failed`, with the
   method and the error code); accounts linked, changed (like a new
   password) and unlinked; verifications issued (by purpose); and with
-  `Authmk.Plugins.Organization`, organizations, members and invitations.
+  `Authmk.Plugins.Organization`, organizations, members, invitations, teams
+  and team members, with their roles; with `Authmk.Plugins.Gate`, the roles
+  organizations define or override (`access_role.*`).
   Each has the user it's about, the signed-in user who caused it (`actor`),
   the organization, IP address and user agent, and a few safe details
   (`metadata`): ids, roles, providers, purposes. Never tokens, codes or
@@ -47,7 +49,18 @@ defmodule Authmk.Plugins.AuditLog do
   alias Authmk.{Background, Context, Endpoint, Error, Log, Request, SignInMethod, Store}
   alias Authmk.Storage.ETS
 
-  @models [:user, :session, :account, :verification, :organization, :member, :invitation]
+  @models [
+    :user,
+    :session,
+    :account,
+    :verification,
+    :organization,
+    :member,
+    :invitation,
+    :team,
+    :team_member,
+    :access_role
+  ]
   @actions %{after_create: "created", after_update: "updated", after_delete: "deleted"}
   @cleanup_every 3600
 
@@ -196,6 +209,28 @@ defmodule Authmk.Plugins.AuditLog do
       user_id: member.user_id,
       organization_id: member.organization_id,
       metadata: %{role: member.role}
+    }
+
+  defp details(:team, team),
+    do: %{
+      organization_id: team.organization_id,
+      metadata: %{team_id: team.id, name: team.name, role: Map.get(team, :role)}
+    }
+
+  defp details(:team_member, team_member),
+    do: %{
+      user_id: team_member.user_id,
+      metadata: %{team_id: team_member.team_id, role: Map.get(team_member, :role)}
+    }
+
+  defp details(:access_role, access_role),
+    do: %{
+      organization_id: access_role.organization_id,
+      metadata: %{
+        level: access_role.level,
+        role: access_role.role,
+        permission: access_role.permission
+      }
     }
 
   defp details(:invitation, invitation),

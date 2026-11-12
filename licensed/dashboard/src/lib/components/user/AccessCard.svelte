@@ -7,9 +7,29 @@
   import { formatDate } from "#lib/format.ts";
 
   // Their app roles, and their roles and teams in each organization, with
-  // what each allows: worked out by the same rules the plugins check.
+  // what each allows: worked out by the same rules the plugins check. With
+  // Authmk.Plugins.Gate, also the app's abilities they have there.
   let { access }: { access: Access } = $props();
+
+  const abilityList = (abilities: Record<string, string[]>) =>
+    Object.entries(abilities).sort(([a], [b]) => a.localeCompare(b));
 </script>
+
+{#snippet abilities(granted: Record<string, string[]>, where: string)}
+  <div class="text-xs">
+    <span class="text-base-content/70">Can do {where}:</span>
+    {#if abilityList(granted).length === 0}
+      <span class="text-base-content/70">nothing.</span>
+    {:else}
+      <dl class="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+        {#each abilityList(granted) as [resource, actions] (resource)}
+          <dt class="font-mono font-medium">{resource}</dt>
+          <dd class="flex flex-wrap gap-1">{#each actions as action (action)}<span class="badge badge-ghost badge-xs font-mono">{action}</span>{/each}</dd>
+        {/each}
+      </dl>
+    {/if}
+  </div>
+{/snippet}
 
 <Card title="What they can see and do">
   {#if access.app}
@@ -27,6 +47,7 @@
         {#each access.app.roles as role (role.name)}<RolePermissions {role} />{/each}
       </div>
     {/if}
+    {#if access.app.abilities}{@render abilities(access.app.abilities, "everywhere")}{/if}
   {/if}
 
   {#each access.organizations as org (org.id)}
@@ -39,9 +60,14 @@
       {#if org.teams.length > 0}
         <div class="flex flex-wrap items-center gap-1 text-xs">
           <span class="text-base-content/70">Teams:</span>
-          {#each org.teams as team (team.id)}<span class="badge badge-outline badge-sm">{team.name}</span>{/each}
+          {#each org.teams as team (team.id)}
+            <span class="badge badge-outline badge-sm">
+              {team.name}{#if team.role}<span class="opacity-70">· {team.role}{team.member_role ? `, as ${team.member_role}` : ""}</span>{/if}
+            </span>
+          {/each}
         </div>
       {/if}
+      {#if org.abilities}{@render abilities(org.abilities, `in ${org.name}`)}{/if}
     </div>
   {/each}
 

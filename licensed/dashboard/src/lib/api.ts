@@ -41,6 +41,7 @@ export type Me = {
     admin: boolean;
     organizations: boolean;
     teams: boolean;
+    gate: boolean;
     audit_log: boolean;
     sso: boolean;
     scim: boolean;
@@ -119,14 +120,18 @@ export type LinkedAccount = { id: string; provider: string; account_id: string; 
 // A role and what it allows, by resource.
 export type Role = { name: string; source: string; exists: boolean; permissions: Record<string, string[]> };
 
+// What Authmk.Plugins.Gate lets someone do: `null` without the plugin.
+export type Abilities = Record<string, string[]> | null;
+
 export type Access = {
-  app: { roles: Role[]; all_admin_actions: boolean } | null;
+  app: { roles: Role[]; all_admin_actions: boolean; abilities: Abilities } | null;
   organizations: {
     id: string;
     name: string;
     slug: string;
     roles: Role[];
-    teams: { id: string; name: string }[];
+    teams: { id: string; name: string; role: string | null; member_role: string | null }[];
+    abilities: Abilities;
     joined_at: string;
   }[];
 };
@@ -214,7 +219,24 @@ export type SCIMConnection = {
 
 export type Member = { user: User; role: string; joined_at: string };
 
-export type Team = { id: string; name: string; members: { id: string; email: string; name: string | null }[]; created_at: string };
+export type Team = {
+  id: string;
+  name: string;
+  role: string | null;
+  members: { id: string; email: string; name: string | null; role: string | null }[];
+  created_at: string;
+};
+
+export type AccessLevel = "organization" | "team" | "team_member";
+
+// A role an organization's members, teams or team members can have: the
+// code's ("code"), the code's changed for it ("override"), or its own.
+export type AccessRole = {
+  level: AccessLevel;
+  role: string;
+  permission: Record<string, string[]>;
+  source: "code" | "override" | "organization";
+};
 
 export type Invitation = {
   id: string;
@@ -232,6 +254,7 @@ export type OrganizationDetail = {
   roles: { name: string; built_in: boolean }[];
   members: Member[];
   teams: Team[];
+  access: { roles: AccessRole[]; abilities: Record<string, string[]> } | null;
   invitations: Invitation[];
   sso_providers: SSOProvider[];
   scim_connections: SCIMConnection[];
@@ -409,6 +432,13 @@ export const api = {
   addTeamMember: (id: string, teamId: string, userId: string) => post(`${team(id, teamId)}/members`, { user_id: userId }),
   removeTeamMember: (id: string, teamId: string, userId: string) =>
     post(`${team(id, teamId)}/members/${encodeURIComponent(userId)}/remove`),
+  setAccessRole: (id: string, level: AccessLevel, role: string, permission: Record<string, string[]>) =>
+    post(`${organization(id)}/access/roles`, { level, role, permission }),
+  deleteAccessRole: (id: string, level: AccessLevel, role: string) =>
+    post(`${organization(id)}/access/roles/delete`, { level, role }),
+  setTeamRole: (id: string, teamId: string, role: string | null) => post(`${team(id, teamId)}/role`, { role }),
+  setTeamMemberRole: (id: string, teamId: string, userId: string, role: string | null) =>
+    post(`${team(id, teamId)}/members/${encodeURIComponent(userId)}/role`, { role }),
   invite: (id: string, attrs: { email: string; role: string; team_id?: string }) => post(`${organization(id)}/invitations`, attrs),
   cancelInvitation: (id: string, invitationId: string) =>
     post(`${organization(id)}/invitations/${encodeURIComponent(invitationId)}/cancel`),

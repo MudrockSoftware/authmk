@@ -2,15 +2,16 @@ defmodule Authmk.Dashboard.API.Organizations do
   @moduledoc false
   # Organizations (with Authmk.Plugins.Organization): the list, one
   # organization's page, and changes to it, its members, teams and
-  # invitations. Changes go through the plugin's server-side functions, so
-  # its rules hold (an organization keeps an owner, roles must exist,
-  # limits), without asking the admin to be a member. They need the Admin
-  # permissions `organization: create, update, delete`.
+  # invitations, and with Authmk.Plugins.Gate what its roles grant. Changes
+  # go through the plugins' server-side functions, so their rules hold (an
+  # organization keeps an owner, roles must exist, limits, no app-only
+  # abilities), without asking the admin to be a member. They need the
+  # Admin permissions `organization: create, update, delete`.
 
   alias Authmk.{Context, Email, Error, Store}
   alias Authmk.Dashboard.{Data, Reply}
   alias Authmk.Dashboard.Data.{Fields, Organizations}
-  alias Authmk.Plugins.Organization
+  alias Authmk.Plugins.{Gate, Organization}
   alias Authmk.Plugins.Organization.Access, as: OrganizationAccess
 
   def route(conn, path, ctx, admin) do
@@ -126,8 +127,65 @@ defmodule Authmk.Dashboard.API.Organizations do
     end
   end
 
+  # With Authmk.Plugins.Gate: what the organization's roles grant.
+  defp on_organization(conn, "POST", ["access", "roles" | path], ctx, admin, organization) do
+    if Data.enabled?(ctx, Gate),
+      do: on_access_role(conn, path, ctx, admin, organization),
+      else: Reply.not_found(conn)
+  end
+
   defp on_organization(conn, _method, _path, _ctx, _admin, _organization),
     do: Reply.not_found(conn)
+
+  defp on_access_role(conn, [], ctx, admin, organization) do
+    %{"level" => level, "role" => role} = role_params(conn)
+    permission = Reply.param(conn, "permission")
+
+    change(
+      conn,
+      ctx,
+      admin,
+      organization,
+      "access_role.set",
+      [level: level, role: role],
+      fn auth ->
+        Gate.put_role(auth, organization.id, level, role, permission)
+      end
+    )
+  end
+
+  defp on_access_role(conn, ["delete"], ctx, admin, organization) do
+    %{"level" => level, "role" => role} = role_params(conn)
+    metadata = [level: level, role: role]
+
+    change(conn, ctx, admin, organization, "access_role.deleted", metadata, fn auth ->
+      Gate.delete_role(auth, organization.id, level, role)
+    end)
+  end
+
+  defp on_access_role(conn, _path, _ctx, _admin, _organization), do: Reply.not_found(conn)
+
+  # A team's or team member's new role, with Authmk.Plugins.Gate: a name,
+  # or nothing to take it away.
+  defp with_role(conn, ctx, fun) do
+    role = Reply.param(conn, "role")
+
+    cond do
+      not Data.enabled?(ctx, Gate) -> Reply.not_found(conn)
+      is_binary(role) or is_nil(role) -> fun.(role)
+      true -> invalid(conn, "A role is a name.")
+    end
+  end
+
+  # Strings only: anything else is an unknown level or an invalid name.
+  defp role_params(conn) do
+    Map.new(["level", "role"], fn key ->
+      case Reply.param(conn, key) do
+        value when is_binary(value) -> {key, value}
+        _other -> {key, ""}
+      end
+    end)
+  end
 
   defp add_member(conn, ctx, admin, organization, user, role) do
     metadata = [user_id: user.id, role: role]
@@ -170,6 +228,26 @@ defmodule Authmk.Dashboard.API.Organizations do
 
     change(conn, ctx, admin, organization, "team_member.removed", metadata, fn auth ->
       Organization.remove_team_member(auth, team.id, user_id)
+    end)
+  end
+
+  defp on_team(conn, ["role"], ctx, admin, organization, team) do
+    with_role(conn, ctx, fn role ->
+      metadata = [team_id: team.id, role: role]
+
+      change(conn, ctx, admin, organization, "team.role_set", metadata, fn auth ->
+        Gate.set_team_role(auth, team.id, role)
+      end)
+    end)
+  end
+
+  defp on_team(conn, ["members", user_id, "role"], ctx, admin, organization, team) do
+    with_role(conn, ctx, fn role ->
+      metadata = [team_id: team.id, user_id: user_id, role: role]
+
+      change(conn, ctx, admin, organization, "team_member.role_set", metadata, fn auth ->
+        Gate.set_team_member_role(auth, team.id, user_id, role)
+      end)
     end)
   end
 

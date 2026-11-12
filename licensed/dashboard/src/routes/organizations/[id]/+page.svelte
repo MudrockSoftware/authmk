@@ -13,6 +13,7 @@
   import MembersCard from "#lib/components/organization/MembersCard.svelte";
   import OrganizationProfileCard from "#lib/components/organization/OrganizationProfileCard.svelte";
   import TeamsCard from "#lib/components/organization/TeamsCard.svelte";
+  import AccessCard from "#lib/components/organization/AccessCard.svelte";
   import { api, type OrganizationDetail } from "#lib/api.ts";
   import { formatDate } from "#lib/format.ts";
   import { Outcome } from "#lib/outcome.svelte.ts";
@@ -67,6 +68,7 @@
   <div class="mt-4 grid gap-6 xl:grid-cols-3">
     <div class="flex flex-col gap-6 xl:col-span-2">
       <MembersCard {detail} {outcome} {editable} />
+      {#if detail.access}<AccessCard {detail} {outcome} {editable} teams={me.features.teams} />{/if}
       {#key detail}<OrganizationProfileCard {detail} {outcome} {editable} />{/key}
     </div>
 

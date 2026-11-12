@@ -4,6 +4,29 @@ authmk follows [Semantic Versioning](https://semver.org). See the
 [stability guide](guides/stability.md) for what a version number promises,
 and how to upgrade.
 
+## 1.2.0
+
+Authorization across organizations and teams. Run `mix authmk.gen.migration`
+after upgrading if you use teams or the new plugin.
+
+- `Authmk.Plugins.Gate`: may this user do this action on this record?
+  Abilities and roles are declared in code, at four levels: the app
+  (`user.role`, from `Authmk.Plugins.Admin`), organization members, teams
+  and members inside teams. App admins may do everything, organization
+  admins everything in their own organization, teams pass their access to
+  their members, and a member's role in a team narrows it. Each
+  organization may override the code's roles and define its own, through
+  server functions and endpoints. `allows?/4`, `authorize/4` and
+  `abilities/3` read the database on every check.
+- `Authmk.Plug.RequireAbility`, and the `:require_ability` hook in
+  `Authmk.LiveView`, which checks again on every patch.
+- `Authmk.Plugins.Organization`: teams and team members have a nullable
+  `role`, set by `Authmk.Plugins.Gate`.
+- `Authmk.Plugins.AuditLog` records changes to teams, team members and
+  organizations' roles.
+- Plugins may check their options against the other plugins at startup
+  with the optional `c:Authmk.Plugin.check_plugins/2` callback.
+
 ## 1.1.0
 
 The admin dashboard grows from a browser into a place to run your app's

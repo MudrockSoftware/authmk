@@ -71,6 +71,7 @@ defmodule Authmk.Config do
 
     plugins = Enum.map(compile[:plugins], &init_plugin/1)
     check_dependencies!(plugins)
+    check_plugins!(plugins)
 
     config =
       struct!(
@@ -194,6 +195,14 @@ defmodule Authmk.Config do
         dependency <- plugin.depends_on(),
         dependency not in enabled do
       raise ArgumentError, "#{inspect(plugin)} needs #{inspect(dependency)} to be enabled"
+    end
+
+    :ok
+  end
+
+  defp check_plugins!(plugins) do
+    for {plugin, opts} <- plugins, function_exported?(plugin, :check_plugins, 2) do
+      :ok = plugin.check_plugins(opts, plugins)
     end
 
     :ok

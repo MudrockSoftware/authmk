@@ -141,7 +141,9 @@ organizations with members, invitations, teams and their own roles, and
 `Authmk.Plugins.APIKey` issues hashed API keys with permissions, usage
 limits and rate limits, and `Authmk.Plugins.ServiceAccount` gives programs
 their own identities (with roles, expiry and IP allow-lists), seen by your
-plugs as `current_principal`.
+plugs as `current_principal`. `Authmk.Plugins.Gate` answers "may this user
+do this on this record?" from app roles, organization roles, team roles and
+roles inside teams, with defaults in code that each organization may adjust.
 
 Sessions and security, also plugins:
 

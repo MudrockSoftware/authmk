@@ -189,7 +189,9 @@ defmodule Authmk.Plugins.Organization do
             required: true,
             index: true,
             input: false
-          ]
+          ],
+          # The team's role, for Authmk.Plugins.Gate, which sets it.
+          role: [type: :string, input: false]
         ]
       ],
       team_member: [
@@ -208,7 +210,9 @@ defmodule Authmk.Plugins.Organization do
             required: true,
             index: true,
             input: false
-          ]
+          ],
+          # The member's role in the team, for Authmk.Plugins.Gate, which sets it.
+          role: [type: :string, input: false]
         ],
         indexes: [[columns: [:team_id, :user_id], unique: true]]
       ]

@@ -73,6 +73,27 @@ defmodule Authmk.PhoenixTest do
       assert {:error, {:redirect, %{to: "/settings"}}} = live(signed_in, "/sign-in")
     end
 
+    test "pages that need an ability check it on mount and on every patch", %{conn: conn} do
+      ada = user()
+      grace = user(email: "grace@example.com")
+      {:ok, acme} = Organization.create_organization(Auth, %{name: "Acme", slug: "acme"}, ada.id)
+
+      {:ok, globex} =
+        Organization.create_organization(Auth, %{name: "Globex", slug: "gx"}, ada.id)
+
+      {:ok, _member} = Organization.add_member(Auth, acme.id, grace.id, "member")
+
+      assert {:error, {:redirect, %{to: "/sign-in"}}} = live(conn, "/orgs/#{acme.id}/reports")
+
+      signed_in = Testing.sign_in(conn, Auth, grace)
+      {:ok, view, html} = live(signed_in, "/orgs/#{acme.id}/reports")
+      assert html =~ "Reports of #{acme.id}"
+
+      # Grace isn't in Globex: not on mount, and not by patching the URL.
+      assert {:error, {:redirect, %{to: "/"}}} = live(signed_in, "/orgs/#{globex.id}/reports")
+      assert {:error, {:redirect, %{to: "/"}}} = render_patch(view, "/orgs/#{globex.id}/reports")
+    end
+
     test "every mount reads the session: revoked ones are signed out", %{conn: conn} do
       ada = user()
       signed_in = Testing.sign_in(conn, Auth, ada)

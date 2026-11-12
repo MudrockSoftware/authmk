@@ -1,5 +1,45 @@
 {
   "tables": {
+    "access_roles": {
+      "columns": {
+        "level": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "organization_id": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "permission": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "text"
+        },
+        "role": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "access_roles_organization_id_index": {
+          "columns": ["organization_id"],
+          "unique": false
+        },
+        "access_roles_organization_id_level_role_index": {
+          "columns": ["organization_id","level","role"],
+          "unique": true
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
     "accounts": {
       "columns": {
         "access_token": {
@@ -508,6 +548,16 @@
           "null": false,
           "references": null,
           "type": "string"
+        },
+        "team_id": {
+          "default": null,
+          "null": true,
+          "references": {
+            "on_delete": "nilify_all",
+            "table": "teams",
+            "type": "binary_id"
+          },
+          "type": "references"
         }
       },
       "indexes": {
@@ -1536,6 +1586,12 @@
           "references": null,
           "type": "string"
         },
+        "active_team_id": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
         "expires_at": {
           "default": null,
           "null": false,
@@ -1802,6 +1858,86 @@
         },
         "subscriptions_reference_id_index": {
           "columns": ["reference_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "team_members": {
+      "columns": {
+        "role": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        },
+        "team_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "teams",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "user_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "users",
+            "type": "binary_id"
+          },
+          "type": "references"
+        }
+      },
+      "indexes": {
+        "team_members_team_id_index": {
+          "columns": ["team_id"],
+          "unique": false
+        },
+        "team_members_team_id_user_id_index": {
+          "columns": ["team_id","user_id"],
+          "unique": true
+        },
+        "team_members_user_id_index": {
+          "columns": ["user_id"],
+          "unique": false
+        }
+      },
+      "primary_key": "binary_id",
+      "timestamps": true
+    },
+    "teams": {
+      "columns": {
+        "name": {
+          "default": null,
+          "null": false,
+          "references": null,
+          "type": "string"
+        },
+        "organization_id": {
+          "default": null,
+          "null": false,
+          "references": {
+            "on_delete": "delete_all",
+            "table": "organizations",
+            "type": "binary_id"
+          },
+          "type": "references"
+        },
+        "role": {
+          "default": null,
+          "null": true,
+          "references": null,
+          "type": "string"
+        }
+      },
+      "indexes": {
+        "teams_organization_id_index": {
+          "columns": ["organization_id"],
           "unique": false
         }
       },
