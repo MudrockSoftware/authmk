@@ -197,6 +197,15 @@ pre.shiki {
 .docs-prose :not(pre) > code::after {
   content: none;
 }
+/* Quotes in the docs are notes ("Status: ..."), not citations. */
+.docs-prose blockquote {
+  font-style: normal;
+}
+.docs-prose blockquote p::before,
+.docs-prose blockquote p::after {
+  content: none;
+}
+
 .docs-prose a:has(> code) {
   text-decoration: none;
 }

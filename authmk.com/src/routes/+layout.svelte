@@ -10,7 +10,8 @@
 </script>
 
 <svelte:head>
-  <link rel="icon" href={favicon} />
+  <link rel="icon" href={favicon} type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 </svelte:head>
 
 <a href="#main" class="btn btn-primary btn-sm fixed start-4 top-2 z-50 -translate-y-20 focus:translate-y-0">

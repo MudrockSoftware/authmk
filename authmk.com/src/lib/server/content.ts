@@ -19,7 +19,7 @@ const unlisted = listRepositoryFiles("guides").filter(
   (file) => file.endsWith(".md") && !docSources.some((source) => source.file === file)
 );
 if (unlisted.length > 0) {
-  throw new Error(`Add these guides to website/src/lib/docs.ts: ${unlisted.join(", ")}`);
+  throw new Error(`Add these guides to authmk.com/src/lib/docs.ts: ${unlisted.join(", ")}`);
 }
 
 export const docs: Doc[] = docSources.map(loadDoc);
