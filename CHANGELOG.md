@@ -4,7 +4,7 @@ authmk follows [Semantic Versioning](https://semver.org). See the
 [stability guide](guides/stability.md) for what a version number promises,
 and how to upgrade.
 
-## 1.1.0 (unreleased)
+## 1.1.0
 
 The admin dashboard grows from a browser into a place to run your app's
 auth. Every page shows only what the app has set up, and every change made

@@ -195,3 +195,8 @@ Tests here emulate real usage. They are not unit tests.
     remote or can discard changes is the developer's job.
 - Update `README.md`, the module docs and `ROADMAP.md` when you change
   public behavior.
+- Never write "Unreleased" (or "unreleased", "not yet released") anywhere:
+  not in `CHANGELOG.md`, the README, guides or module docs. The docs ship
+  as written, so the released version would still say it is unreleased.
+  Put upcoming changes under the next version's heading (`## 1.2.0`), with
+  no status after it.
