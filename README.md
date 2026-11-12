@@ -2,9 +2,8 @@
 
 Website: <https://authmk.com>
 
-> **Status: 1.0.** The public API, plugin API, endpoints and error codes are
-> stable: see the [stability guide](guides/stability.md). What comes next is
-> in [ROADMAP.md](ROADMAP.md).
+> **Status: 1.2** The public API, plugin API, endpoints and error codes are
+> stable: see the [stability guide](guides/stability.md).
 
 ## Why
 
@@ -19,7 +18,7 @@ model to Phoenix and Ecto.
 1. Add the dependency:
 
    ```elixir
-   {:authmk, "~> 1.0"}
+   {:authmk, "~> 1.2"}
    ```
 
 2. Define an auth module:
@@ -343,10 +342,9 @@ adapter code.
 Authmk is English only. Errors carry a stable `code`, such as
 `:invalid_credentials`, so apps can show their own text if they want.
 
-## Roadmap
+## Changelog
 
-See [ROADMAP.md](ROADMAP.md) for what's planned for 1.x, and
-[CHANGELOG.md](CHANGELOG.md) for what changed.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## Installation
 

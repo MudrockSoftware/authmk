@@ -109,7 +109,6 @@ defmodule Authmk.MixProject do
           "guides/stability.md",
           "guides/errors.md",
           "CHANGELOG.md",
-          "ROADMAP.md",
           "SECURITY.md"
         ],
         groups_for_extras: [Guides: ~r/guides\//]
@@ -242,7 +241,7 @@ defmodule Authmk.MixProject do
       links: %{"Website" => @homepage_url, "GitHub" => @source_url},
       files:
         ~w(lib licensed/lib licensed/LICENSE.md priv/pages priv/licensed priv/js guides .formatter.exs
-           mix.exs README.md CHANGELOG.md ROADMAP.md SECURITY.md LICENSE)
+           mix.exs README.md CHANGELOG.md SECURITY.md LICENSE)
     ]
   end
 end
